@@ -33,3 +33,13 @@ jobs:
           name: Zenime-debug
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 7
+
+      - name: Build Perf APK (release-optimized, buat testing performa)
+        run: gradle assemblePerf --no-daemon
+
+      - name: Upload Perf APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Zenime-perf
+          path: app/build/outputs/apk/perf/*.apk
+          retention-days: 7

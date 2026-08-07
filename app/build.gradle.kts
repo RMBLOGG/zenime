@@ -47,6 +47,16 @@ android {
       signingConfig = signingConfigs.getByName("release")
     }
     debug { signingConfig = signingConfigs.getByName("debugConfig") }
+    // Build type "perf": optimized release (isDebuggable = false, R8 minify nyala)
+    // tapi disign pakai debug.keystore, jadi gak butuh keystore production buat testing performa.
+    create("perf") {
+      initWith(getByName("release"))
+      isDebuggable = false
+      isMinifyEnabled = true
+      isShrinkResources = true
+      signingConfig = signingConfigs.getByName("debugConfig")
+      versionNameSuffix = "-perf"
+    }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
