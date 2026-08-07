@@ -16,6 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import java.util.concurrent.ConcurrentHashMap
 
 class AnimeRepository(
     private val api: DayynimeV5Api,
@@ -23,24 +24,83 @@ class AnimeRepository(
     val userPrefs: UserPreferencesRepository
 ) {
 
-    fun getHome(): Flow<Result<HomeResponse>> = flow {
+    // ---- Cache infrastructure ----------------------------------------
+    // In-memory, per-process cache. Ilang kalau proses app di-kill, tapi
+    // itu udah cukup buat ngurangin beban API karena kasus paling sering
+    // adalah user gonta-ganti tab / back-forth antar layar dalam satu sesi.
+    private data class CacheEntry<T>(val data: T, val timestamp: Long)
+
+    private fun isFresh(entry: CacheEntry<*>?, ttlMillis: Long): Boolean =
+        entry != null && (System.currentTimeMillis() - entry.timestamp) < ttlMillis
+
+    companion object {
+        private const val TTL_HOME = 5 * 60 * 1000L        // 5 menit, konten homepage sering berubah
+        private const val TTL_SEARCH = 5 * 60 * 1000L      // 5 menit
+        private const val TTL_DETAIL = 30 * 60 * 1000L     // 30 menit, detail anime jarang berubah
+        private const val TTL_EPISODES = 15 * 60 * 1000L   // 15 menit, episode baru bisa nambah
+        private const val TTL_SCHEDULE = 30 * 60 * 1000L   // 30 menit
+        private const val TTL_GENRES = 60 * 60 * 1000L     // 1 jam, list genre nyaris statis
+    }
+
+    private var homeCache: CacheEntry<HomeResponse>? = null
+    private val searchCache = ConcurrentHashMap<String, CacheEntry<SearchResponse>>()
+    private val detailCache = ConcurrentHashMap<String, CacheEntry<AnimeItem>>()
+    private val episodesCache = ConcurrentHashMap<String, CacheEntry<List<EpisodeItem>>>()
+    private val allEpisodesCache = ConcurrentHashMap<String, CacheEntry<List<EpisodeItem>>>()
+    private val scheduleCache = ConcurrentHashMap<String, CacheEntry<List<AnimeItem>>>()
+    private var genresCache: CacheEntry<List<GenreItem>>? = null
+
+    /** Panggil ini dari pull-to-refresh kalau nanti mau nambahin fitur itu. */
+    fun clearAllCache() {
+        homeCache = null
+        searchCache.clear()
+        detailCache.clear()
+        episodesCache.clear()
+        allEpisodesCache.clear()
+        scheduleCache.clear()
+        genresCache = null
+    }
+
+    // ---- Home ----------------------------------------------------------
+    fun getHome(forceRefresh: Boolean = false): Flow<Result<HomeResponse>> = flow {
+        val cached = homeCache
+        if (!forceRefresh && isFresh(cached, TTL_HOME)) {
+            emit(Result.Success(cached!!.data))
+            return@flow
+        }
         emit(Result.Loading)
         try {
             val response = api.getHome()
+            homeCache = CacheEntry(response, System.currentTimeMillis())
             emit(Result.Success(response))
         } catch (e: Exception) {
-            emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat beranda"))
+            // API lagi bermasalah tapi masih ada cache lama -> tampilin
+            // daripada nge-blank-in layar. Lebih baik data agak basi
+            // daripada error total.
+            if (cached != null) {
+                emit(Result.Success(cached.data))
+            } else {
+                emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat beranda"))
+            }
         }
     }.flowOn(Dispatchers.IO)
 
+    // ---- Search ----------------------------------------------------------
     fun search(
         query: String = "",
         page: Int? = null,
         sort: String? = null,
         genreIn: String? = null,
         status: String? = null,
-        type: String? = null
+        type: String? = null,
+        forceRefresh: Boolean = false
     ): Flow<Result<SearchResponse>> = flow {
+        val key = listOf(query, page, sort, genreIn, status, type).joinToString("|")
+        val cached = searchCache[key]
+        if (!forceRefresh && isFresh(cached, TTL_SEARCH)) {
+            emit(Result.Success(cached!!.data))
+            return@flow
+        }
         emit(Result.Loading)
         try {
             val response = api.search(
@@ -51,29 +111,61 @@ class AnimeRepository(
                 status = status,
                 type = type
             )
+            searchCache[key] = CacheEntry(response, System.currentTimeMillis())
             emit(Result.Success(response))
         } catch (e: Exception) {
-            emit(Result.Error(e, e.localizedMessage ?: "Gagal melakukan pencarian"))
+            if (cached != null) {
+                emit(Result.Success(cached.data))
+            } else {
+                emit(Result.Error(e, e.localizedMessage ?: "Gagal melakukan pencarian"))
+            }
         }
     }.flowOn(Dispatchers.IO)
 
-    fun getDetail(id: String): Flow<Result<AnimeItem>> = flow {
+    // ---- Detail ----------------------------------------------------------
+    fun getDetail(id: String, forceRefresh: Boolean = false): Flow<Result<AnimeItem>> = flow {
+        val cached = detailCache[id]
+        if (!forceRefresh && isFresh(cached, TTL_DETAIL)) {
+            emit(Result.Success(cached!!.data))
+            return@flow
+        }
         emit(Result.Loading)
         try {
             val response = api.getDetail(id)
+            detailCache[id] = CacheEntry(response, System.currentTimeMillis())
             emit(Result.Success(response))
         } catch (e: Exception) {
-            emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat detail anime"))
+            if (cached != null) {
+                emit(Result.Success(cached.data))
+            } else {
+                emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat detail anime"))
+            }
         }
     }.flowOn(Dispatchers.IO)
 
-    fun getEpisodes(id: String, page: Int? = null): Flow<Result<List<EpisodeItem>>> = flow {
+    // ---- Episodes (single page) ------------------------------------------
+    fun getEpisodes(
+        id: String,
+        page: Int? = null,
+        forceRefresh: Boolean = false
+    ): Flow<Result<List<EpisodeItem>>> = flow {
+        val key = "$id:$page"
+        val cached = episodesCache[key]
+        if (!forceRefresh && isFresh(cached, TTL_EPISODES)) {
+            emit(Result.Success(cached!!.data))
+            return@flow
+        }
         emit(Result.Loading)
         try {
             val response = api.getEpisodes(id, page)
+            episodesCache[key] = CacheEntry(response, System.currentTimeMillis())
             emit(Result.Success(response))
         } catch (e: Exception) {
-            emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat daftar episode"))
+            if (cached != null) {
+                emit(Result.Success(cached.data))
+            } else {
+                emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat daftar episode"))
+            }
         }
     }.flowOn(Dispatchers.IO)
 
@@ -82,7 +174,12 @@ class AnimeRepository(
     // halaman di sini sampe ketemu halaman kosong. Batch pertama request TANPA
     // page param sama sekali (bukan page=1) -- page=1 itu udah batch KEDUA
     // di upstream. Sama persis pattern yang dipakai di Aniku.
-    fun getAllEpisodes(id: String): Flow<Result<List<EpisodeItem>>> = flow {
+    fun getAllEpisodes(id: String, forceRefresh: Boolean = false): Flow<Result<List<EpisodeItem>>> = flow {
+        val cached = allEpisodesCache[id]
+        if (!forceRefresh && isFresh(cached, TTL_EPISODES)) {
+            emit(Result.Success(cached!!.data))
+            return@flow
+        }
         emit(Result.Loading)
         try {
             val allEpisodes = mutableListOf<EpisodeItem>()
@@ -98,12 +195,22 @@ class AnimeRepository(
                     epPage++
                 }
             }
-            emit(Result.Success(allEpisodes.toList()))
+            val result = allEpisodes.toList()
+            allEpisodesCache[id] = CacheEntry(result, System.currentTimeMillis())
+            emit(Result.Success(result))
         } catch (e: Exception) {
-            emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat daftar episode"))
+            if (cached != null) {
+                emit(Result.Success(cached.data))
+            } else {
+                emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat daftar episode"))
+            }
         }
     }.flowOn(Dispatchers.IO)
 
+    // ---- Episode stream ----------------------------------------------------
+    // SENGAJA TIDAK DI-CACHE: link stream biasanya signed URL dengan masa
+    // berlaku pendek dari upstream. Kalau di-cache dan URL-nya udah expired,
+    // video bakal gagal diputar meskipun "keliatan" ada datanya.
     fun getEpisodeStream(episodeId: String): Flow<Result<StreamResponse>> = flow {
         emit(Result.Loading)
         try {
@@ -114,23 +221,45 @@ class AnimeRepository(
         }
     }.flowOn(Dispatchers.IO)
 
-    fun getSchedule(day: String): Flow<Result<List<AnimeItem>>> = flow {
+    // ---- Schedule ----------------------------------------------------------
+    fun getSchedule(day: String, forceRefresh: Boolean = false): Flow<Result<List<AnimeItem>>> = flow {
+        val cached = scheduleCache[day]
+        if (!forceRefresh && isFresh(cached, TTL_SCHEDULE)) {
+            emit(Result.Success(cached!!.data))
+            return@flow
+        }
         emit(Result.Loading)
         try {
             val response = api.getSchedule(day)
+            scheduleCache[day] = CacheEntry(response, System.currentTimeMillis())
             emit(Result.Success(response))
         } catch (e: Exception) {
-            emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat jadwal tayang"))
+            if (cached != null) {
+                emit(Result.Success(cached.data))
+            } else {
+                emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat jadwal tayang"))
+            }
         }
     }.flowOn(Dispatchers.IO)
 
-    fun getGenres(): Flow<Result<List<GenreItem>>> = flow {
+    // ---- Genres ----------------------------------------------------------
+    fun getGenres(forceRefresh: Boolean = false): Flow<Result<List<GenreItem>>> = flow {
+        val cached = genresCache
+        if (!forceRefresh && isFresh(cached, TTL_GENRES)) {
+            emit(Result.Success(cached!!.data))
+            return@flow
+        }
         emit(Result.Loading)
         try {
             val response = api.getGenres()
+            genresCache = CacheEntry(response, System.currentTimeMillis())
             emit(Result.Success(response))
         } catch (e: Exception) {
-            emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat daftar genre"))
+            if (cached != null) {
+                emit(Result.Success(cached.data))
+            } else {
+                emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat daftar genre"))
+            }
         }
     }.flowOn(Dispatchers.IO)
 

@@ -39,6 +39,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -128,7 +131,9 @@ fun ZenimeAppNavHost(
 
             // Home Screen
             composable(Screen.Home.route) {
-                val homeViewModel = remember { HomeViewModel(repository) }
+                val homeViewModel: HomeViewModel = viewModel(
+                    factory = viewModelFactory { initializer { HomeViewModel(repository) } }
+                )
                 HomeScreen(
                     viewModel = homeViewModel,
                     onAnimeClick = { animeId ->
@@ -142,7 +147,9 @@ fun ZenimeAppNavHost(
 
             // Search Screen
             composable(Screen.Search.route) {
-                val searchViewModel = remember { SearchViewModel(repository) }
+                val searchViewModel: SearchViewModel = viewModel(
+                    factory = viewModelFactory { initializer { SearchViewModel(repository) } }
+                )
                 SearchScreen(
                     viewModel = searchViewModel,
                     onAnimeClick = { animeId ->
@@ -153,7 +160,9 @@ fun ZenimeAppNavHost(
 
             // Schedule Screen
             composable(Screen.Schedule.route) {
-                val scheduleViewModel = remember { ScheduleViewModel(repository) }
+                val scheduleViewModel: ScheduleViewModel = viewModel(
+                    factory = viewModelFactory { initializer { ScheduleViewModel(repository) } }
+                )
                 ScheduleScreen(
                     viewModel = scheduleViewModel,
                     onAnimeClick = { animeId ->
@@ -164,7 +173,9 @@ fun ZenimeAppNavHost(
 
             // Favorites & Watch History Screen
             composable(Screen.Favorites.route) {
-                val favViewModel = remember { FavoritesHistoryViewModel(repository) }
+                val favViewModel: FavoritesHistoryViewModel = viewModel(
+                    factory = viewModelFactory { initializer { FavoritesHistoryViewModel(repository) } }
+                )
                 FavoritesHistoryScreen(
                     viewModel = favViewModel,
                     onAnimeClick = { animeId ->
@@ -178,7 +189,9 @@ fun ZenimeAppNavHost(
 
             // Settings Screen
             composable(Screen.Settings.route) {
-                val settingsViewModel = remember { SettingsViewModel(repository) }
+                val settingsViewModel: SettingsViewModel = viewModel(
+                    factory = viewModelFactory { initializer { SettingsViewModel(repository) } }
+                )
                 SettingsScreen(
                     viewModel = settingsViewModel
                 )
