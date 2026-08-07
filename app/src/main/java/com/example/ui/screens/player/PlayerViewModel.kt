@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -58,7 +59,9 @@ class PlayerViewModel(
                 _streamState.value = result
                 if (result is Result.Success) {
                     val servers = result.data.servers ?: emptyList()
-                    val prefQuality = defaultQuality.value
+                    // Baca langsung dari DataStore, jangan lewat StateFlow defaultQuality
+                    // (yang WhileSubscribed & belum tentu ke-collect duluan sebelum ini jalan)
+                    val prefQuality = repository.userPrefs.defaultQualityFlow.first()
                     // Pick server with matching preferred quality or first available
                     val matchedServer = servers.find { it.quality?.contains(prefQuality) == true }
                         ?: servers.firstOrNull()

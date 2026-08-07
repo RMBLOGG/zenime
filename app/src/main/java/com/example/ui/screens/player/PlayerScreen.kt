@@ -1,5 +1,8 @@
 package com.example.ui.screens.player
 
+import android.app.Activity
+import android.content.ContextWrapper
+import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -88,6 +91,19 @@ fun PlayerScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+
+    // Auto landscape saat masuk PlayerScreen, balikin lagi pas keluar
+    DisposableEffect(Unit) {
+        val activity = context.findActivity()
+        val originalOrientation = activity?.requestedOrientation
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+
+        onDispose {
+            activity?.requestedOrientation = originalOrientation
+                ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
     val streamState by viewModel.streamState.collectAsStateWithLifecycle()
     val selectedServer by viewModel.selectedServer.collectAsStateWithLifecycle()
 
@@ -481,4 +497,11 @@ private fun formatTime(ms: Long): String {
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
     return String.format("%02d:%02d", minutes, seconds)
+}
+
+/** Cari Activity dari Context, karena LocalContext.current bisa jadi ContextWrapper (Compose). */
+private tailrec fun android.content.Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
