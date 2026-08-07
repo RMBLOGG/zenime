@@ -76,7 +76,10 @@ sealed class Screen(
 ) {
     data object Splash : Screen("splash")
     data object Home : Screen("home", "Home", Icons.Filled.Home, Icons.Outlined.Home)
-    data object Search : Screen("search", "Cari", Icons.Filled.Search, Icons.Outlined.Search)
+    data object Search : Screen("search?status={status}", "Cari", Icons.Filled.Search, Icons.Outlined.Search) {
+        fun createRoute(status: String? = null): String =
+            if (status != null) "search?status=$status" else "search"
+    }
     data object Schedule : Screen("schedule", "Jadwal", Icons.Filled.DateRange, Icons.Outlined.DateRange)
     data object Favorites : Screen("favorites", "Koleksi", Icons.Filled.Bookmark, Icons.Outlined.Bookmark)
     data object Settings : Screen("settings", "Pengaturan", Icons.Filled.Settings, Icons.Outlined.Settings)
@@ -140,15 +143,26 @@ fun ZenimeAppNavHost(
                         navController.navigate(Screen.Detail.createRoute(animeId))
                     },
                     onSearchClick = {
-                        navController.navigate(Screen.Search.route)
+                        navController.navigate(Screen.Search.createRoute())
+                    },
+                    onSeeAllOngoingClick = {
+                        navController.navigate(Screen.Search.createRoute(status = "ONGOING"))
                     }
                 )
             }
 
             // Search Screen
-            composable(Screen.Search.route) {
+            composable(
+                route = Screen.Search.route,
+                arguments = listOf(navArgument("status") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                })
+            ) { backStackEntry ->
+                val initialStatus = backStackEntry.arguments?.getString("status")
                 val searchViewModel: SearchViewModel = viewModel(
-                    factory = viewModelFactory { initializer { SearchViewModel(repository) } }
+                    factory = viewModelFactory { initializer { SearchViewModel(repository, initialStatus) } }
                 )
                 SearchScreen(
                     viewModel = searchViewModel,
@@ -242,7 +256,12 @@ fun ZenimeAppNavHost(
                 currentRoute = currentRoute,
                 onNavigate = { screen ->
                     if (currentRoute != screen.route) {
-                        navController.navigate(screen.route) {
+                        val destinationRoute = if (screen is Screen.Search) {
+                            Screen.Search.createRoute()
+                        } else {
+                            screen.route
+                        }
+                        navController.navigate(destinationRoute) {
                             popUpTo(navController.graph.findStartDestination().id) {
                                 saveState = true
                             }

@@ -74,6 +74,7 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     onAnimeClick: (String) -> Unit,
     onSearchClick: () -> Unit,
+    onSeeAllOngoingClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val homeState by viewModel.homeState.collectAsStateWithLifecycle()
@@ -139,6 +140,23 @@ fun HomeScreen(
                                         onAnimeClick = onAnimeClick
                                     )
                                     Spacer(modifier = Modifier.height(20.dp))
+                                }
+                            }
+
+                            // Section: Sedang Tayang (Ongoing) -- di Dayynime v5, field
+                            // "hot" merepresentasikan anime yang lagi tayang, sama seperti
+                            // konvensi yang dipakai di Aniku. Sengaja ditaruh paling atas,
+                            // di atas section "Baru Ditambahkan".
+                            data.hot?.let { hotList ->
+                                if (hotList.isNotEmpty()) {
+                                    item {
+                                        AnimeHorizontalSection(
+                                            title = "Sedang Tayang",
+                                            items = hotList,
+                                            onAnimeClick = onAnimeClick,
+                                            onSeeAllClick = onSeeAllOngoingClick
+                                        )
+                                    }
                                 }
                             }
 
@@ -379,10 +397,11 @@ fun AnimeHorizontalSection(
     title: String,
     items: List<AnimeItem>,
     onAnimeClick: (String) -> Unit,
+    onSeeAllClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.padding(vertical = 10.dp)) {
-        SectionHeader(title = title)
+        SectionHeader(title = title, onSeeAllClick = onSeeAllClick)
 
         LazyRow(
             contentPadding = PaddingValues(horizontal = 20.dp),

@@ -358,7 +358,7 @@ fun FilterBottomSheetContent(
         Text("Status", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.height(8.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(null to "Semua", "ongoing" to "Ongoing", "completed" to "Completed").forEach { (valKey, label) ->
+            listOf(null to "Semua", "ONGOING" to "Ongoing", "FINISHED" to "Completed").forEach { (valKey, label) ->
                 FilterChip(
                     selected = tempStatus == valKey,
                     onClick = { tempStatus = valKey },

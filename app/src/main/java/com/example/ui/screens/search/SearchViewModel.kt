@@ -15,11 +15,14 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
-class SearchViewModel(private val repository: AnimeRepository) : ViewModel() {
+class SearchViewModel(
+    private val repository: AnimeRepository,
+    initialStatus: String? = null
+) : ViewModel() {
 
     val searchQuery = MutableStateFlow("")
     val selectedGenre = MutableStateFlow<String?>(null)
-    val selectedStatus = MutableStateFlow<String?>(null)
+    val selectedStatus = MutableStateFlow(initialStatus)
     val selectedType = MutableStateFlow<String?>(null)
     val selectedSort = MutableStateFlow<String?>(null)
 
@@ -29,8 +32,14 @@ class SearchViewModel(private val repository: AnimeRepository) : ViewModel() {
     private val _genres = MutableStateFlow<List<GenreItem>>(emptyList())
     val genres: StateFlow<List<GenreItem>> = _genres.asStateFlow()
 
-    private var currentPage = 1
-    private var hasNextPage = false
+    // animeinweb (Dayynime v5) itu bukan pagination halaman biasa -- server bisa
+    // nyisir beberapa halaman upstream sekaligus dalam 1 response biar filter
+    // status/type gak gampang mentok, jadi page yang dikirim ke request
+    // BERIKUTNYA harus ngikutin cursor `next_page` dari response sebelumnya,
+    // bukan dihitung +1 sendiri di app. Pola yang sama dipakai di Aniku buat
+    // source Dayynime-v5.
+    private var nextPageCursor = 0
+    private var hasNextPage = true
     private val allLoadedItems = mutableListOf<AnimeItem>()
 
     init {
@@ -82,27 +91,24 @@ class SearchViewModel(private val repository: AnimeRepository) : ViewModel() {
     }
 
     fun performSearch() {
-        currentPage = 1
+        nextPageCursor = 0
+        hasNextPage = true
         allLoadedItems.clear()
-        fetchPage(1)
+        fetchPage(isFirstPage = true)
     }
 
     fun loadNextPage() {
         if (hasNextPage && _searchResults.value !is Result.Loading) {
-            currentPage++
-            fetchPage(currentPage)
+            fetchPage(isFirstPage = false)
         }
     }
 
-    private fun fetchPage(page: Int) {
+    private fun fetchPage(isFirstPage: Boolean) {
         viewModelScope.launch {
-            if (page == 1) {
+            if (isFirstPage) {
                 _searchResults.value = Result.Loading
             }
-            // animeinweb /api/search itu 0-indexed (halaman pertama = page 0),
-            // sedangkan UI kita mulai dari page 1 -> dikurangi 1 di sini.
-            // (lihat catatan yang sama di Aniku, AnikuViewModel.fetchSearchPage)
-            val apiPage = (page - 1).coerceAtLeast(0)
+            val apiPage = nextPageCursor
             repository.search(
                 query = searchQuery.value,
                 page = apiPage,
@@ -113,21 +119,23 @@ class SearchViewModel(private val repository: AnimeRepository) : ViewModel() {
             ).collect { result ->
                 when (result) {
                     is Result.Loading -> {
-                        if (page == 1) _searchResults.value = Result.Loading
+                        if (isFirstPage) _searchResults.value = Result.Loading
                     }
                     is Result.Error -> {
-                        if (page == 1) {
+                        if (isFirstPage) {
                             _searchResults.value = Result.Error(result.exception, result.message)
                         }
+                        hasNextPage = false
                     }
                     is Result.Success -> {
                         val response = result.data
                         val newItems = response.results ?: emptyList()
-                        if (page == 1) {
+                        if (isFirstPage) {
                             allLoadedItems.clear()
                         }
                         allLoadedItems.addAll(newItems)
                         hasNextPage = response.next_page != null
+                        nextPageCursor = response.next_page ?: (apiPage + 1)
                         _searchResults.value = Result.Success(allLoadedItems.toList())
                     }
                 }
