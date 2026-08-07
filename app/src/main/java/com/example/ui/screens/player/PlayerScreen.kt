@@ -106,6 +106,12 @@ fun PlayerScreen(
 
     val streamState by viewModel.streamState.collectAsStateWithLifecycle()
     val selectedServer by viewModel.selectedServer.collectAsStateWithLifecycle()
+    val resumePositionMs by viewModel.resumePositionMs.collectAsStateWithLifecycle()
+
+    // Nge-track apakah seek "lanjutin dari terakhir nonton" udah pernah
+    // dijalanin. Cuma sekali di awal -- ganti server/kualitas belakangan
+    // gak boleh nge-reset balik ke posisi lama dari histori.
+    var hasAppliedResume by remember { mutableStateOf(false) }
 
     var isPlaying by remember { mutableStateOf(false) }
     var currentPosition by remember { mutableLongStateOf(0L) }
@@ -164,6 +170,13 @@ fun PlayerScreen(
     LaunchedEffect(selectedServer) {
         val serverUrl = selectedServer?.link
         if (!serverUrl.isNullOrEmpty()) {
+            // Kalau ini ganti server/kualitas di TENGAH nonton (bukan load
+            // pertama), jaga posisi biar gak balik ke awal. Load pertama
+            // biarin 0 di sini -- posisi "lanjutin dari terakhir nonton"
+            // ditangani terpisah di listener STATE_READY di bawah, soalnya
+            // resumePositionMs dari histori bisa belum kebaca pas titik ini.
+            val positionToKeep = if (hasAppliedResume) exoPlayer.currentPosition else 0L
+
             val httpDataSourceFactory = DefaultHttpDataSource.Factory()
                 .setDefaultRequestProperties(
                     mapOf(
@@ -176,6 +189,9 @@ fun PlayerScreen(
                 .createMediaSource(MediaItem.fromUri(Uri.parse(serverUrl)))
 
             exoPlayer.setMediaSource(mediaSource)
+            if (positionToKeep > 0) {
+                exoPlayer.seekTo(positionToKeep)
+            }
             exoPlayer.prepare()
             exoPlayer.playWhenReady = true
         }
@@ -190,6 +206,15 @@ fun PlayerScreen(
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) {
                     duration = if (exoPlayer.duration > 0) exoPlayer.duration else 0L
+
+                    // Sekali doang: begitu player siap pertama kali dan ada
+                    // posisi tersimpan dari histori nonton, lompat ke situ.
+                    if (!hasAppliedResume) {
+                        if (resumePositionMs > 0) {
+                            exoPlayer.seekTo(resumePositionMs)
+                        }
+                        hasAppliedResume = true
+                    }
                 }
             }
         }

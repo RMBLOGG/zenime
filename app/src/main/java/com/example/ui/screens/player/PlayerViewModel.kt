@@ -36,9 +36,29 @@ class PlayerViewModel(
     private var currentAnimeTitle: String = "Anime"
     private var currentPosterUrl: String? = null
 
+    // Posisi terakhir nonton episode INI (bukan episode lain di anime yang
+    // sama) -- 0 kalau belum pernah nonton, atau kalau progress lama udah
+    // mepet abis (dianggap "udah kelar" jadi gak perlu resume).
+    private val _resumePositionMs = MutableStateFlow(0L)
+    val resumePositionMs: StateFlow<Long> = _resumePositionMs.asStateFlow()
+
     init {
         loadStream()
         loadAnimeInfo()
+        loadResumePosition()
+    }
+
+    private fun loadResumePosition() {
+        viewModelScope.launch {
+            val history = repository.getHistoryForAnime(animeId).first()
+            if (history != null && history.episodeId == episodeId) {
+                val isNearlyFinished = history.durationMs > 0 &&
+                    history.progressMs >= history.durationMs * 0.95
+                if (!isNearlyFinished && history.progressMs > 5000) {
+                    _resumePositionMs.value = history.progressMs
+                }
+            }
+        }
     }
 
     private fun loadAnimeInfo() {
