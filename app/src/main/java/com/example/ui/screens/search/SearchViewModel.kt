@@ -99,9 +99,13 @@ class SearchViewModel(private val repository: AnimeRepository) : ViewModel() {
             if (page == 1) {
                 _searchResults.value = Result.Loading
             }
+            // animeinweb /api/search itu 0-indexed (halaman pertama = page 0),
+            // sedangkan UI kita mulai dari page 1 -> dikurangi 1 di sini.
+            // (lihat catatan yang sama di Aniku, AnikuViewModel.fetchSearchPage)
+            val apiPage = (page - 1).coerceAtLeast(0)
             repository.search(
                 query = searchQuery.value,
-                page = page,
+                page = apiPage,
                 sort = selectedSort.value,
                 genreIn = selectedGenre.value,
                 status = selectedStatus.value,

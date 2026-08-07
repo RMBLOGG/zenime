@@ -54,7 +54,7 @@ class DetailViewModel(
 
     fun loadEpisodes() {
         viewModelScope.launch {
-            repository.getEpisodes(animeId).collect { result ->
+            repository.getAllEpisodes(animeId).collect { result ->
                 _episodesState.value = result
             }
         }

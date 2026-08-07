@@ -77,6 +77,33 @@ class AnimeRepository(
         }
     }.flowOn(Dispatchers.IO)
 
+    // animeinweb /api/anime/{id}/episodes dipaginasi upstream (30/halaman).
+    // Buat anime yang episode-nya banyak (One Piece dkk bisa 1000+), loop semua
+    // halaman di sini sampe ketemu halaman kosong. Batch pertama request TANPA
+    // page param sama sekali (bukan page=1) -- page=1 itu udah batch KEDUA
+    // di upstream. Sama persis pattern yang dipakai di Aniku.
+    fun getAllEpisodes(id: String): Flow<Result<List<EpisodeItem>>> = flow {
+        emit(Result.Loading)
+        try {
+            val allEpisodes = mutableListOf<EpisodeItem>()
+            val firstBatch = api.getEpisodes(id, page = null)
+            allEpisodes.addAll(firstBatch)
+            if (firstBatch.isNotEmpty()) {
+                var epPage = 1
+                val MAX_EPISODE_PAGES = 60 // ~1800 episode, jauh di atas anime terpanjang yang ada
+                while (epPage <= MAX_EPISODE_PAGES) {
+                    val pageResult = api.getEpisodes(id, page = epPage)
+                    if (pageResult.isEmpty()) break
+                    allEpisodes.addAll(pageResult)
+                    epPage++
+                }
+            }
+            emit(Result.Success(allEpisodes.toList()))
+        } catch (e: Exception) {
+            emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat daftar episode"))
+        }
+    }.flowOn(Dispatchers.IO)
+
     fun getEpisodeStream(episodeId: String): Flow<Result<StreamResponse>> = flow {
         emit(Result.Loading)
         try {
