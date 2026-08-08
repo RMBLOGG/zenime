@@ -33,7 +33,14 @@ class PlayerViewModel(
             initialValue = "720p"
         )
 
-    val autoSkipEnabled: StateFlow<Boolean> = repository.userPrefs.autoSkipIntroOutroFlow
+    val autoSkipIntro: StateFlow<Boolean> = repository.userPrefs.autoSkipIntroFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
+    val autoSkipOutro: StateFlow<Boolean> = repository.userPrefs.autoSkipOutroFlow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),

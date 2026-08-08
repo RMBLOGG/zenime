@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -69,7 +70,8 @@ fun SettingsScreen(
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val dynamicColor by viewModel.dynamicColor.collectAsStateWithLifecycle()
     val defaultQuality by viewModel.defaultQuality.collectAsStateWithLifecycle()
-    val autoSkipIntroOutro by viewModel.autoSkipIntroOutro.collectAsStateWithLifecycle()
+    val autoSkipIntro by viewModel.autoSkipIntro.collectAsStateWithLifecycle()
+    val autoSkipOutro by viewModel.autoSkipOutro.collectAsStateWithLifecycle()
 
     var showQualityMenu by remember { mutableStateOf(false) }
 
@@ -238,14 +240,40 @@ fun SettingsScreen(
                             Icon(imageVector = Icons.Default.FastForward, contentDescription = null, tint = ZenimePrimary)
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
-                                Text("Lewati Intro & Outro Otomatis", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
-                                Text("Lompat intro & lanjut episode berikutnya otomatis", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Lewati Intro Otomatis", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                                Text("Lompat ke detik 90 pas episode dibuka dari awal", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
 
                         Switch(
-                            checked = autoSkipIntroOutro,
-                            onCheckedChange = { viewModel.setAutoSkipIntroOutro(it) },
+                            checked = autoSkipIntro,
+                            onCheckedChange = { viewModel.setAutoSkipIntro(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = ZenimePrimary
+                            )
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.SkipNext, contentDescription = null, tint = ZenimePrimary)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("Auto-Lanjut Episode (Outro)", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                                Text("Lanjut ke episode berikutnya otomatis pas mepet abis", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+
+                        Switch(
+                            checked = autoSkipOutro,
+                            onCheckedChange = { viewModel.setAutoSkipOutro(it) },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
                                 checkedTrackColor = ZenimePrimary

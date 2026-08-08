@@ -18,7 +18,8 @@ class UserPreferencesRepository(private val context: Context) {
         val THEME_MODE = stringPreferencesKey("theme_mode") // "DARK", "LIGHT", "SYSTEM"
         val DYNAMIC_COLOR = booleanPreferencesKey("dynamic_color")
         val DEFAULT_QUALITY = stringPreferencesKey("default_quality") // "720p", "1080p", "480p", "360p"
-        val AUTO_SKIP_INTRO_OUTRO = booleanPreferencesKey("auto_skip_intro_outro")
+        val AUTO_SKIP_INTRO = booleanPreferencesKey("auto_skip_intro")
+        val AUTO_SKIP_OUTRO = booleanPreferencesKey("auto_skip_outro")
     }
 
     val themeModeFlow: Flow<String> = context.dataStore.data.map { prefs ->
@@ -33,9 +34,13 @@ class UserPreferencesRepository(private val context: Context) {
         prefs[Keys.DEFAULT_QUALITY] ?: "720p"
     }
 
-    // Default ON: lompat intro otomatis & auto-lanjut episode berikutnya pas masuk outro.
-    val autoSkipIntroOutroFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
-        prefs[Keys.AUTO_SKIP_INTRO_OUTRO] ?: true
+    // Default ON, tapi sekarang dua-duanya bisa diatur sendiri-sendiri di Pengaturan.
+    val autoSkipIntroFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.AUTO_SKIP_INTRO] ?: true
+    }
+
+    val autoSkipOutroFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.AUTO_SKIP_OUTRO] ?: true
     }
 
     suspend fun setThemeMode(mode: String) {
@@ -56,9 +61,15 @@ class UserPreferencesRepository(private val context: Context) {
         }
     }
 
-    suspend fun setAutoSkipIntroOutro(enabled: Boolean) {
+    suspend fun setAutoSkipIntro(enabled: Boolean) {
         context.dataStore.edit { prefs ->
-            prefs[Keys.AUTO_SKIP_INTRO_OUTRO] = enabled
+            prefs[Keys.AUTO_SKIP_INTRO] = enabled
+        }
+    }
+
+    suspend fun setAutoSkipOutro(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.AUTO_SKIP_OUTRO] = enabled
         }
     }
 }

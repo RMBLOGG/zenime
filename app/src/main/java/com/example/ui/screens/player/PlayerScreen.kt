@@ -130,7 +130,8 @@ fun PlayerScreen(
     val streamState by viewModel.streamState.collectAsStateWithLifecycle()
     val selectedServer by viewModel.selectedServer.collectAsStateWithLifecycle()
     val resumePositionMs by viewModel.resumePositionMs.collectAsStateWithLifecycle()
-    val autoSkipEnabled by viewModel.autoSkipEnabled.collectAsStateWithLifecycle()
+    val autoSkipIntro by viewModel.autoSkipIntro.collectAsStateWithLifecycle()
+    val autoSkipOutro by viewModel.autoSkipOutro.collectAsStateWithLifecycle()
 
     // Nge-track apakah seek "lanjutin dari terakhir nonton" udah pernah
     // dijalanin. Cuma sekali di awal -- ganti server/kualitas belakangan
@@ -193,7 +194,7 @@ fun PlayerScreen(
                 // Auto-skip outro: begitu masuk zona outro (mepet abis), langsung
                 // lanjut ke episode berikutnya kalau ada, tanpa nunggu ditekan.
                 val nextEpId = currentResult?.data?.episodeNext?.id
-                if (autoSkipEnabled &&
+                if (autoSkipOutro &&
                     !hasAutoSkippedOutro &&
                     !nextEpId.isNullOrEmpty() &&
                     duration > MIN_DURATION_FOR_SKIP_MS &&
@@ -255,7 +256,7 @@ fun PlayerScreen(
                     if (!hasAppliedResume) {
                         if (resumePositionMs > 0) {
                             exoPlayer.seekTo(resumePositionMs)
-                        } else if (autoSkipEnabled && duration > MIN_DURATION_FOR_SKIP_MS) {
+                        } else if (autoSkipIntro && duration > MIN_DURATION_FOR_SKIP_MS) {
                             exoPlayer.seekTo(INTRO_SKIP_MS)
                         }
                         hasAppliedResume = true
