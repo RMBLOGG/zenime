@@ -1,8 +1,5 @@
 package com.example.ui.screens.player
 
-import android.app.Activity
-import android.content.ContextWrapper
-import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -82,6 +79,7 @@ import androidx.media3.ui.PlayerView
 import com.example.data.common.Result
 import com.example.data.model.StreamServer
 import com.example.ui.components.ErrorStateView
+import com.example.util.findActivity
 import kotlinx.coroutines.delay
 
 // Durasi intro yang dilompatin pas auto-skip (dalam ms). Nggak ada timestamp
@@ -104,17 +102,12 @@ fun PlayerScreen(
 ) {
     val context = LocalContext.current
 
-    // Auto landscape saat masuk PlayerScreen, balikin lagi pas keluar
-    DisposableEffect(Unit) {
-        val activity = context.findActivity()
-        val originalOrientation = activity?.requestedOrientation
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-
-        onDispose {
-            activity?.requestedOrientation = originalOrientation
-                ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
-    }
+    // Orientasi landscape buat PlayerScreen di-lock di level NavGraph
+    // (berdasarkan current route), BUKAN di sini. Kalau di-lock per-composable
+    // kayak sebelumnya, transisi "Episode Selanjutnya" (dispose PlayerScreen
+    // lama + compose yang baru, sempat overlap pas animasi) bikin race:
+    // onDispose PlayerScreen lama kejalan SETELAH PlayerScreen baru sempet
+    // nge-set landscape, jadi malah balik ke portrait. Lihat NavGraph.kt.
 
     // Layar jangan sampe mati/kekunci sendiri selama nonton, meskipun gak ada
     // sentuhan ke layar (nonton anime kan biasanya cuma diliatin, gak dipegang terus).
@@ -600,11 +593,4 @@ private fun formatTime(ms: Long): String {
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
     return String.format("%02d:%02d", minutes, seconds)
-}
-
-/** Cari Activity dari Context, karena LocalContext.current bisa jadi ContextWrapper (Compose). */
-private tailrec fun android.content.Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
 }

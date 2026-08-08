@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import android.content.pm.ActivityInfo
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.DateRange
@@ -31,12 +32,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -67,6 +70,7 @@ import com.example.ui.screens.settings.SettingsScreen
 import com.example.ui.screens.settings.SettingsViewModel
 import com.example.ui.screens.splash.SplashScreen
 import com.example.ui.theme.ZenimePrimary
+import com.example.util.findActivity
 
 sealed class Screen(
     val route: String,
@@ -110,6 +114,25 @@ fun ZenimeAppNavHost(
     val currentRoute = navBackStackEntry?.destination?.route
 
     val showBottomBar = currentRoute in bottomNavScreens.map { it.route }
+
+    // Lock orientasi landscape berdasarkan ROUTE saat ini (bukan lifecycle
+    // masing-masing composable PlayerScreen). Ini penting pas pindah dari
+    // satu episode ke episode selanjutnya: dua instance PlayerScreen (lama &
+    // baru) bisa sempet hidup bersamaan selama animasi transisi navigasi.
+    // Kalau lock/restore-nya ditaruh di dalam PlayerScreen (DisposableEffect
+    // per-composable), instance lama bisa aja ke-dispose belakangan dan
+    // nimpa balik ke portrait padahal instance baru udah nge-set landscape.
+    // Dengan nge-cek di sini (satu sumber kebenaran = current route), race
+    // itu nggak mungkin kejadian lagi.
+    val context = LocalContext.current
+    LaunchedEffect(currentRoute) {
+        val activity = context.findActivity() ?: return@LaunchedEffect
+        activity.requestedOrientation = if (currentRoute == Screen.Player.route) {
+            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        } else {
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
 
     Box(
         modifier = Modifier
