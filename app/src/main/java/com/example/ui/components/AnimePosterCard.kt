@@ -12,9 +12,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -184,5 +189,71 @@ fun AnimePosterCard(
                 modifier = Modifier.padding(horizontal = 2.dp, vertical = 2.dp)
             )
         }
+
+        // Views & Favorites
+        val viewsText = formatCount(anime.views)
+        val favoritesText = formatCount(anime.favorites)
+
+        if (viewsText != null || favoritesText != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 2.dp, vertical = 1.dp)
+            ) {
+                viewsText?.let {
+                    Icon(
+                        imageVector = Icons.Filled.PlayArrow,
+                        contentDescription = "Views",
+                        tint = Color(0xFFE53935),
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                }
+
+                if (viewsText != null && favoritesText != null) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+
+                favoritesText?.let {
+                    Icon(
+                        imageVector = Icons.Filled.Star,
+                        contentDescription = "Favorites",
+                        tint = Color(0xFFFFB300),
+                        modifier = Modifier.size(11.dp)
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Format angka besar ke format ringkas ala Indonesia: 1.874.111 -> "1,9jt",
+ * 24.803 -> "24,8rb". Balikin null kalau input null/kosong/bukan angka.
+ */
+private fun formatCount(raw: String?): String? {
+    val value = raw?.toLongOrNull() ?: return null
+    return when {
+        value >= 1_000_000 -> {
+            val jt = value / 1_000_000.0
+            "${"%.1f".format(jt).replace('.', ',')}jt"
+        }
+        value >= 1_000 -> {
+            val rb = value / 1_000.0
+            "${"%.1f".format(rb).replace('.', ',')}rb"
+        }
+        else -> value.toString()
     }
 }
