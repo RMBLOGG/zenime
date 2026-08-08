@@ -5,6 +5,7 @@ import android.content.ContextWrapper
 import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
@@ -28,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Pause
@@ -82,6 +84,16 @@ import com.example.data.model.StreamServer
 import com.example.ui.components.ErrorStateView
 import kotlinx.coroutines.delay
 
+// Durasi intro yang dilompatin pas auto-skip (dalam ms). Nggak ada timestamp
+// intro/outro asli dari API, jadi dipakai perkiraan tetap kayak kebanyakan
+// app nonton anime lain.
+private const val INTRO_SKIP_MS = 90_000L
+// Berapa lama sebelum episode abis dianggap "zona outro" buat auto-lanjut.
+private const val OUTRO_WINDOW_MS = 85_000L
+// Episode harus minimal sepanjang ini biar auto-skip intro/outro jalan
+// (biar OVA/klip pendek nggak ke-skip abis).
+private const val MIN_DURATION_FOR_SKIP_MS = INTRO_SKIP_MS * 3
+
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(
@@ -104,9 +116,21 @@ fun PlayerScreen(
         }
     }
 
+    // Layar jangan sampe mati/kekunci sendiri selama nonton, meskipun gak ada
+    // sentuhan ke layar (nonton anime kan biasanya cuma diliatin, gak dipegang terus).
+    DisposableEffect(Unit) {
+        val activity = context.findActivity()
+        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+        onDispose {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     val streamState by viewModel.streamState.collectAsStateWithLifecycle()
     val selectedServer by viewModel.selectedServer.collectAsStateWithLifecycle()
     val resumePositionMs by viewModel.resumePositionMs.collectAsStateWithLifecycle()
+    val autoSkipEnabled by viewModel.autoSkipEnabled.collectAsStateWithLifecycle()
 
     // Nge-track apakah seek "lanjutin dari terakhir nonton" udah pernah
     // dijalanin. Cuma sekali di awal -- ganti server/kualitas belakangan
@@ -121,6 +145,10 @@ fun PlayerScreen(
 
     var showQualityMenu by remember { mutableStateOf(false) }
     var showSpeedMenu by remember { mutableStateOf(false) }
+
+    // Jaga biar auto-lanjut ke episode berikutnya cuma kejadian sekali pas
+    // masuk zona outro, gak nge-trigger berkali-kali tiap tick progress.
+    var hasAutoSkippedOutro by remember { mutableStateOf(false) }
 
     // ExoPlayer instance
     val exoPlayer = remember {
@@ -161,6 +189,19 @@ fun PlayerScreen(
                     epTitle = epDetail?.title,
                     epIndex = epDetail?.index
                 )
+
+                // Auto-skip outro: begitu masuk zona outro (mepet abis), langsung
+                // lanjut ke episode berikutnya kalau ada, tanpa nunggu ditekan.
+                val nextEpId = currentResult?.data?.episodeNext?.id
+                if (autoSkipEnabled &&
+                    !hasAutoSkippedOutro &&
+                    !nextEpId.isNullOrEmpty() &&
+                    duration > MIN_DURATION_FOR_SKIP_MS &&
+                    duration - currentPosition <= OUTRO_WINDOW_MS
+                ) {
+                    hasAutoSkippedOutro = true
+                    onNextEpisodeClick(nextEpId)
+                }
             }
             delay(1000)
         }
@@ -209,9 +250,13 @@ fun PlayerScreen(
 
                     // Sekali doang: begitu player siap pertama kali dan ada
                     // posisi tersimpan dari histori nonton, lompat ke situ.
+                    // Kalau ini nonton dari awal (belum ada histori) dan
+                    // auto-skip aktif, lompatin intro-nya juga.
                     if (!hasAppliedResume) {
                         if (resumePositionMs > 0) {
                             exoPlayer.seekTo(resumePositionMs)
+                        } else if (autoSkipEnabled && duration > MIN_DURATION_FOR_SKIP_MS) {
+                            exoPlayer.seekTo(INTRO_SKIP_MS)
                         }
                         hasAppliedResume = true
                     }
@@ -437,6 +482,38 @@ fun PlayerScreen(
                                             tint = Color.White,
                                             modifier = Modifier.size(36.dp)
                                         )
+                                    }
+                                }
+
+                                // Manual "Lewati Intro" pill — tetep muncul walau
+                                // auto-skip nyala/mati, buat jaga-jaga kalau lompatan
+                                // otomatisnya kurang pas.
+                                if (currentPosition < INTRO_SKIP_MS && duration > MIN_DURATION_FOR_SKIP_MS) {
+                                    Surface(
+                                        shape = RoundedCornerShape(20.dp),
+                                        color = Color.Black.copy(alpha = 0.6f),
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .padding(bottom = 72.dp, end = 16.dp)
+                                            .clickable { exoPlayer.seekTo(INTRO_SKIP_MS) }
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                                        ) {
+                                            Text(
+                                                text = "Lewati Intro",
+                                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                                color = Color.White
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Icon(
+                                                imageVector = Icons.Default.FastForward,
+                                                contentDescription = "Lewati Intro",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
                                     }
                                 }
 

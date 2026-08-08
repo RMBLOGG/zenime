@@ -33,6 +33,13 @@ class PlayerViewModel(
             initialValue = "720p"
         )
 
+    val autoSkipEnabled: StateFlow<Boolean> = repository.userPrefs.autoSkipIntroOutroFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
     private var currentAnimeTitle: String = "Anime"
     private var currentPosterUrl: String? = null
 

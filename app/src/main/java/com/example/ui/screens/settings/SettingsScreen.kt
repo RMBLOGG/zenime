@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ColorLens
+import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.Card
@@ -68,6 +69,7 @@ fun SettingsScreen(
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val dynamicColor by viewModel.dynamicColor.collectAsStateWithLifecycle()
     val defaultQuality by viewModel.defaultQuality.collectAsStateWithLifecycle()
+    val autoSkipIntroOutro by viewModel.autoSkipIntroOutro.collectAsStateWithLifecycle()
 
     var showQualityMenu by remember { mutableStateOf(false) }
 
@@ -223,6 +225,32 @@ fun SettingsScreen(
                                 }
                             }
                         }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.FastForward, contentDescription = null, tint = ZenimePrimary)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("Lewati Intro & Outro Otomatis", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                                Text("Lompat intro & lanjut episode berikutnya otomatis", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+
+                        Switch(
+                            checked = autoSkipIntroOutro,
+                            onCheckedChange = { viewModel.setAutoSkipIntroOutro(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = ZenimePrimary
+                            )
+                        )
                     }
                 }
             }

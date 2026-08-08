@@ -31,6 +31,13 @@ class SettingsViewModel(private val repository: AnimeRepository) : ViewModel() {
             initialValue = "720p"
         )
 
+    val autoSkipIntroOutro: StateFlow<Boolean> = repository.userPrefs.autoSkipIntroOutroFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
     fun setThemeMode(mode: String) {
         viewModelScope.launch {
             repository.userPrefs.setThemeMode(mode)
@@ -46,6 +53,12 @@ class SettingsViewModel(private val repository: AnimeRepository) : ViewModel() {
     fun setDefaultQuality(quality: String) {
         viewModelScope.launch {
             repository.userPrefs.setDefaultQuality(quality)
+        }
+    }
+
+    fun setAutoSkipIntroOutro(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.userPrefs.setAutoSkipIntroOutro(enabled)
         }
     }
 }
