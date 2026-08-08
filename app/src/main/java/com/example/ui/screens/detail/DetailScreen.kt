@@ -405,7 +405,7 @@ fun DetailScreen(
                                 val isWatched = watchHistory?.episodeId == ep.id
                                 EpisodeHorizontalCard(
                                     episode = ep,
-                                    posterUrl = anime.image_cover ?: anime.image_poster,
+                                    posterUrl = ep.resolvedImageUrl ?: anime.image_cover ?: anime.image_poster,
                                     isWatched = isWatched,
                                     onClick = {
                                         onEpisodeClick(ep.id, ep.title ?: "Episode ${ep.index}")

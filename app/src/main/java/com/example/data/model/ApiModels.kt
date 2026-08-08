@@ -64,7 +64,19 @@ data class EpisodeItem(
     @Json(name = "key_time") val key_time: String? = null,
     @Json(name = "title") val title: String? = null,
     @Json(name = "views") val views: String? = null
-)
+) {
+    /**
+     * Upstream ngasih path relatif buat thumbnail episode (beda sama
+     * image_cover/image_poster anime yang udah full URL). Host asetnya
+     * xyz-api.animein.net -- disimpulkan dari pola image_cover yang
+     * pakai prefix /assets_xyz/ di response homepage/detail.
+     */
+    val resolvedImageUrl: String?
+        get() {
+            val raw = image?.takeIf { it.isNotBlank() } ?: return null
+            return if (raw.startsWith("http")) raw else "https://xyz-api.animein.net$raw"
+        }
+}
 
 @JsonClass(generateAdapter = true)
 data class StreamServer(
