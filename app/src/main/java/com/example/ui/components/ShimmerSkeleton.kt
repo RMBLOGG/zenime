@@ -129,6 +129,28 @@ fun ShimmerHorizontalSection(modifier: Modifier = Modifier) {
 }
 
 @Composable
+fun ShimmerEpisodeCard(modifier: Modifier = Modifier) {
+    val brush = shimmerBrush()
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 5.dp)
+            .height(80.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(brush)
+    ) {}
+}
+
+@Composable
+fun ShimmerEpisodeList(modifier: Modifier = Modifier, count: Int = 4) {
+    Column(modifier = modifier) {
+        repeat(count) {
+            ShimmerEpisodeCard()
+        }
+    }
+}
+
+@Composable
 fun ShimmerBanner(modifier: Modifier = Modifier) {
     val brush = shimmerBrush()
     Box(

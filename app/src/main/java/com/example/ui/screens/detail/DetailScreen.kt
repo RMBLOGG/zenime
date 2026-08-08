@@ -63,6 +63,7 @@ import coil.request.ImageRequest
 import com.example.data.common.Result
 import com.example.data.model.EpisodeItem
 import com.example.ui.components.ErrorStateView
+import com.example.ui.components.ShimmerEpisodeList
 import com.example.ui.components.ShimmerHorizontalSection
 import com.example.ui.components.ShimmerPosterItem
 import com.example.ui.theme.CardOutlineBorder
@@ -364,7 +365,11 @@ fun DetailScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Daftar Episode (${episodesList.size})",
+                                    text = if (episodesState is Result.Loading) {
+                                        "Daftar Episode"
+                                    } else {
+                                        "Daftar Episode (${episodesList.size})"
+                                    },
                                     style = MaterialTheme.typography.titleMedium.copy(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 18.sp
@@ -376,7 +381,11 @@ fun DetailScreen(
                         }
 
                         // 5. Episode Card List (Horizontal Small Cards)
-                        if (episodesList.isEmpty()) {
+                        if (episodesState is Result.Loading) {
+                            item {
+                                ShimmerEpisodeList()
+                            }
+                        } else if (episodesList.isEmpty()) {
                             item {
                                 Box(
                                     modifier = Modifier
