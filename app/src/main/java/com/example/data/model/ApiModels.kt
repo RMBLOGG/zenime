@@ -18,7 +18,9 @@ data class AnimeItem(
     @Json(name = "favorites") val favorites: String? = null,
     @Json(name = "image_poster") val image_poster: String? = null,
     @Json(name = "image_cover") val image_cover: String? = null,
-    @Json(name = "aired_start") val aired_start: String? = null
+    @Json(name = "aired_start") val aired_start: String? = null,
+    @Json(name = "time") val time: String? = null,
+    @Json(name = "key_time") val key_time: String? = null
 )
 
 @JsonClass(generateAdapter = true)

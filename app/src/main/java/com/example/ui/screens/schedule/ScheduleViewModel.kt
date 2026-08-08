@@ -5,34 +5,65 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.common.Result
 import com.example.data.model.AnimeItem
 import com.example.data.repository.AnimeRepository
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+
+/**
+ * All the anime airing on a single day, keyed by its position (0 = Monday ... 6 = Sunday).
+ */
+data class DaySection(
+    val dayIndex: Int,
+    val dayKey: String,
+    val dayName: String,
+    val anime: List<AnimeItem>
+)
 
 class ScheduleViewModel(private val repository: AnimeRepository) : ViewModel() {
 
-    val selectedDayIndex = MutableStateFlow(0) // 0: monday, 1: tuesday, ... 6: sunday
     val daysApiKeys = listOf("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
     val daysDisplayNames = listOf("Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu")
 
-    private val _scheduleState = MutableStateFlow<Result<List<AnimeItem>>>(Result.Loading)
-    val scheduleState: StateFlow<Result<List<AnimeItem>>> = _scheduleState.asStateFlow()
+    private val _scheduleState = MutableStateFlow<Result<List<DaySection>>>(Result.Loading)
+    val scheduleState: StateFlow<Result<List<DaySection>>> = _scheduleState.asStateFlow()
 
     init {
-        loadSchedule(daysApiKeys[0])
+        loadFullWeek()
     }
 
-    fun selectDay(index: Int) {
-        selectedDayIndex.value = index
-        loadSchedule(daysApiKeys[index])
-    }
-
-    fun loadSchedule(day: String) {
+    fun loadFullWeek() {
         viewModelScope.launch {
-            repository.getSchedule(day).collect { result ->
-                _scheduleState.value = result
+            _scheduleState.value = Result.Loading
+            try {
+                val sections = daysApiKeys.indices
+                    .map { index ->
+                        async { index to fetchDay(daysApiKeys[index]) }
+                    }
+                    .awaitAll()
+                    .sortedBy { it.first }
+                    .map { (index, list) ->
+                        DaySection(
+                            dayIndex = index,
+                            dayKey = daysApiKeys[index],
+                            dayName = daysDisplayNames[index],
+                            anime = list
+                        )
+                    }
+                _scheduleState.value = Result.Success(sections)
+            } catch (e: Exception) {
+                _scheduleState.value = Result.Error(e, e.localizedMessage ?: "Gagal memuat jadwal tayang")
             }
+        }
+    }
+
+    private suspend fun fetchDay(dayKey: String): List<AnimeItem> {
+        return when (val result = repository.getSchedule(dayKey).first { it !is Result.Loading }) {
+            is Result.Success -> result.data
+            else -> emptyList()
         }
     }
 }
