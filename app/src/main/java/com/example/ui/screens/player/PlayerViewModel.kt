@@ -3,6 +3,7 @@ package com.example.ui.screens.player
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.common.Result
+import com.example.data.model.EpisodeItem
 import com.example.data.model.StreamResponse
 import com.example.data.model.StreamServer
 import com.example.data.repository.AnimeRepository
@@ -56,10 +57,26 @@ class PlayerViewModel(
     private val _resumePositionMs = MutableStateFlow(0L)
     val resumePositionMs: StateFlow<Long> = _resumePositionMs.asStateFlow()
 
+    // Daftar semua episode anime ini, buat ditampilin di sidebar "Daftar
+    // Episode" di PlayerScreen. Di-load sekali di init, sama kayak
+    // loadAnimeInfo() -- repository udah nge-cache jadi murah dipanggil lagi
+    // kalau user buka-tutup sidebar atau pindah episode dalam anime yang sama.
+    private val _episodeListState = MutableStateFlow<Result<List<EpisodeItem>>>(Result.Loading)
+    val episodeListState: StateFlow<Result<List<EpisodeItem>>> = _episodeListState.asStateFlow()
+
     init {
         loadStream()
         loadAnimeInfo()
         loadResumePosition()
+        loadEpisodeList()
+    }
+
+    private fun loadEpisodeList() {
+        viewModelScope.launch {
+            repository.getAllEpisodes(animeId).collect { result ->
+                _episodeListState.value = result
+            }
+        }
     }
 
     private fun loadResumePosition() {

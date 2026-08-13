@@ -16,6 +16,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -26,9 +28,12 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -36,16 +41,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PlayCircleFilled
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Speed
@@ -97,7 +107,10 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.PlayerView
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.data.common.Result
+import com.example.data.model.EpisodeItem
 import com.example.ui.components.ErrorStateView
 import com.example.util.findActivity
 import kotlinx.coroutines.delay
@@ -170,6 +183,9 @@ fun PlayerScreen(
     val resumePositionMs by viewModel.resumePositionMs.collectAsStateWithLifecycle()
     val autoSkipIntro by viewModel.autoSkipIntro.collectAsStateWithLifecycle()
     val autoSkipOutro by viewModel.autoSkipOutro.collectAsStateWithLifecycle()
+    val episodeListState by viewModel.episodeListState.collectAsStateWithLifecycle()
+
+    var showEpisodeList by remember { mutableStateOf(false) }
 
     // Nge-track apakah seek "lanjutin dari terakhir nonton" udah pernah
     // dijalanin. Cuma sekali di awal -- ganti server/kualitas belakangan
@@ -462,6 +478,15 @@ fun PlayerScreen(
 
                                     Spacer(modifier = Modifier.width(4.dp))
 
+                                    // Episode List Sidebar Trigger
+                                    PlayerIconButton(
+                                        icon = Icons.AutoMirrored.Filled.PlaylistPlay,
+                                        contentDescription = "Daftar Episode",
+                                        onClick = { showEpisodeList = true }
+                                    )
+
+                                    Spacer(modifier = Modifier.width(4.dp))
+
                                     // Quality Picker Icon
                                     Box {
                                         PlayerIconButton(
@@ -641,6 +666,20 @@ fun PlayerScreen(
                                 }
                             }
                         }
+
+                        // Sidebar Daftar Episode -- sengaja di luar
+                        // AnimatedVisibility kontrol di atas, biar tetap
+                        // kebuka walau overlay kontrol lagi auto-hide.
+                        EpisodeListSidebar(
+                            visible = showEpisodeList,
+                            episodeListState = episodeListState,
+                            currentEpisodeId = viewModel.episodeId,
+                            onDismiss = { showEpisodeList = false },
+                            onEpisodeClick = { ep ->
+                                showEpisodeList = false
+                                onNextEpisodeClick(ep.id)
+                            }
+                        )
                     }
                 }
             }
@@ -825,6 +864,226 @@ private fun PlayerPill(
                 tint = if (filled) Color.Black else Color.White,
                 modifier = Modifier.size(16.dp)
             )
+        }
+    }
+}
+
+/**
+ * Sidebar "Daftar Episode" -- scrim gelap + panel slide-in dari kanan,
+ * nampilin semua episode anime ini biar user bisa lompat episode tanpa
+ * balik ke halaman detail dulu. Episode yang lagi diputar di-highlight.
+ */
+@Composable
+private fun EpisodeListSidebar(
+    visible: Boolean,
+    episodeListState: Result<List<EpisodeItem>>,
+    currentEpisodeId: String,
+    onDismiss: () -> Unit,
+    onEpisodeClick: (EpisodeItem) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(tween(200)),
+        exit = fadeOut(tween(200)),
+        modifier = modifier.fillMaxSize()
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            // Scrim -- tap di luar panel buat nutup
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.55f))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = onDismiss
+                    )
+            )
+
+            AnimatedVisibility(
+                visible = visible,
+                enter = slideInHorizontally(animationSpec = tween(220), initialOffsetX = { it }) + fadeIn(tween(220)),
+                exit = slideOutHorizontally(animationSpec = tween(200), targetOffsetX = { it }) + fadeOut(tween(200)),
+                modifier = Modifier.align(Alignment.CenterEnd)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(300.dp)
+                        .shadow(elevation = 20.dp, clip = false)
+                        .background(Color(0xFF121317))
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() },
+                            onClick = {} // Nyerap tap biar gak nembus ke scrim di belakangnya
+                        )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Daftar Episode",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(32.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.08f))
+                                .clickable(
+                                    indication = null,
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    onClick = onDismiss
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Tutup",
+                                tint = Color.White,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(Color.White.copy(alpha = 0.06f))
+                    )
+
+                    when (episodeListState) {
+                        is Result.Loading -> {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    color = PlayerAccent,
+                                    strokeWidth = 2.5.dp,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        }
+                        is Result.Error -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(24.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "Gagal memuat daftar episode",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = Color.White.copy(alpha = 0.6f),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                            }
+                        }
+                        is Result.Success -> {
+                            val episodes = episodeListState.data
+                            LazyColumn(
+                                contentPadding = PaddingValues(vertical = 8.dp),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                items(episodes, key = { it.id }) { ep ->
+                                    EpisodeListRow(
+                                        episode = ep,
+                                        isActive = ep.id == currentEpisodeId,
+                                        onClick = { onEpisodeClick(ep) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Satu baris episode di dalam sidebar. */
+@Composable
+private fun EpisodeListRow(
+    episode: EpisodeItem,
+    isActive: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(if (isActive) PlayerAccent.copy(alpha = 0.12f) else Color.Transparent)
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = onClick
+            )
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .width(84.dp)
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(Color.White.copy(alpha = 0.06f))
+        ) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(episode.resolvedImageUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = episode.title,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            if (isActive) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.35f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayCircleFilled,
+                        contentDescription = null,
+                        tint = PlayerAccent,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Episode ${episode.index ?: ""}",
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.SemiBold
+                ),
+                color = if (isActive) PlayerAccent else Color.White,
+                maxLines = 1
+            )
+            val epTitle = episode.title
+            if (!epTitle.isNullOrEmpty()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = epTitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.55f),
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
