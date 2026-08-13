@@ -9,12 +9,17 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -30,10 +35,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.HighQuality
@@ -43,9 +50,6 @@ import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -78,9 +82,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
@@ -462,25 +469,21 @@ fun PlayerScreen(
                                             contentDescription = "Pilih Kualitas",
                                             onClick = { showQualityMenu = true }
                                         )
-                                        DropdownMenu(
+                                        PlayerDropdownMenu(
                                             expanded = showQualityMenu,
-                                            onDismissRequest = { showQualityMenu = false }
-                                        ) {
-                                            servers.forEach { server ->
-                                                DropdownMenuItem(
-                                                    text = {
-                                                        Text(
-                                                            text = "${server.name ?: "Server"} (${server.quality ?: "720p"})",
-                                                            fontWeight = if (selectedServer?.id == server.id) FontWeight.Bold else FontWeight.Normal
-                                                        )
-                                                    },
+                                            onDismissRequest = { showQualityMenu = false },
+                                            title = "Kualitas Video",
+                                            options = servers.map { server ->
+                                                PlayerMenuOption(
+                                                    label = "${server.name ?: "Server"} (${server.quality ?: "720p"})",
+                                                    isSelected = selectedServer?.id == server.id,
                                                     onClick = {
                                                         viewModel.selectServer(server)
                                                         showQualityMenu = false
                                                     }
                                                 )
                                             }
-                                        }
+                                        )
                                     }
 
                                     Spacer(modifier = Modifier.width(6.dp))
@@ -493,18 +496,14 @@ fun PlayerScreen(
                                             onClick = { showSpeedMenu = true },
                                             badge = if (playbackSpeed != 1.0f) "${playbackSpeed}x" else null
                                         )
-                                        DropdownMenu(
+                                        PlayerDropdownMenu(
                                             expanded = showSpeedMenu,
-                                            onDismissRequest = { showSpeedMenu = false }
-                                        ) {
-                                            listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { speed ->
-                                                DropdownMenuItem(
-                                                    text = {
-                                                        Text(
-                                                            "${speed}x",
-                                                            fontWeight = if (playbackSpeed == speed) FontWeight.Bold else FontWeight.Normal
-                                                        )
-                                                    },
+                                            onDismissRequest = { showSpeedMenu = false },
+                                            title = "Kecepatan Putar",
+                                            options = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).map { speed ->
+                                                PlayerMenuOption(
+                                                    label = "${speed}x",
+                                                    isSelected = playbackSpeed == speed,
                                                     onClick = {
                                                         playbackSpeed = speed
                                                         exoPlayer.playbackParameters = PlaybackParameters(speed)
@@ -512,7 +511,7 @@ fun PlayerScreen(
                                                     }
                                                 )
                                             }
-                                        }
+                                        )
                                     }
                                 }
 
@@ -689,6 +688,103 @@ private fun PlayerIconButton(
                 tint = Color.White,
                 modifier = Modifier.size(iconSize)
             )
+        }
+    }
+}
+
+private data class PlayerMenuOption(
+    val label: String,
+    val isSelected: Boolean,
+    val onClick: () -> Unit
+)
+
+/**
+ * Panel dropdown custom buat pengaturan player (kualitas, kecepatan) —
+ * gantiin DropdownMenu bawaan Material3 yang tampilannya kotak polos gak
+ * konsisten sama tema player. Panel gelap solid, rounded, dengan judul,
+ * highlight lembut + centang di opsi yang lagi aktif, mirip pengaturan
+ * player di app streaming profesional.
+ */
+@Composable
+private fun PlayerDropdownMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    title: String,
+    options: List<PlayerMenuOption>,
+    modifier: Modifier = Modifier
+) {
+    if (!expanded) return
+
+    val density = LocalDensity.current
+
+    Popup(
+        alignment = Alignment.TopEnd,
+        offset = with(density) { IntOffset(x = 0, y = 48.dp.roundToPx()) },
+        onDismissRequest = onDismissRequest,
+        properties = PopupProperties(focusable = true)
+    ) {
+        val visibleState = remember { MutableTransitionState(false) }
+        LaunchedEffect(Unit) { visibleState.targetState = true }
+
+        AnimatedVisibility(
+            visibleState = visibleState,
+            enter = fadeIn(tween(140)) + scaleIn(initialScale = 0.9f, animationSpec = tween(140)),
+            exit = fadeOut(tween(100)) + scaleOut(targetScale = 0.9f, animationSpec = tween(100))
+        ) {
+            Column(
+                modifier = modifier
+                    .widthIn(min = 180.dp, max = 260.dp)
+                    .shadow(elevation = 16.dp, shape = RoundedCornerShape(16.dp), clip = false)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFF16171C).copy(alpha = 0.97f))
+                    .border(
+                        BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+                        RoundedCornerShape(16.dp)
+                    )
+                    .padding(vertical = 6.dp)
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+
+                options.forEach { option ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() },
+                                onClick = option.onClick
+                            )
+                            .background(
+                                if (option.isSelected) PlayerAccent.copy(alpha = 0.14f) else Color.Transparent
+                            )
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    ) {
+                        Text(
+                            text = option.label,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontWeight = if (option.isSelected) FontWeight.Bold else FontWeight.Normal
+                            ),
+                            color = if (option.isSelected) PlayerAccent else Color.White.copy(alpha = 0.85f),
+                            modifier = Modifier.weight(1f)
+                        )
+                        if (option.isSelected) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = PlayerAccent,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
