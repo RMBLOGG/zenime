@@ -3,6 +3,7 @@ package com.example.ui.screens.favorites
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,8 +29,6 @@ import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,13 +36,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -52,6 +45,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -66,8 +61,8 @@ import com.example.data.local.WatchHistoryEntity
 import com.example.data.model.AnimeItem
 import com.example.ui.components.AnimePosterCard
 import com.example.ui.components.EmptyStateView
-import com.example.ui.theme.CardOutlineBorder
 import com.example.ui.theme.ZenimePrimary
+import com.example.ui.theme.ZenimeSurfaceVariantDark
 
 import com.example.ui.components.ZenimeHeader
 import com.example.ui.components.ZenimeScreenTitle
@@ -97,60 +92,34 @@ fun FavoritesHistoryScreen(
             ZenimeHeader(
                 title = { ZenimeScreenTitle(title = "Koleksi Saya") }
             )
-            // Tab Row
-            TabRow(
-                selectedTabIndex = selectedTabIndex,
-                containerColor = MaterialTheme.colorScheme.background,
-                contentColor = ZenimePrimary,
-                indicator = { tabPositions ->
-                    TabRowDefaults.SecondaryIndicator(
-                        Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
-                        color = ZenimePrimary
-                    )
-                }
+
+            // Segmented tab custom — pill capsule dengan tab terpilih diisi warna
+            // aksen solid, gantiin TabRow bawaan yang cuma garis bawah tipis
+            // generik.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(ZenimeSurfaceVariantDark)
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Tab(
+                CollectionTab(
+                    label = "Favorit",
+                    count = favorites.size,
+                    icon = Icons.Default.Bookmark,
                     selected = selectedTabIndex == 0,
                     onClick = { selectedTabIndex = 0 },
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Bookmark,
-                                contentDescription = null,
-                                tint = if (selectedTabIndex == 0) ZenimePrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Favorit (${favorites.size})",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = if (selectedTabIndex == 0) FontWeight.Bold else FontWeight.Medium
-                                ),
-                                color = if (selectedTabIndex == 0) ZenimePrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+                    modifier = Modifier.weight(1f)
                 )
-
-                Tab(
+                CollectionTab(
+                    label = "Riwayat",
+                    count = watchHistory.size,
+                    icon = Icons.Default.History,
                     selected = selectedTabIndex == 1,
                     onClick = { selectedTabIndex = 1 },
-                    text = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.History,
-                                contentDescription = null,
-                                tint = if (selectedTabIndex == 1) ZenimePrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Riwayat (${watchHistory.size})",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = if (selectedTabIndex == 1) FontWeight.Bold else FontWeight.Medium
-                                ),
-                                color = if (selectedTabIndex == 1) ZenimePrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+                    modifier = Modifier.weight(1f)
                 )
             }
 
@@ -217,6 +186,46 @@ fun FavoritesHistoryScreen(
     }
 }
 
+/** Satu tab di segmented control "Favorit / Riwayat". */
+@Composable
+private fun CollectionTab(
+    label: String,
+    count: Int,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (selected) ZenimePrimary else Color.Transparent)
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = onClick
+            )
+            .padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = "$label ($count)",
+            style = MaterialTheme.typography.labelLarge.copy(
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+            ),
+            color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
 @Composable
 fun WatchHistoryCard(
     item: WatchHistoryEntity,
@@ -225,26 +234,32 @@ fun WatchHistoryCard(
     onDeleteClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    val progressFrac = if (item.durationMs > 0) {
+        (item.progressMs.toFloat() / item.durationMs.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+    val percentWatched = (progressFrac * 100).toInt()
+
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
         modifier = modifier
             .fillMaxWidth()
-            .border(1.dp, CardOutlineBorder, RoundedCornerShape(14.dp))
+            .shadow(elevation = 4.dp, shape = RoundedCornerShape(16.dp), clip = false)
+            .clip(RoundedCornerShape(16.dp))
             .clickable { onCardClick() }
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Poster
+            // Poster dengan badge episode di pojok
             Box(
                 modifier = Modifier
-                    .width(70.dp)
+                    .width(76.dp)
                     .aspectRatio(2f / 3f)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 AsyncImage(
@@ -256,6 +271,30 @@ fun WatchHistoryCard(
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
+
+                // Scrim tipis di bawah poster biar badge episode kebaca
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(28.dp)
+                        .align(Alignment.BottomCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))
+                            )
+                        )
+                )
+                if (!item.episodeIndex.isNullOrEmpty()) {
+                    Text(
+                        text = "EP ${item.episodeIndex}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 6.dp, bottom = 4.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(14.dp))
@@ -275,56 +314,52 @@ fun WatchHistoryCard(
 
                 Spacer(modifier = Modifier.height(2.dp))
 
+                val epLabel = "Episode ${item.episodeIndex ?: ""}${if (!item.episodeTitle.isNullOrEmpty()) " - ${item.episodeTitle}" else ""}"
                 Text(
-                    text = "Episode ${item.episodeIndex ?: ""}${if (!item.episodeTitle.isNullOrEmpty()) " - ${item.episodeTitle}" else ""}",
+                    text = "$epLabel • ${formatRelativeTime(item.lastUpdated)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                val progressFrac = if (item.durationMs > 0) (item.progressMs.toFloat() / item.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
-                val percentWatched = (progressFrac * 100).toInt()
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    LinearProgressIndicator(
+                        progress = { progressFrac },
+                        color = ZenimePrimary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(5.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                    )
                     Text(
-                        text = "$percentWatched% ditonton",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        text = "$percentWatched%",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                         color = ZenimePrimary
                     )
                 }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                LinearProgressIndicator(
-                    progress = { progressFrac },
-                    color = ZenimePrimary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                )
             }
 
-            Spacer(modifier = Modifier.width(8.dp))
+            Spacer(modifier = Modifier.width(6.dp))
 
             // Action buttons
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Surface(
                     shape = CircleShape,
                     color = ZenimePrimary,
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(38.dp)
+                        .shadow(elevation = 6.dp, shape = CircleShape, clip = false)
                         .clickable { onResumeClick() }
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -352,3 +387,20 @@ fun WatchHistoryCard(
         }
     }
 }
+
+/** Format selisih waktu jadi teks relatif kayak "2 jam lalu", "Baru saja". */
+private fun formatRelativeTime(timestampMs: Long): String {
+    val diffMs = (System.currentTimeMillis() - timestampMs).coerceAtLeast(0)
+    val minutes = diffMs / 60_000
+    val hours = minutes / 60
+    val days = hours / 24
+
+    return when {
+        minutes < 1 -> "Baru saja"
+        minutes < 60 -> "$minutes menit lalu"
+        hours < 24 -> "$hours jam lalu"
+        days < 7 -> "$days hari lalu"
+        else -> "${days / 7} minggu lalu"
+    }
+}
+
