@@ -25,7 +25,7 @@ object AdManager {
     // Set true kalau lagi development/testing biar cuma dapet iklan dummy
     // (nggak generate uang beneran, aman dari resiko akun ke-flag karena
     // klik/impresi berulang dari device sendiri). Production: false.
-    private var testMode = false
+    private var testMode = true
 
     private var isInitialized = false
     private var isInterstitialLoaded = false
