@@ -1,6 +1,8 @@
 package com.example.ui.screens.player
 
+import android.media.AudioManager
 import android.net.Uri
+import android.provider.Settings
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
@@ -48,17 +50,24 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
+import androidx.compose.material.icons.filled.BrightnessHigh
+import androidx.compose.material.icons.filled.BrightnessLow
+import androidx.compose.material.icons.filled.BrightnessMedium
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircleFilled
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.VolumeDown
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -68,8 +77,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -102,6 +113,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -112,8 +124,10 @@ import coil.request.ImageRequest
 import com.example.data.common.Result
 import com.example.data.model.EpisodeItem
 import com.example.ui.components.ErrorStateView
+import com.example.util.PipController
 import com.example.util.findActivity
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 // Durasi intro yang dilompatin pas auto-skip (dalam ms). Nggak ada timestamp
@@ -178,6 +192,16 @@ fun PlayerScreen(
         }
     }
 
+    // Daftarin ke PipController selama PlayerScreen ini hidup, biar
+    // MainActivity tau boleh auto-masuk PiP pas user pindah app. Dilepas
+    // lagi pas keluar dari player.
+    DisposableEffect(Unit) {
+        PipController.setCanEnterPip(true)
+        onDispose {
+            PipController.setCanEnterPip(false)
+        }
+    }
+
     val streamState by viewModel.streamState.collectAsStateWithLifecycle()
     val selectedServer by viewModel.selectedServer.collectAsStateWithLifecycle()
     val resumePositionMs by viewModel.resumePositionMs.collectAsStateWithLifecycle()
@@ -201,6 +225,98 @@ fun PlayerScreen(
 
     var showQualityMenu by remember { mutableStateOf(false) }
     var showSpeedMenu by remember { mutableStateOf(false) }
+
+    val isInPip by PipController.isInPipMode.collectAsState()
+
+    // Gesture kontrol: swipe vertikal kiri = brightness, kanan = volume;
+    // double-tap kiri/kanan = mundur/maju 10 detik. State di bawah cuma
+    // buat nge-drive tampilan indikator/flash-nya.
+    val audioManager = remember {
+        context.getSystemService(android.content.Context.AUDIO_SERVICE) as? AudioManager
+    }
+    val maxVolume = remember { (audioManager?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15).coerceAtLeast(1) }
+
+    var brightnessLevel by remember { mutableFloatStateOf(0.5f) }
+    var volumeLevel by remember { mutableFloatStateOf(0.5f) }
+    var isDraggingBrightness by remember { mutableStateOf(false) }
+    var isDraggingVolume by remember { mutableStateOf(false) }
+    var showBrightnessIndicator by remember { mutableStateOf(false) }
+    var showVolumeIndicator by remember { mutableStateOf(false) }
+
+    var seekFlashTrigger by remember { mutableIntStateOf(0) }
+    var seekFlashIsForward by remember { mutableStateOf(true) }
+    var showSeekFlash by remember { mutableStateOf(false) }
+
+    // Baca level brightness & volume SAAT INI sekali di awal, biar drag
+    // pertama mulai dari posisi yang bener (bukan ujug-ujug dari 50%).
+    LaunchedEffect(Unit) {
+        val activity = context.findActivity()
+        val windowBrightness = activity?.window?.attributes?.screenBrightness
+        brightnessLevel = if (windowBrightness != null && windowBrightness >= 0f) {
+            windowBrightness
+        } else {
+            runCatching {
+                Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS) / 255f
+            }.getOrDefault(0.5f)
+        }.coerceIn(0f, 1f)
+
+        val currentVol = audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: (maxVolume / 2)
+        volumeLevel = (currentVol.toFloat() / maxVolume).coerceIn(0f, 1f)
+    }
+
+    // Sembunyiin indikator brightness/volume ~600ms setelah jari diangkat,
+    // bukan langsung ilang -- biar sempat kebaca angka akhirnya.
+    LaunchedEffect(isDraggingBrightness) {
+        if (isDraggingBrightness) {
+            showBrightnessIndicator = true
+        } else {
+            delay(600)
+            showBrightnessIndicator = false
+        }
+    }
+    LaunchedEffect(isDraggingVolume) {
+        if (isDraggingVolume) {
+            showVolumeIndicator = true
+        } else {
+            delay(600)
+            showVolumeIndicator = false
+        }
+    }
+
+    // Flash ikon "+10/-10" pas double-tap, ilang otomatis abis sebentar.
+    LaunchedEffect(seekFlashTrigger) {
+        if (seekFlashTrigger == 0) return@LaunchedEffect
+        showSeekFlash = true
+        delay(500)
+        showSeekFlash = false
+    }
+
+    // Tutup semua dropdown/sidebar pas beneran masuk mode PiP -- jendela
+    // kecil gak ada gunanya nampilin menu yang gak bisa disentuh dengan
+    // nyaman, dan overlay kontrolnya sendiri disembunyiin total (lihat di
+    // bawah).
+    LaunchedEffect(isInPip) {
+        if (isInPip) {
+            showQualityMenu = false
+            showSpeedMenu = false
+            showEpisodeList = false
+            isControlsVisible = false
+        }
+    }
+
+    fun applyBrightness(value: Float) {
+        val activity = context.findActivity() ?: return
+        val window = activity.window
+        val params = window.attributes
+        params.screenBrightness = value.coerceIn(0.01f, 1f)
+        window.attributes = params
+    }
+
+    fun applyVolume(value: Float) {
+        val am = audioManager ?: return
+        val target = (value * maxVolume).roundToInt().coerceIn(0, maxVolume)
+        am.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0)
+    }
 
     // Jaga biar auto-lanjut ke episode berikutnya cuma kejadian sekali pas
     // masuk zona outro, gak nge-trigger berkali-kali tiap tick progress.
@@ -300,6 +416,9 @@ fun PlayerScreen(
             override fun onIsPlayingChanged(playing: Boolean) {
                 isPlaying = playing
             }
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                PipController.setAspectRatio(videoSize.width, videoSize.height)
+            }
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = playbackState == Player.STATE_BUFFERING
                 if (playbackState == Player.STATE_READY) {
@@ -362,10 +481,58 @@ fun PlayerScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() }
-                            ) { isControlsVisible = !isControlsVisible }
+                            .pointerInput(Unit) {
+                                detectTapGestures(
+                                    onTap = { isControlsVisible = !isControlsVisible },
+                                    onDoubleTap = { offset ->
+                                        val isLeftSide = offset.x < size.width / 2f
+                                        if (isLeftSide) {
+                                            val newPos = (exoPlayer.currentPosition - 10000).coerceAtLeast(0)
+                                            exoPlayer.seekTo(newPos)
+                                            seekFlashIsForward = false
+                                        } else {
+                                            val cap = if (duration > 0) duration else Long.MAX_VALUE
+                                            val newPos = (exoPlayer.currentPosition + 10000).coerceAtMost(cap)
+                                            exoPlayer.seekTo(newPos)
+                                            seekFlashIsForward = true
+                                        }
+                                        seekFlashTrigger++
+                                    }
+                                )
+                            }
+                            .pointerInput(Unit) {
+                                var isLeftSideDrag = false
+                                detectDragGestures(
+                                    onDragStart = { offset ->
+                                        isLeftSideDrag = offset.x < size.width / 2f
+                                        if (isLeftSideDrag) {
+                                            isDraggingBrightness = true
+                                        } else {
+                                            isDraggingVolume = true
+                                        }
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        // Swipe ke atas nambah level -- makanya dibalik (negatif).
+                                        val deltaFrac = -dragAmount.y / size.height.toFloat()
+                                        if (isLeftSideDrag) {
+                                            brightnessLevel = (brightnessLevel + deltaFrac).coerceIn(0f, 1f)
+                                            applyBrightness(brightnessLevel)
+                                        } else {
+                                            volumeLevel = (volumeLevel + deltaFrac).coerceIn(0f, 1f)
+                                            applyVolume(volumeLevel)
+                                        }
+                                    },
+                                    onDragEnd = {
+                                        isDraggingBrightness = false
+                                        isDraggingVolume = false
+                                    },
+                                    onDragCancel = {
+                                        isDraggingBrightness = false
+                                        isDraggingVolume = false
+                                    }
+                                )
+                            }
                     ) {
                         // Media3 Player View
                         AndroidView(
@@ -395,17 +562,77 @@ fun PlayerScreen(
                             )
                         }
 
-                        // Custom Controls Overlay
-                        AnimatedVisibility(
-                            visible = isControlsVisible,
-                            enter = fadeIn(tween(150)),
-                            exit = fadeOut(tween(150)),
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                // Scrim gradient atas -- gelap di tepi paling atas,
-                                // memudar ke transparan. Bukan overlay hitam rata di
-                                // seluruh layar, biar video tetep keliatan jernih di
+                        // Semua overlay interaktif (kontrol, indikator gesture,
+                        // sidebar episode) disembunyiin total pas beneran lagi
+                        // PiP -- jendela kecilnya cuma nampilin video mentah,
+                        // sistem yang gambar tombol play/pause/close sendiri.
+                        if (!isInPip) {
+                            // Flash ikon "+10/-10" pas double-tap kiri/kanan.
+                            AnimatedVisibility(
+                                visible = showSeekFlash,
+                                enter = fadeIn(tween(120)),
+                                exit = fadeOut(tween(200)),
+                                modifier = Modifier
+                                    .align(if (seekFlashIsForward) Alignment.CenterEnd else Alignment.CenterStart)
+                                    .padding(horizontal = 56.dp)
+                            ) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color.Black.copy(alpha = 0.55f)
+                                ) {
+                                    Icon(
+                                        imageVector = if (seekFlashIsForward) Icons.Default.Forward10 else Icons.Default.Replay10,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier
+                                            .padding(16.dp)
+                                            .size(30.dp)
+                                    )
+                                }
+                            }
+
+                            // Indikator brightness pas swipe di setengah layar kiri.
+                            AnimatedVisibility(
+                                visible = showBrightnessIndicator,
+                                enter = fadeIn(tween(100)),
+                                exit = fadeOut(tween(200)),
+                                modifier = Modifier
+                                    .align(Alignment.CenterStart)
+                                    .padding(start = 28.dp)
+                            ) {
+                                GestureLevelIndicator(
+                                    icon = brightnessIconFor(brightnessLevel),
+                                    level = brightnessLevel
+                                )
+                            }
+
+                            // Indikator volume pas swipe di setengah layar kanan.
+                            AnimatedVisibility(
+                                visible = showVolumeIndicator,
+                                enter = fadeIn(tween(100)),
+                                exit = fadeOut(tween(200)),
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .padding(end = 28.dp)
+                            ) {
+                                GestureLevelIndicator(
+                                    icon = volumeIconFor(volumeLevel),
+                                    level = volumeLevel
+                                )
+                            }
+
+                            // Custom Controls Overlay
+                            AnimatedVisibility(
+                                visible = isControlsVisible,
+                                enter = fadeIn(tween(150)),
+                                exit = fadeOut(tween(150)),
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    // Scrim gradient atas -- gelap di tepi paling atas,
+                                    // memudar ke transparan. Bukan overlay hitam rata di
+                                    // seluruh layar, biar video tetep keliatan jernih di
+
                                 // area tengah kayak Crunchyroll/Netflix.
                                 Box(
                                     modifier = Modifier
@@ -475,6 +702,18 @@ fun PlayerScreen(
                                             )
                                         }
                                     }
+
+                                    Spacer(modifier = Modifier.width(4.dp))
+
+                                    // Picture-in-Picture Trigger -- manual, di
+                                    // luar auto-PiP pas user pindah app.
+                                    PlayerIconButton(
+                                        icon = Icons.Default.PictureInPictureAlt,
+                                        contentDescription = "Picture in Picture",
+                                        onClick = {
+                                            context.findActivity()?.let { PipController.requestEnter(it) }
+                                        }
+                                    )
 
                                     Spacer(modifier = Modifier.width(4.dp))
 
@@ -680,9 +919,78 @@ fun PlayerScreen(
                                 onNextEpisodeClick(ep.id)
                             }
                         )
+                        } // tutup if (!isInPip)
                     }
                 }
             }
+        }
+    }
+}
+
+/** Pilih ikon brightness yang paling nyambung sama level saat ini. */
+private fun brightnessIconFor(level: Float): ImageVector = when {
+    level < 0.15f -> Icons.Default.BrightnessLow
+    level < 0.7f -> Icons.Default.BrightnessMedium
+    else -> Icons.Default.BrightnessHigh
+}
+
+/** Pilih ikon volume yang paling nyambung sama level saat ini. */
+private fun volumeIconFor(level: Float): ImageVector = when {
+    level <= 0f -> Icons.Default.VolumeOff
+    level < 0.5f -> Icons.Default.VolumeDown
+    else -> Icons.Default.VolumeUp
+}
+
+/**
+ * Pill vertikal buat nunjukin level brightness/volume pas lagi di-swipe --
+ * ikon di atas, track tipis di tengah, persentase di bawah. Muncul di sisi
+ * kiri (brightness) atau kanan (volume) layar selama jari nyentuh, ilang
+ * beberapa saat setelah dilepas.
+ */
+@Composable
+private fun GestureLevelIndicator(
+    icon: ImageVector,
+    level: Float,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = Color.Black.copy(alpha = 0.6f),
+        modifier = modifier
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(70.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color.White.copy(alpha = 0.25f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .fillMaxHeight(level.coerceIn(0f, 1f))
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(PlayerAccent)
+                )
+            }
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "${(level * 100).roundToInt()}%",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = Color.White
+            )
         }
     }
 }
