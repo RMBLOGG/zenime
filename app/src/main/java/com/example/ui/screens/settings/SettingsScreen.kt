@@ -548,36 +548,35 @@ fun SettingsScreen(
                             modifier = Modifier.padding(vertical = 26.dp, horizontal = 20.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                // Glow halus di belakang logo -- satu-satunya aksen dekoratif
-                                // yang agak "berani" di layar ini, dijaga tetap tenang & tipis.
+                            Box(
+                                modifier = Modifier.size(120.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                // Glow halus simetris di belakang logo -- satu-satunya aksen
+                                // dekoratif yang agak "berani" di layar ini, dijaga tenang & tipis.
                                 Box(
                                     modifier = Modifier
-                                        .size(120.dp)
+                                        .matchParentSize()
                                         .clip(CircleShape)
                                         .background(
                                             Brush.radialGradient(
                                                 colors = listOf(
-                                                    ZenimePrimary.copy(alpha = 0.22f),
+                                                    ZenimePrimary.copy(alpha = 0.20f),
                                                     Color.Transparent
                                                 )
                                             )
                                         )
                                 )
-                                Box(
+                                // Logo dipakai apa adanya (bentuk rounded-square aslinya),
+                                // tanpa dibungkus circle lain biar gak nabrak sama bentuk/warna
+                                // ikon dan gak keliatan miring.
+                                Image(
+                                    painter = painterResource(id = R.drawable.zenime_logo_1786121211149),
+                                    contentDescription = "Zenime Logo",
                                     modifier = Modifier
-                                        .size(72.dp)
-                                        .clip(CircleShape)
-                                        .background(ZenimePrimary.copy(alpha = 0.12f))
-                                        .border(1.dp, CardOutlineBorder, CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Image(
-                                        painter = painterResource(id = R.drawable.zenime_logo_1786121211149),
-                                        contentDescription = "Zenime Logo",
-                                        modifier = Modifier.size(46.dp)
-                                    )
-                                }
+                                        .size(76.dp)
+                                        .clip(RoundedCornerShape(20.dp))
+                                )
                             }
 
                             Spacer(modifier = Modifier.height(16.dp))
