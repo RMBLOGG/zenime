@@ -9,7 +9,7 @@ import retrofit2.converter.moshi.MoshiConverterFactory
 import java.util.concurrent.TimeUnit
 
 object NetworkModule {
-    private const val BASE_URL = "https://animeinweb-api.vercel.app/api/"
+    private const val BASE_URL = "http://203.175.11.166:5001/api/"
 
     val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
