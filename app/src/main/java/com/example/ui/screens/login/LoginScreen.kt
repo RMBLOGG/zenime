@@ -1,18 +1,21 @@
 package com.example.ui.screens.login
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
@@ -25,20 +28,29 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import com.example.R
 import com.example.ui.theme.CardOutlineBorder
+import com.example.ui.theme.ZenimeBackgroundDark
 import com.example.ui.theme.ZenimePrimary
 
 /**
- * Gerbang wajib login sebelum masuk ke app. Ditaruh di antara Splash dan
- * Home di NavGraph -- lihat ZenimeAppNavHost.
+ * Gerbang wajib login sebelum masuk ke app. Ditaruh sebagai start
+ * destination di NavGraph kalau belum ada sesi Firebase aktif -- lihat
+ * ZenimeAppNavHost.
+ *
+ * Backdrop-nya grid poster anime (dari homepage repository) yang diputar
+ * miring, terinspirasi tampilan login Crunchyroll.
  */
 @Composable
 fun LoginScreen(
@@ -48,22 +60,69 @@ fun LoginScreen(
 ) {
     val isSigningIn by viewModel.isSigningIn.collectAsStateWithLifecycle()
     val loginError by viewModel.loginError.collectAsStateWithLifecycle()
+    val posterUrls by viewModel.posterUrls.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 32.dp),
-        contentAlignment = Alignment.Center
+            .background(ZenimeBackgroundDark)
     ) {
+        // Layer 1: grid poster yang diputar miring, statis (bukan buat discroll)
+        if (posterUrls.isNotEmpty()) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                userScrollEnabled = false,
+                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        rotationZ = -9f
+                        scaleX = 1.35f
+                        scaleY = 1.35f
+                    }
+            ) {
+                items(posterUrls) { url ->
+                    AsyncImage(
+                        model = url,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .aspectRatio(0.7f)
+                            .clip(RoundedCornerShape(4.dp))
+                    )
+                }
+            }
+        }
+
+        // Layer 2: gradient gelap biar teks & tombol tetap gampang dibaca
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0.0f to ZenimeBackgroundDark.copy(alpha = 0.55f),
+                            0.45f to ZenimeBackgroundDark.copy(alpha = 0.75f),
+                            1.0f to ZenimeBackgroundDark
+                        )
+                    )
+                )
+        )
+
+        // Layer 3: logo kecil + judul + tombol login, nempel di bawah
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 28.dp)
+                .padding(bottom = 40.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Box(
                 modifier = Modifier
-                    .size(96.dp)
+                    .size(64.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
@@ -71,16 +130,16 @@ fun LoginScreen(
                 Image(
                     painter = painterResource(id = R.drawable.zenime_logo_1786121211149),
                     contentDescription = "Zenime Logo",
-                    modifier = Modifier.size(68.dp)
+                    modifier = Modifier.size(46.dp)
                 )
             }
 
             Spacer(modifier = Modifier.height(20.dp))
 
             Text(
-                text = "Selamat Datang di Zenime",
+                text = "Semua anime favoritmu.\nSemua di satu tempat.",
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onBackground,
+                color = Color.White,
                 textAlign = TextAlign.Center
             )
 
@@ -93,7 +152,7 @@ fun LoginScreen(
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(36.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
             OutlinedButton(
                 onClick = {
@@ -105,9 +164,9 @@ fun LoginScreen(
                     .height(52.dp),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = MaterialTheme.colorScheme.onSurface
+                    contentColor = Color.White
                 ),
-                border = BorderStroke(1.dp, CardOutlineBorder)
+                border = androidx.compose.foundation.BorderStroke(1.dp, CardOutlineBorder)
             ) {
                 if (isSigningIn) {
                     CircularProgressIndicator(

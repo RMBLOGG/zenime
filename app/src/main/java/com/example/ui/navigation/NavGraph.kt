@@ -72,7 +72,6 @@ import com.example.ui.screens.search.SearchScreen
 import com.example.ui.screens.search.SearchViewModel
 import com.example.ui.screens.settings.SettingsScreen
 import com.example.ui.screens.settings.SettingsViewModel
-import com.example.ui.screens.splash.SplashScreen
 import com.example.ui.theme.ZenimePrimary
 import com.example.util.findActivity
 
@@ -82,7 +81,6 @@ sealed class Screen(
     val selectedIcon: ImageVector? = null,
     val unselectedIcon: ImageVector? = null
 ) {
-    data object Splash : Screen("splash")
     data object Login : Screen("login")
     data object Home : Screen("home", "Home", Icons.Filled.Home, Icons.Outlined.Home)
     data object Search : Screen("search?status={status}", "Cari", Icons.Filled.Search, Icons.Outlined.Search) {
@@ -127,11 +125,11 @@ fun ZenimeAppNavHost(
     val currentUser by authRepository.currentUser.collectAsStateWithLifecycle()
 
     // Kalau user logout (misal dari tombol Logout di Settings) pas lagi
-    // gak di Splash/Login, lempar balik ke Login dan bersihin backstack --
+    // gak di Login, lempar balik ke Login dan bersihin backstack --
     // supaya gak ada cara masuk balik ke Home tanpa login ulang.
     LaunchedEffect(currentUser) {
         if (currentUser == null && currentRoute != null &&
-            currentRoute != Screen.Splash.route && currentRoute != Screen.Login.route
+            currentRoute != Screen.Login.route
         ) {
             navController.navigate(Screen.Login.route) {
                 popUpTo(0) { inclusive = true }
@@ -163,33 +161,25 @@ fun ZenimeAppNavHost(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
+        // AuthRepository nyimpen currentUser secara synchronous dari
+        // firebaseAuth.currentUser pas di-init (lihat AuthRepository.kt),
+        // jadi kita bisa langsung mutusin start destination di sini tanpa
+        // splash screen buat nunggu status login kebaca dulu.
+        val startDestination = if (authRepository.currentUser.value != null) {
+            Screen.Home.route
+        } else {
+            Screen.Login.route
+        }
+
         NavHost(
             navController = navController,
-            startDestination = Screen.Splash.route,
+            startDestination = startDestination,
             modifier = Modifier.fillMaxSize()
         ) {
-            // Splash Screen
-            composable(Screen.Splash.route) {
-                SplashScreen(
-                    onSplashFinished = {
-                        // Wajib login: kalau belum ada sesi Firebase yang
-                        // aktif, arahkan ke Login dulu, bukan langsung Home.
-                        val destination = if (authRepository.currentUser.value != null) {
-                            Screen.Home.route
-                        } else {
-                            Screen.Login.route
-                        }
-                        navController.navigate(destination) {
-                            popUpTo(Screen.Splash.route) { inclusive = true }
-                        }
-                    }
-                )
-            }
-
             // Login Screen (wajib sebelum masuk app)
             composable(Screen.Login.route) {
                 val loginViewModel: LoginViewModel = viewModel(
-                    factory = viewModelFactory { initializer { LoginViewModel(authRepository) } }
+                    factory = viewModelFactory { initializer { LoginViewModel(authRepository, repository) } }
                 )
                 LoginScreen(
                     viewModel = loginViewModel,
