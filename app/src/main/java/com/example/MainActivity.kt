@@ -9,6 +9,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import com.example.data.api.NetworkModule
 import com.example.data.local.UserPreferencesRepository
 import com.example.data.local.ZenimeDatabase
@@ -16,6 +17,7 @@ import com.example.data.repository.AnimeRepository
 import com.example.ui.navigation.ZenimeAppNavHost
 import com.example.ui.theme.ZenimeTheme
 import com.example.util.PipController
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -30,6 +32,14 @@ class MainActivity : ComponentActivity() {
             dao = database.zenimeDao(),
             userPrefs = userPrefs
         )
+
+        // Mulai narik data homepage (buat poster backdrop LoginScreen dan
+        // konten HomeScreen) sesegera mungkin, sebelum compose pertama kali
+        // ke-render -- supaya poster udah nyampe/lagi keburu kecache pas
+        // LoginScreen tampil, bukan mulai fetch baru pas layar itu dibuka.
+        lifecycleScope.launch {
+            repository.getHome().collect { }
+        }
 
         setContent {
             val themeMode by userPrefs.themeModeFlow.collectAsStateWithLifecycle(initialValue = "DARK")

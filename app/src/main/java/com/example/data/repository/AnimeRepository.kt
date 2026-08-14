@@ -12,10 +12,13 @@ import com.example.data.model.GenreItem
 import com.example.data.model.HomeResponse
 import com.example.data.model.SearchResponse
 import com.example.data.model.StreamResponse
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 
 class AnimeRepository(
@@ -43,6 +46,8 @@ class AnimeRepository(
     }
 
     private var homeCache: CacheEntry<HomeResponse>? = null
+    private val homeMutex = Mutex()
+    private var homeInFlight: CompletableDeferred<HomeResponse>? = null
     private val searchCache = ConcurrentHashMap<String, CacheEntry<SearchResponse>>()
     private val detailCache = ConcurrentHashMap<String, CacheEntry<AnimeItem>>()
     private val episodesCache = ConcurrentHashMap<String, CacheEntry<List<EpisodeItem>>>()
@@ -70,20 +75,46 @@ class AnimeRepository(
         }
         emit(Result.Loading)
         try {
-            val response = api.getHome()
-            homeCache = CacheEntry(response, System.currentTimeMillis())
+            val response = fetchHomeDeduped()
             emit(Result.Success(response))
         } catch (e: Exception) {
             // API lagi bermasalah tapi masih ada cache lama -> tampilin
             // daripada nge-blank-in layar. Lebih baik data agak basi
             // daripada error total.
-            if (cached != null) {
-                emit(Result.Success(cached.data))
+            val cachedAfterFailure = homeCache
+            if (cachedAfterFailure != null) {
+                emit(Result.Success(cachedAfterFailure.data))
             } else {
                 emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat beranda"))
             }
         }
     }.flowOn(Dispatchers.IO)
+
+    /**
+     * Kalau ada beberapa pemanggil getHome() hampir bersamaan (misal warm-up
+     * di MainActivity.onCreate() dan LoginViewModel.init() yang jalan
+     * beriringan pas app baru dibuka), cukup satu yang beneran nembak
+     * network -- pemanggil lain nunggu hasil yang sama. Ini penting justru
+     * di momen paling kritis (cold start), bukan cuma buat ngirit kuota.
+     */
+    private suspend fun fetchHomeDeduped(): HomeResponse {
+        val existing = homeMutex.withLock { homeInFlight }
+        if (existing != null) return existing.await()
+
+        val deferred = CompletableDeferred<HomeResponse>()
+        homeMutex.withLock { homeInFlight = deferred }
+        return try {
+            val response = api.getHome()
+            homeCache = CacheEntry(response, System.currentTimeMillis())
+            deferred.complete(response)
+            response
+        } catch (e: Exception) {
+            deferred.completeExceptionally(e)
+            throw e
+        } finally {
+            homeMutex.withLock { homeInFlight = null }
+        }
+    }
 
     // ---- Search ----------------------------------------------------------
     fun search(

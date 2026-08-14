@@ -1,6 +1,5 @@
 package com.example.ui.screens.login
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,11 +11,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -24,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,12 +37,17 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.R
+import com.example.ui.components.shimmerBrush
 import com.example.ui.theme.CardOutlineBorder
 import com.example.ui.theme.ZenimeBackgroundDark
 import com.example.ui.theme.ZenimePrimary
+import com.example.util.findActivity
 
 /**
  * Gerbang wajib login sebelum masuk ke app. Ditaruh sebagai start
@@ -50,7 +55,8 @@ import com.example.ui.theme.ZenimePrimary
  * ZenimeAppNavHost.
  *
  * Backdrop-nya grid poster anime (dari homepage repository) yang diputar
- * miring, terinspirasi tampilan login Crunchyroll.
+ * miring. Sebelum data poster kebaca dari API, grid diisi placeholder
+ * shimmer dulu (bukan layar hitam kosong) supaya kesannya langsung muncul.
  */
 @Composable
 fun LoginScreen(
@@ -63,27 +69,56 @@ fun LoginScreen(
     val posterUrls by viewModel.posterUrls.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
+    // Sembunyiin navigation bar sistem selama di halaman ini biar backdrop
+    // poster-nya full-bleed sampai bawah layar. Dikembaliin lagi begitu user
+    // pindah dari layar ini (login sukses / activity di-dispose) -- pola
+    // yang sama kayak immersive mode di PlayerScreen.
+    DisposableEffect(Unit) {
+        val activity = context.findActivity()
+        val window = activity?.window
+
+        if (window != null) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            val insetsController = WindowInsetsControllerCompat(window, window.decorView)
+            insetsController.hide(WindowInsetsCompat.Type.navigationBars())
+            insetsController.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+
+        onDispose {
+            if (window != null) {
+                WindowCompat.setDecorFitsSystemWindows(window, true)
+                val insetsController = WindowInsetsControllerCompat(window, window.decorView)
+                insetsController.show(WindowInsetsCompat.Type.navigationBars())
+            }
+        }
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(ZenimeBackgroundDark)
     ) {
-        // Layer 1: grid poster yang diputar miring, statis (bukan buat discroll)
-        if (posterUrls.isNotEmpty()) {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                userScrollEnabled = false,
-                horizontalArrangement = Arrangement.spacedBy(3.dp),
-                verticalArrangement = Arrangement.spacedBy(3.dp),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        rotationZ = -9f
-                        scaleX = 1.35f
-                        scaleY = 1.35f
-                    }
-            ) {
-                items(posterUrls) { url ->
+        // Layer 1: grid poster yang diputar miring, statis (bukan buat discroll).
+        // Selalu 24 slot: keisi poster asli kalau udah ada, sisanya shimmer
+        // placeholder -- jadi grid-nya langsung tampil penuh dari awal,
+        // gak nunggu network selesai dulu baru muncul.
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(3),
+            userScrollEnabled = false,
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    rotationZ = -9f
+                    scaleX = 1.35f
+                    scaleY = 1.35f
+                }
+        ) {
+            items(24) { index ->
+                val url = posterUrls.getOrNull(index)
+                if (url != null) {
                     AsyncImage(
                         model = url,
                         contentDescription = null,
@@ -91,6 +126,13 @@ fun LoginScreen(
                         modifier = Modifier
                             .aspectRatio(0.7f)
                             .clip(RoundedCornerShape(4.dp))
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .aspectRatio(0.7f)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(shimmerBrush())
                     )
                 }
             }
@@ -111,7 +153,18 @@ fun LoginScreen(
                 )
         )
 
-        // Layer 3: logo kecil + judul + tombol login, nempel di bawah
+        // Layer 3: wordmark logo di pojok kiri atas
+        androidx.compose.foundation.Image(
+            painter = painterResource(id = R.drawable.zenime_wordmark),
+            contentDescription = "Zenime",
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .statusBarsPadding()
+                .padding(start = 20.dp, top = 16.dp)
+                .height(28.dp)
+        )
+
+        // Layer 4: judul + tombol login, nempel di bawah
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -120,22 +173,6 @@ fun LoginScreen(
                 .padding(bottom = 40.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.zenime_logo_1786121211149),
-                    contentDescription = "Zenime Logo",
-                    modifier = Modifier.size(46.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
             Text(
                 text = "Semua anime favoritmu.\nSemua di satu tempat.",
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
