@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -54,12 +55,15 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.data.repository.AnimeRepository
+import com.example.data.repository.AuthRepository
 import com.example.ui.screens.detail.DetailScreen
 import com.example.ui.screens.detail.DetailViewModel
 import com.example.ui.screens.favorites.FavoritesHistoryScreen
 import com.example.ui.screens.favorites.FavoritesHistoryViewModel
 import com.example.ui.screens.home.HomeScreen
 import com.example.ui.screens.home.HomeViewModel
+import com.example.ui.screens.login.LoginScreen
+import com.example.ui.screens.login.LoginViewModel
 import com.example.ui.screens.player.PlayerScreen
 import com.example.ui.screens.player.PlayerViewModel
 import com.example.ui.screens.schedule.ScheduleScreen
@@ -79,6 +83,7 @@ sealed class Screen(
     val unselectedIcon: ImageVector? = null
 ) {
     data object Splash : Screen("splash")
+    data object Login : Screen("login")
     data object Home : Screen("home", "Home", Icons.Filled.Home, Icons.Outlined.Home)
     data object Search : Screen("search?status={status}", "Cari", Icons.Filled.Search, Icons.Outlined.Search) {
         fun createRoute(status: String? = null): String =
@@ -115,6 +120,25 @@ fun ZenimeAppNavHost(
 
     val showBottomBar = currentRoute in bottomNavScreens.map { it.route }
 
+    // Satu instance AuthRepository dipakai bareng sama LoginScreen di bawah,
+    // biar status login yang dicek buat mutusin navigasi (Splash -> Login
+    // atau Home) sama persis sama yang di-observe screen lain.
+    val authRepository = remember { AuthRepository() }
+    val currentUser by authRepository.currentUser.collectAsStateWithLifecycle()
+
+    // Kalau user logout (misal dari tombol Logout di Settings) pas lagi
+    // gak di Splash/Login, lempar balik ke Login dan bersihin backstack --
+    // supaya gak ada cara masuk balik ke Home tanpa login ulang.
+    LaunchedEffect(currentUser) {
+        if (currentUser == null && currentRoute != null &&
+            currentRoute != Screen.Splash.route && currentRoute != Screen.Login.route
+        ) {
+            navController.navigate(Screen.Login.route) {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+    }
+
     // Lock orientasi landscape berdasarkan ROUTE saat ini (bukan lifecycle
     // masing-masing composable PlayerScreen). Ini penting pas pindah dari
     // satu episode ke episode selanjutnya: dua instance PlayerScreen (lama &
@@ -148,8 +172,30 @@ fun ZenimeAppNavHost(
             composable(Screen.Splash.route) {
                 SplashScreen(
                     onSplashFinished = {
-                        navController.navigate(Screen.Home.route) {
+                        // Wajib login: kalau belum ada sesi Firebase yang
+                        // aktif, arahkan ke Login dulu, bukan langsung Home.
+                        val destination = if (authRepository.currentUser.value != null) {
+                            Screen.Home.route
+                        } else {
+                            Screen.Login.route
+                        }
+                        navController.navigate(destination) {
                             popUpTo(Screen.Splash.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
+
+            // Login Screen (wajib sebelum masuk app)
+            composable(Screen.Login.route) {
+                val loginViewModel: LoginViewModel = viewModel(
+                    factory = viewModelFactory { initializer { LoginViewModel(authRepository) } }
+                )
+                LoginScreen(
+                    viewModel = loginViewModel,
+                    onLoginSuccess = {
+                        navController.navigate(Screen.Home.route) {
+                            popUpTo(Screen.Login.route) { inclusive = true }
                         }
                     }
                 )
