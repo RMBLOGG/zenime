@@ -109,7 +109,7 @@ private fun SettingsGroupCard(
             .fillMaxWidth()
             .border(1.dp, CardOutlineBorder, RoundedCornerShape(18.dp))
     ) {
-        Column(content = content)
+        Column(modifier = Modifier.fillMaxWidth(), content = content)
     }
 }
 
@@ -544,101 +544,101 @@ fun SettingsScreen(
                             .fillMaxWidth()
                             .border(1.dp, CardOutlineBorder, RoundedCornerShape(18.dp))
                     ) {
-                        Column(
-                            modifier = Modifier.padding(vertical = 26.dp, horizontal = 20.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Box(
-                                modifier = Modifier.size(120.dp),
-                                contentAlignment = Alignment.Center
+                        Column(modifier = Modifier.fillMaxWidth()) {
+
+                            // Header: logo di kiri, nama + tagline di tengah, versi di kanan.
+                            // Row biar gak ada masalah centering kayak layout stack sebelumnya.
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // Glow halus simetris di belakang logo -- satu-satunya aksen
-                                // dekoratif yang agak "berani" di layar ini, dijaga tenang & tipis.
-                                Box(
-                                    modifier = Modifier
-                                        .matchParentSize()
-                                        .clip(CircleShape)
-                                        .background(
-                                            Brush.radialGradient(
-                                                colors = listOf(
-                                                    ZenimePrimary.copy(alpha = 0.20f),
-                                                    Color.Transparent
-                                                )
-                                            )
-                                        )
-                                )
-                                // Logo dipakai apa adanya (bentuk rounded-square aslinya),
-                                // tanpa dibungkus circle lain biar gak nabrak sama bentuk/warna
-                                // ikon dan gak keliatan miring.
                                 Image(
                                     painter = painterResource(id = R.drawable.zenime_logo_1786121211149),
                                     contentDescription = "Zenime Logo",
                                     modifier = Modifier
-                                        .size(76.dp)
+                                        .size(56.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                )
+
+                                Spacer(modifier = Modifier.width(14.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Zenime",
+                                        style = MaterialTheme.typography.titleMedium.copy(
+                                            fontWeight = FontWeight.ExtraBold,
+                                            letterSpacing = (-0.2).sp
+                                        ),
+                                        color = Color.White,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = "Nonton Anime, Tenang & Modern",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(10.dp))
+
+                                Box(
+                                    modifier = Modifier
                                         .clip(RoundedCornerShape(20.dp))
-                                )
+                                        .background(ZenimePrimary.copy(alpha = 0.14f))
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                ) {
+                                    Text(
+                                        text = "v1.0.0",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = ZenimePrimary
+                                    )
+                                }
                             }
 
-                            Spacer(modifier = Modifier.height(16.dp))
+                            HorizontalDivider(thickness = 1.dp, color = CardOutlineBorder.copy(alpha = 0.6f))
 
-                            Text(
-                                text = "Zenime",
-                                style = MaterialTheme.typography.titleLarge.copy(
-                                    fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = (-0.3).sp
-                                ),
-                                color = Color.White
-                            )
-
-                            Spacer(modifier = Modifier.height(4.dp))
-
-                            Text(
-                                text = "Nonton Anime, Tenang & Modern",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-
-                            Spacer(modifier = Modifier.height(14.dp))
-
-                            Box(
+                            // Baris info teknis, rata kiri konsisten sama section lain.
+                            Column(
                                 modifier = Modifier
-                                    .clip(RoundedCornerShape(20.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Text(
-                                    text = "VERSI 1.0.0",
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.6.sp
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Native Kotlin \u00b7 Jetpack Compose \u00b7 Material 3",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(6.dp)
+                                            .clip(CircleShape)
+                                            .background(ZenimePrimary.copy(alpha = 0.7f))
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Powered by Dayynime v5 API & Direct MP4 Streaming",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = ZenimePrimary.copy(alpha = 0.9f)
+                                    )
+                                }
                             }
-
-                            Spacer(modifier = Modifier.height(6.dp))
-
-                            Text(
-                                text = "Native Kotlin \u00b7 Jetpack Compose \u00b7 Material 3",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                            )
-
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            HorizontalDivider(
-                                modifier = Modifier.fillMaxWidth(0.6f),
-                                thickness = 1.dp,
-                                color = CardOutlineBorder
-                            )
-
-                            Spacer(modifier = Modifier.height(14.dp))
-
-                            Text(
-                                text = "Powered by Dayynime v5 API & Direct MP4 Streaming",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = ZenimePrimary.copy(alpha = 0.9f)
-                            )
                         }
                     }
                 }
