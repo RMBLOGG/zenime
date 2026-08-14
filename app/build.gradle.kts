@@ -20,6 +20,9 @@ android {
     versionCode = 1
     versionName = "1.0"
 
+    // Unity Ads Game ID (Monetization > Apps di dashboard Unity Cloud).
+    buildConfigField("String", "UNITY_ADS_GAME_ID", "\"800355766\"")
+
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
@@ -111,6 +114,7 @@ dependencies {
   implementation(libs.coil.compose)
   implementation(libs.androidx.media3.exoplayer)
   implementation(libs.androidx.media3.ui)
+  implementation(libs.unity.ads)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
   // Uncomment to use Firestore:

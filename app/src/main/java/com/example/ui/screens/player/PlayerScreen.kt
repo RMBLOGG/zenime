@@ -121,6 +121,7 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.ads.AdManager
 import com.example.data.common.Result
 import com.example.data.model.EpisodeItem
 import com.example.ui.components.ErrorStateView
@@ -199,6 +200,18 @@ fun PlayerScreen(
         PipController.setCanEnterPip(true)
         onDispose {
             PipController.setCanEnterPip(false)
+        }
+    }
+
+    // Tampilin video ad (interstitial, bisa di-skip) sekali tiap kali layar
+    // ini dibuka buat episode baru. PlayerScreen di-compose ulang dari nol
+    // tiap pindah episode (lihat NavGraph: PlayerViewModel baru dibikin per
+    // episodeId), jadi LaunchedEffect(Unit) di sini otomatis cuma jalan
+    // sekali per episode -- BUKAN tiap kali user pencet tombol play.
+    LaunchedEffect(Unit) {
+        val activity = context.findActivity()
+        if (activity != null) {
+            AdManager.showInterstitial(activity) {}
         }
     }
 

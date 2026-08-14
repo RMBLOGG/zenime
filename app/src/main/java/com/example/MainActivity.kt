@@ -10,6 +10,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import com.example.ads.AdManager
 import com.example.data.api.NetworkModule
 import com.example.data.api.RemoteConfigManager
 import com.example.data.local.UserPreferencesRepository
@@ -25,6 +26,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Init Unity Ads sedini mungkin biar interstitial udah siap kepake
+        // pas user pertama kali buka PlayerScreen.
+        AdManager.initialize(this)
 
         val database = ZenimeDatabase.getInstance(this)
         val userPrefs = UserPreferencesRepository(this)
