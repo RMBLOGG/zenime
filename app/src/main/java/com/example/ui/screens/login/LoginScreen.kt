@@ -138,30 +138,34 @@ fun LoginScreen(
             }
         }
 
-        // Layer 2: gradient gelap biar teks & tombol tetap gampang dibaca
+        // Layer 2: gradient gelap -- dibiarin jernih di 2/3 atas biar poster
+        // keliatan jelas kayak referensi, cuma nge-dim di area bawah tempat
+        // teks & tombol duduk.
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
                         colorStops = arrayOf(
-                            0.0f to ZenimeBackgroundDark.copy(alpha = 0.55f),
-                            0.45f to ZenimeBackgroundDark.copy(alpha = 0.75f),
+                            0.0f to Color.Transparent,
+                            0.55f to Color.Transparent,
+                            0.72f to ZenimeBackgroundDark.copy(alpha = 0.55f),
+                            0.88f to ZenimeBackgroundDark.copy(alpha = 0.92f),
                             1.0f to ZenimeBackgroundDark
                         )
                     )
                 )
         )
 
-        // Layer 3: wordmark logo di pojok kiri atas
+        // Layer 3: wordmark logo di pojok kiri atas, seukuran wordmark Crunchyroll
         androidx.compose.foundation.Image(
             painter = painterResource(id = R.drawable.zenime_wordmark),
             contentDescription = "Zenime",
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .statusBarsPadding()
-                .padding(start = 20.dp, top = 16.dp)
-                .height(28.dp)
+                .padding(start = 16.dp, top = 12.dp)
+                .height(40.dp)
         )
 
         // Layer 4: judul + tombol login, nempel di bawah
