@@ -37,4 +37,10 @@ class FavoritesHistoryViewModel(private val repository: AnimeRepository) : ViewM
             repository.clearHistory()
         }
     }
+
+    fun removeFavorite(animeId: String) {
+        viewModelScope.launch {
+            repository.removeFavorite(animeId)
+        }
+    }
 }

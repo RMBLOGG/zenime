@@ -299,6 +299,13 @@ class AnimeRepository(
 
     fun isFavorite(animeId: String): Flow<Boolean> = dao.isFavoriteFlow(animeId)
 
+    // Buat hapus langsung dari kartu Favorit di halaman Koleksi (swipe atau
+    // tombol trash) -- gak butuh AnimeItem lengkap kayak toggleFavorite,
+    // cukup id-nya doang.
+    suspend fun removeFavorite(animeId: String) {
+        dao.deleteFavorite(animeId)
+    }
+
     suspend fun toggleFavorite(anime: AnimeItem, isCurrentlyFavorite: Boolean) {
         if (isCurrentlyFavorite) {
             dao.deleteFavorite(anime.id)

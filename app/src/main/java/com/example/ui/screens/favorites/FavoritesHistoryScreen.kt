@@ -35,8 +35,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -148,11 +151,38 @@ fun FavoritesHistoryScreen(
                                     type = fav.type,
                                     status = fav.status
                                 )
-                                AnimePosterCard(
-                                    anime = dummyItem,
-                                    onClick = { onAnimeClick(fav.id) },
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    AnimePosterCard(
+                                        anime = dummyItem,
+                                        onClick = { onAnimeClick(fav.id) },
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+
+                                    // Tombol hapus favorit -- nempel di pojok
+                                    // kanan-atas poster, background bulat
+                                    // gelap biar kebaca di atas poster apa pun.
+                                    Box(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(6.dp)
+                                            .size(26.dp)
+                                            .clip(CircleShape)
+                                            .background(Color.Black.copy(alpha = 0.55f))
+                                            .clickable(
+                                                indication = null,
+                                                interactionSource = remember { MutableInteractionSource() },
+                                                onClick = { viewModel.removeFavorite(fav.id) }
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Hapus dari Favorit",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -226,6 +256,7 @@ private fun CollectionTab(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WatchHistoryCard(
     item: WatchHistoryEntity,
@@ -239,10 +270,50 @@ fun WatchHistoryCard(
     } else 0f
     val percentWatched = (progressFrac * 100).toInt()
 
+    // Swipe ke arah mana pun (kiri atau kanan) buat hapus -- tombol trash
+    // di kartu tetep ada juga sebagai cara alternatif, dua-duanya manggil
+    // onDeleteClick yang sama.
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.StartToEnd || value == SwipeToDismissBoxValue.EndToStart) {
+                onDeleteClick()
+                true
+            } else {
+                false
+            }
+        }
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        modifier = modifier.fillMaxWidth(),
+        backgroundContent = {
+            val alignment = when (dismissState.dismissDirection) {
+                SwipeToDismissBoxValue.StartToEnd -> Alignment.CenterStart
+                SwipeToDismissBoxValue.EndToStart -> Alignment.CenterEnd
+                SwipeToDismissBoxValue.Settled -> Alignment.Center
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.error)
+                    .padding(horizontal = 28.dp),
+                contentAlignment = alignment
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+    ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .shadow(elevation = 4.dp, shape = RoundedCornerShape(16.dp), clip = false)
             .clip(RoundedCornerShape(16.dp))
@@ -386,6 +457,7 @@ fun WatchHistoryCard(
             }
         }
     }
+    } // tutup content lambda SwipeToDismissBox
 }
 
 /** Format selisih waktu jadi teks relatif kayak "2 jam lalu", "Baru saja". */
