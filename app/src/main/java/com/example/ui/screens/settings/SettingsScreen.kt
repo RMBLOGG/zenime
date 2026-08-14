@@ -4,11 +4,10 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,6 +36,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,8 +49,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,7 +57,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -75,6 +76,112 @@ import com.example.ui.theme.ZenimePrimary
 
 import com.example.ui.components.ZenimeHeader
 import com.example.ui.components.ZenimeScreenTitle
+
+// ---------------------------------------------------------------------------
+// Building blocks pengaturan -- satu card per section, baris dipisah divider
+// tipis (bukan spacer gede), ikon dikasih "chip" kotak membulat bertinta
+// warna primary. Polanya dipakai konsisten di semua section di bawah.
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun SettingsGroupLabel(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text.uppercase(),
+        style = MaterialTheme.typography.labelMedium.copy(
+            fontWeight = FontWeight.Bold,
+            letterSpacing = 1.1.sp,
+            fontSize = 12.sp
+        ),
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier.padding(start = 4.dp)
+    )
+}
+
+@Composable
+private fun SettingsGroupCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = modifier
+            .fillMaxWidth()
+            .border(1.dp, CardOutlineBorder, RoundedCornerShape(18.dp))
+    ) {
+        Column(content = content)
+    }
+}
+
+@Composable
+private fun SettingsIconChip(
+    icon: ImageVector,
+    tint: Color = ZenimePrimary
+) {
+    Box(
+        modifier = Modifier
+            .size(38.dp)
+            .clip(RoundedCornerShape(11.dp))
+            .background(tint.copy(alpha = 0.14f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(imageVector = icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun SettingsRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String? = null,
+    trailing: @Composable () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f, fill = false)
+        ) {
+            SettingsIconChip(icon = icon)
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f, fill = false)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (subtitle != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        trailing()
+    }
+}
+
+/** Divider tipis, indent-nya sejajar sama teks (ngelewatin ikon chip). */
+@Composable
+private fun SettingsRowDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 68.dp, end = 16.dp),
+        thickness = 1.dp,
+        color = CardOutlineBorder.copy(alpha = 0.6f)
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,7 +200,6 @@ fun SettingsScreen(
 
     val context = LocalContext.current
     var showSignOutConfirm by remember { mutableStateOf(false) }
-
     var showQualityMenu by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -112,387 +218,436 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp)
+                    .padding(horizontal = 20.dp, vertical = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(28.dp)
             ) {
-            // Section: Akun
-            Text(
-                text = "Akun",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = ZenimePrimary
-                )
-            )
 
-            Card(
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, CardOutlineBorder, RoundedCornerShape(14.dp))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
+                // ---------------- Section: Akun ----------------
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SettingsGroupLabel("Akun")
+
                     val user = currentUser
-                    if (user == null) {
-                        // Belum login
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.AccountCircle, contentDescription = null, tint = ZenimePrimary)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("Belum Login", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
-                                Text(
-                                    "Login buat sinkronin pengaturan kamu",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
+                    val glowBrush = Brush.radialGradient(
+                        colors = listOf(ZenimePrimary.copy(alpha = 0.16f), Color.Transparent),
+                        center = Offset(0f, 0f),
+                        radius = 420f
+                    )
 
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        OutlinedButton(
-                            onClick = { viewModel.signInWithGoogle(context) },
-                            enabled = !isSigningIn,
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.onSurface
-                            ),
-                            border = BorderStroke(1.dp, CardOutlineBorder)
-                        ) {
-                            if (isSigningIn) {
-                                CircularProgressIndicator(
-                                    color = ZenimePrimary,
-                                    strokeWidth = 2.dp,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text("Menghubungkan...")
-                            } else {
-                                Text("G", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text("Masuk dengan Google")
-                            }
-                        }
-
-                        if (loginError != null) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = loginError ?: "",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    } else {
-                        // Udah login
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            val photoUrl = user.photoUrl?.toString()
-                            if (!photoUrl.isNullOrEmpty()) {
-                                AsyncImage(
-                                    model = photoUrl,
-                                    contentDescription = user.displayName,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(CircleShape)
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.AccountCircle,
-                                    contentDescription = null,
-                                    tint = ZenimePrimary,
-                                    modifier = Modifier.size(44.dp)
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.width(12.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = user.displayName ?: "Pengguna Zenime",
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = user.email ?: "",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-
-                            IconButton(onClick = { showSignOutConfirm = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.Logout,
-                                    contentDescription = "Keluar",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-
-            Text(
-                text = "Tampilan & Tema",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = ZenimePrimary
-                )
-            )
-
-            Card(
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, CardOutlineBorder, RoundedCornerShape(14.dp))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.Palette, contentDescription = null, tint = ZenimePrimary)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text("Mode Tema", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    listOf(
-                        "DARK" to "Tema Gelap (Default)",
-                        "LIGHT" to "Tema Terang",
-                        "SYSTEM" to "Ikuti Sistem"
-                    ).forEach { (key, label) ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
+                    Card(
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, CardOutlineBorder, RoundedCornerShape(18.dp))
+                    ) {
+                        Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 2.dp)
+                                .background(glowBrush)
+                                .padding(18.dp)
                         ) {
-                            RadioButton(
-                                selected = themeMode == key,
-                                onClick = { viewModel.setThemeMode(key) },
-                                colors = RadioButtonDefaults.colors(selectedColor = ZenimePrimary)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(label, style = MaterialTheme.typography.bodyLarge)
-                        }
-                    }
+                            if (user == null) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(50.dp)
+                                            .clip(CircleShape)
+                                            .background(ZenimePrimary.copy(alpha = 0.14f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.AccountCircle,
+                                            contentDescription = null,
+                                            tint = ZenimePrimary,
+                                            modifier = Modifier.size(28.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(14.dp))
+                                    Column {
+                                        Text(
+                                            "Belum Login",
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                                        )
+                                        Text(
+                                            "Login buat sinkronin pengaturan kamu",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                                Spacer(modifier = Modifier.height(16.dp))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.ColorLens, contentDescription = null, tint = ZenimePrimary)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("Dynamic Color", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
-                                Text("Warna dari Wallpaper (Android 12+)", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
+                                OutlinedButton(
+                                    onClick = { viewModel.signInWithGoogle(context) },
+                                    enabled = !isSigningIn,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        contentColor = MaterialTheme.colorScheme.onSurface
+                                    ),
+                                    border = BorderStroke(1.dp, CardOutlineBorder)
+                                ) {
+                                    if (isSigningIn) {
+                                        CircularProgressIndicator(
+                                            color = ZenimePrimary,
+                                            strokeWidth = 2.dp,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text("Menghubungkan...")
+                                    } else {
+                                        Text("G", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Text("Masuk dengan Google")
+                                    }
+                                }
 
-                        Switch(
-                            checked = dynamicColor,
-                            onCheckedChange = { viewModel.setDynamicColor(it) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = ZenimePrimary
-                            )
-                        )
-                    }
-                }
-            }
-
-            // Section: Pemutaran Video
-            Text(
-                text = "Pemutaran Video",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = ZenimePrimary
-                )
-            )
-
-            Card(
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, CardOutlineBorder, RoundedCornerShape(14.dp))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.HighQuality, contentDescription = null, tint = ZenimePrimary)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("Kualitas Video Default", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
-                                Text("Kualitas utama saat memuat episode", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-
-                        Box {
-                            OutlinedCard(
-                                onClick = { showQualityMenu = true },
-                                shape = RoundedCornerShape(8.dp),
-                                border = BorderStroke(1.dp, CardOutlineBorder)
-                            ) {
-                                Text(
-                                    text = defaultQuality,
-                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                )
-                            }
-
-                            DropdownMenu(
-                                expanded = showQualityMenu,
-                                onDismissRequest = { showQualityMenu = false }
-                            ) {
-                                listOf("1080p", "720p", "480p", "360p").forEach { q ->
-                                    DropdownMenuItem(
-                                        text = { Text(q, fontWeight = if (q == defaultQuality) FontWeight.Bold else FontWeight.Normal) },
-                                        onClick = {
-                                            viewModel.setDefaultQuality(q)
-                                            showQualityMenu = false
-                                        }
+                                if (loginError != null) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = loginError ?: "",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.error
                                     )
+                                }
+                            } else {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    val photoUrl = user.photoUrl?.toString()
+                                    Box(
+                                        modifier = Modifier
+                                            .size(52.dp)
+                                            .clip(CircleShape)
+                                            .border(
+                                                width = 2.dp,
+                                                brush = Brush.linearGradient(
+                                                    listOf(ZenimePrimary, ZenimePrimary.copy(alpha = 0.35f))
+                                                ),
+                                                shape = CircleShape
+                                            )
+                                            .padding(2.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (!photoUrl.isNullOrEmpty()) {
+                                            AsyncImage(
+                                                model = photoUrl,
+                                                contentDescription = user.displayName,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .clip(CircleShape)
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Default.AccountCircle,
+                                                contentDescription = null,
+                                                tint = ZenimePrimary,
+                                                modifier = Modifier.fillMaxSize()
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(14.dp))
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = user.displayName ?: "Pengguna Zenime",
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        Text(
+                                            text = user.email ?: "",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = { showSignOutConfirm = true },
+                                        modifier = Modifier
+                                            .size(38.dp)
+                                            .clip(RoundedCornerShape(11.dp))
+                                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Logout,
+                                            contentDescription = "Keluar",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                // ---------------- Section: Tampilan & Tema ----------------
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SettingsGroupLabel("Tampilan & Tema")
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.FastForward, contentDescription = null, tint = ZenimePrimary)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("Lewati Intro Otomatis", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
-                                Text("Lompat ke detik 90 pas episode dibuka dari awal", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    SettingsGroupCard {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                SettingsIconChip(icon = Icons.Default.Palette)
+                                Spacer(modifier = Modifier.width(14.dp))
+                                Text("Mode Tema", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold))
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            listOf(
+                                "DARK" to "Tema Gelap (Default)",
+                                "LIGHT" to "Tema Terang",
+                                "SYSTEM" to "Ikuti Sistem"
+                            ).forEach { (key, label) ->
+                                val selected = themeMode == key
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(
+                                            if (selected) ZenimePrimary.copy(alpha = 0.08f) else Color.Transparent
+                                        )
+                                        .padding(vertical = 4.dp, horizontal = 4.dp)
+                                ) {
+                                    RadioButton(
+                                        selected = selected,
+                                        onClick = { viewModel.setThemeMode(key) },
+                                        colors = RadioButtonDefaults.colors(selectedColor = ZenimePrimary)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        label,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                                        )
+                                    )
+                                }
                             }
                         }
 
-                        Switch(
-                            checked = autoSkipIntro,
-                            onCheckedChange = { viewModel.setAutoSkipIntro(it) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = ZenimePrimary
-                            )
-                        )
-                    }
+                        SettingsRowDivider()
 
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(imageVector = Icons.Default.SkipNext, contentDescription = null, tint = ZenimePrimary)
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("Auto-Lanjut Episode (Outro)", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
-                                Text("Lanjut ke episode berikutnya otomatis pas mepet abis", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        SettingsRow(
+                            icon = Icons.Default.ColorLens,
+                            title = "Dynamic Color",
+                            subtitle = "Warna dari Wallpaper (Android 12+)",
+                            trailing = {
+                                Switch(
+                                    checked = dynamicColor,
+                                    onCheckedChange = { viewModel.setDynamicColor(it) },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = ZenimePrimary
+                                    )
+                                )
                             }
-                        }
-
-                        Switch(
-                            checked = autoSkipOutro,
-                            onCheckedChange = { viewModel.setAutoSkipOutro(it) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = ZenimePrimary
-                            )
                         )
                     }
                 }
-            }
 
-            // Section: Tentang Aplikasi
-            Text(
-                text = "Tentang Aplikasi",
-                style = MaterialTheme.typography.titleMedium.copy(
-                    fontWeight = FontWeight.Bold,
-                    color = ZenimePrimary
-                )
-            )
+                // ---------------- Section: Pemutaran Video ----------------
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SettingsGroupLabel("Pemutaran Video")
 
-            Card(
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, CardOutlineBorder, RoundedCornerShape(14.dp))
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Box(
+                    SettingsGroupCard {
+                        SettingsRow(
+                            icon = Icons.Default.HighQuality,
+                            title = "Kualitas Video Default",
+                            subtitle = "Kualitas utama saat memuat episode",
+                            trailing = {
+                                Box {
+                                    OutlinedCard(
+                                        onClick = { showQualityMenu = true },
+                                        shape = RoundedCornerShape(9.dp),
+                                        colors = CardDefaults.outlinedCardColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                        ),
+                                        border = BorderStroke(1.dp, CardOutlineBorder)
+                                    ) {
+                                        Text(
+                                            text = defaultQuality,
+                                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                            color = ZenimePrimary,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                        )
+                                    }
+
+                                    DropdownMenu(
+                                        expanded = showQualityMenu,
+                                        onDismissRequest = { showQualityMenu = false }
+                                    ) {
+                                        listOf("1080p", "720p", "480p", "360p").forEach { q ->
+                                            DropdownMenuItem(
+                                                text = { Text(q, fontWeight = if (q == defaultQuality) FontWeight.Bold else FontWeight.Normal) },
+                                                onClick = {
+                                                    viewModel.setDefaultQuality(q)
+                                                    showQualityMenu = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        )
+
+                        SettingsRowDivider()
+
+                        SettingsRow(
+                            icon = Icons.Default.FastForward,
+                            title = "Lewati Intro Otomatis",
+                            subtitle = "Lompat ke detik 90 pas episode dibuka dari awal",
+                            trailing = {
+                                Switch(
+                                    checked = autoSkipIntro,
+                                    onCheckedChange = { viewModel.setAutoSkipIntro(it) },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = ZenimePrimary
+                                    )
+                                )
+                            }
+                        )
+
+                        SettingsRowDivider()
+
+                        SettingsRow(
+                            icon = Icons.Default.SkipNext,
+                            title = "Auto-Lanjut Episode (Outro)",
+                            subtitle = "Lanjut ke episode berikutnya otomatis pas mepet abis",
+                            trailing = {
+                                Switch(
+                                    checked = autoSkipOutro,
+                                    onCheckedChange = { viewModel.setAutoSkipOutro(it) },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = ZenimePrimary
+                                    )
+                                )
+                            }
+                        )
+                    }
+                }
+
+                // ---------------- Section: Tentang Aplikasi ----------------
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SettingsGroupLabel("Tentang Aplikasi")
+
+                    Card(
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                         modifier = Modifier
-                            .size(68.dp)
-                            .clip(CircleShape)
-                            .background(ZenimePrimary.copy(alpha = 0.2f)),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .border(1.dp, CardOutlineBorder, RoundedCornerShape(18.dp))
                     ) {
-                        Image(
-                            painter = painterResource(id = R.drawable.zenime_logo_1786121211149),
-                            contentDescription = "Zenime Logo",
-                            modifier = Modifier.size(48.dp)
-                        )
+                        Column(
+                            modifier = Modifier.padding(vertical = 26.dp, horizontal = 20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                // Glow halus di belakang logo -- satu-satunya aksen dekoratif
+                                // yang agak "berani" di layar ini, dijaga tetap tenang & tipis.
+                                Box(
+                                    modifier = Modifier
+                                        .size(120.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            Brush.radialGradient(
+                                                colors = listOf(
+                                                    ZenimePrimary.copy(alpha = 0.22f),
+                                                    Color.Transparent
+                                                )
+                                            )
+                                        )
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .size(72.dp)
+                                        .clip(CircleShape)
+                                        .background(ZenimePrimary.copy(alpha = 0.12f))
+                                        .border(1.dp, CardOutlineBorder, CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.zenime_logo_1786121211149),
+                                        contentDescription = "Zenime Logo",
+                                        modifier = Modifier.size(46.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Text(
+                                text = "Zenime",
+                                style = MaterialTheme.typography.titleLarge.copy(
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = (-0.3).sp
+                                ),
+                                color = Color.White
+                            )
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            Text(
+                                text = "Nonton Anime, Tenang & Modern",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = "VERSI 1.0.0",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 0.6.sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Text(
+                                text = "Native Kotlin \u00b7 Jetpack Compose \u00b7 Material 3",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            HorizontalDivider(
+                                modifier = Modifier.fillMaxWidth(0.6f),
+                                thickness = 1.dp,
+                                color = CardOutlineBorder
+                            )
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            Text(
+                                text = "Powered by Dayynime v5 API & Direct MP4 Streaming",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = ZenimePrimary.copy(alpha = 0.9f)
+                            )
+                        }
                     }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "Zenime",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
-                        color = Color.White
-                    )
-
-                    Text(
-                        text = "Nonton Anime, Tenang & Modern",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "Versi 1.0.0 — Native Kotlin + Jetpack Compose + Material 3",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "Powered by Dayynime v5 API & Direct MP4 Streaming",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = ZenimePrimary.copy(alpha = 0.9f)
-                    )
                 }
+
+                Spacer(modifier = Modifier.height(94.dp))
             }
-            
-            Spacer(modifier = Modifier.height(110.dp))
         }
     }
-}
 
     if (showSignOutConfirm) {
         AlertDialog(
