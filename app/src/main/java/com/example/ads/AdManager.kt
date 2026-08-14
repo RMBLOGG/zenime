@@ -2,7 +2,10 @@ package com.example.ads
 
 import android.app.Activity
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.widget.Toast
 import com.example.BuildConfig
 import com.unity3d.ads.IUnityAdsInitializationListener
 import com.unity3d.ads.IUnityAdsLoadListener
@@ -11,8 +14,9 @@ import com.unity3d.ads.UnityAds
 import com.unity3d.ads.UnityAdsShowOptions
 
 /**
- * Wrapper tipis di atas Unity Ads SDK buat nampilin interstitial video ad
- * sebelum user mulai nonton episode.
+ * Wrapper tipis di atas Unity Ads SDK buat nampilin REWARDED video ad
+ * (wajib ditonton penuh, tanpa tombol skip) sebelum user mulai nonton
+ * episode.
  *
  * Placement ID diambil dari dashboard Unity Cloud (Monetization > Apps >
  * Zenime > Network Placement ID).
@@ -20,7 +24,7 @@ import com.unity3d.ads.UnityAdsShowOptions
 object AdManager {
 
     private const val TAG = "AdManager"
-    private const val PLACEMENT_INTERSTITIAL = "Interstitial_Android"
+    private const val PLACEMENT_REWARDED = "Rewarded_Android"
 
     // Set true kalau lagi development/testing biar cuma dapet iklan dummy
     // (nggak generate uang beneran, aman dari resiko akun ke-flag karena
@@ -28,7 +32,20 @@ object AdManager {
     private var testMode = true
 
     private var isInitialized = false
-    private var isInterstitialLoaded = false
+    private var isRewardedLoaded = false
+    private var appContext: Context? = null
+
+    // Toast debug sementara buat diagnosis kenapa iklan gak muncul, tanpa
+    // perlu logcat/adb. Aman dibiarin nyala pas testMode=true; nanti tinggal
+    // di-nonaktifin lagi setelah masalahnya ketemu.
+    private var debugToasts = true
+
+    private fun debugToast(context: Context, message: String) {
+        if (!debugToasts) return
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(context.applicationContext, "[AdManager] $message", Toast.LENGTH_LONG).show()
+        }
+    }
 
     fun setTestMode(enabled: Boolean) {
         testMode = enabled
@@ -39,6 +56,7 @@ object AdManager {
      * placement yang di-load/ditampilin.
      */
     fun initialize(context: Context, onReady: (() -> Unit)? = null) {
+        appContext = context.applicationContext
         if (isInitialized) {
             onReady?.invoke()
             return
@@ -51,8 +69,9 @@ object AdManager {
             object : IUnityAdsInitializationListener {
                 override fun onInitializationComplete() {
                     Log.d(TAG, "Unity Ads initialized")
+                    debugToast(context, "Init sukses, mulai load iklan")
                     isInitialized = true
-                    loadInterstitial()
+                    loadRewarded()
                     onReady?.invoke()
                 }
 
@@ -61,19 +80,21 @@ object AdManager {
                     message: String?
                 ) {
                     Log.e(TAG, "Unity Ads init failed: $error - $message")
+                    debugToast(context, "Init GAGAL: $error - $message")
                 }
             }
         )
     }
 
-    /** Preload iklan interstitial supaya siap ditampilin instan pas dibutuhin. */
-    fun loadInterstitial() {
+    /** Preload rewarded ad supaya siap ditampilin instan pas dibutuhin. */
+    fun loadRewarded() {
         if (!isInitialized) return
         UnityAds.load(
-            PLACEMENT_INTERSTITIAL,
+            PLACEMENT_REWARDED,
             object : IUnityAdsLoadListener {
                 override fun onUnityAdsAdLoaded(placementId: String?) {
-                    isInterstitialLoaded = true
+                    isRewardedLoaded = true
+                    appContext?.let { debugToast(it, "Iklan berhasil di-load, siap tampil") }
                 }
 
                 override fun onUnityAdsFailedToLoad(
@@ -81,41 +102,46 @@ object AdManager {
                     error: UnityAds.UnityAdsLoadError?,
                     message: String?
                 ) {
-                    isInterstitialLoaded = false
-                    Log.e(TAG, "Gagal load interstitial: $error - $message")
+                    isRewardedLoaded = false
+                    Log.e(TAG, "Gagal load rewarded ad: $error - $message")
+                    appContext?.let { debugToast(it, "Load GAGAL: $error - $message") }
                 }
             }
         )
     }
 
     /**
-     * Tampilin interstitial video ad kalau udah siap. [onAdFinished] selalu
-     * dipanggil tepat sekali -- baik iklannya sukses tampil, di-skip user,
-     * gagal tampil, atau memang belum ada iklan yang siap (network/timeout) --
-     * supaya alur nonton video TETEP LANJUT walau iklan gagal, bukan malah
-     * nge-block user selamanya.
+     * Tampilin rewarded video ad (wajib nonton penuh, gak ada tombol skip)
+     * kalau udah siap. [onAdFinished] dipanggil dengan [earnedReward] = true
+     * cuma kalau iklannya beneran ditonton sampai selesai (state COMPLETED).
+     *
+     * Kalau iklan gagal/belum siap (misal lagi no-fill), [onAdFinished]
+     * tetap dipanggil dengan earnedReward = false supaya video TETEP BISA
+     * DITONTON -- bukan malah nge-block user selamanya gara-gara sistem
+     * iklan lagi bermasalah.
      */
-    fun showInterstitial(activity: Activity, onAdFinished: () -> Unit) {
-        if (!isInitialized || !isInterstitialLoaded) {
-            Log.d(TAG, "Interstitial belum siap, skip nampilin iklan")
-            onAdFinished()
+    fun showRewarded(activity: Activity, onAdFinished: (earnedReward: Boolean) -> Unit) {
+        if (!isInitialized || !isRewardedLoaded) {
+            Log.d(TAG, "Rewarded ad belum siap, skip nampilin iklan")
+            debugToast(activity, "Skip: belum siap (init=$isInitialized, loaded=$isRewardedLoaded)")
+            onAdFinished(false)
             return
         }
 
         var finished = false
-        fun finishOnce() {
+        fun finishOnce(earnedReward: Boolean) {
             if (!finished) {
                 finished = true
-                isInterstitialLoaded = false
+                isRewardedLoaded = false
                 // Siapin iklan berikutnya buat episode selanjutnya.
-                loadInterstitial()
-                onAdFinished()
+                loadRewarded()
+                onAdFinished(earnedReward)
             }
         }
 
         UnityAds.show(
             activity,
-            PLACEMENT_INTERSTITIAL,
+            PLACEMENT_REWARDED,
             UnityAdsShowOptions(),
             object : IUnityAdsShowListener {
                 override fun onUnityAdsShowFailure(
@@ -123,8 +149,9 @@ object AdManager {
                     error: UnityAds.UnityAdsShowError?,
                     message: String?
                 ) {
-                    Log.e(TAG, "Gagal nampilin interstitial: $error - $message")
-                    finishOnce()
+                    Log.e(TAG, "Gagal nampilin rewarded ad: $error - $message")
+                    debugToast(activity, "Show GAGAL: $error - $message")
+                    finishOnce(false)
                 }
 
                 override fun onUnityAdsShowStart(placementId: String?) {}
@@ -135,7 +162,9 @@ object AdManager {
                     placementId: String?,
                     state: UnityAds.UnityAdsShowCompletionState?
                 ) {
-                    finishOnce()
+                    val completed = state == UnityAds.UnityAdsShowCompletionState.COMPLETED
+                    Log.d(TAG, "Rewarded ad selesai dengan state: $state")
+                    finishOnce(completed)
                 }
             }
         )

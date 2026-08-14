@@ -203,15 +203,21 @@ fun PlayerScreen(
         }
     }
 
-    // Tampilin video ad (interstitial, bisa di-skip) sekali tiap kali layar
-    // ini dibuka buat episode baru. PlayerScreen di-compose ulang dari nol
-    // tiap pindah episode (lihat NavGraph: PlayerViewModel baru dibikin per
-    // episodeId), jadi LaunchedEffect(Unit) di sini otomatis cuma jalan
-    // sekali per episode -- BUKAN tiap kali user pencet tombol play.
+    // Tampilin rewarded video ad (WAJIB ditonton penuh, gak ada skip) sekali
+    // tiap kali layar ini dibuka buat episode baru. PlayerScreen di-compose
+    // ulang dari nol tiap pindah episode (lihat NavGraph: PlayerViewModel
+    // baru dibikin per episodeId), jadi LaunchedEffect(Unit) di sini
+    // otomatis cuma jalan sekali per episode -- BUKAN tiap kali user pencet
+    // tombol play. Video baru mulai di-load/diputar SETELAH iklan selesai
+    // (adGateOpen = true) -- lihat LaunchedEffect(selectedServer, adGateOpen)
+    // di bawah.
+    var adGateOpen by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
         val activity = context.findActivity()
         if (activity != null) {
-            AdManager.showInterstitial(activity) {}
+            AdManager.showRewarded(activity) { _ -> adGateOpen = true }
+        } else {
+            adGateOpen = true
         }
     }
 
@@ -393,7 +399,8 @@ fun PlayerScreen(
     }
 
     // Update MediaSource when selectedServer changes
-    LaunchedEffect(selectedServer) {
+    LaunchedEffect(selectedServer, adGateOpen) {
+        if (!adGateOpen) return@LaunchedEffect
         val serverUrl = selectedServer?.link
         if (!serverUrl.isNullOrEmpty()) {
             // Kalau ini ganti server/kualitas di TENGAH nonton (bukan load
