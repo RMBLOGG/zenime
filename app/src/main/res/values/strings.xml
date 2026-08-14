@@ -1,3 +1,22 @@
 <resources>
     <string name="app_name">Zenime</string>
+
+    <!--
+      Web Client ID buat Google Sign-In (AuthRepository.kt). SENGAJA gak
+      pakai R.string.default_web_client_id yang otomatis di-generate dari
+      google-services.json -- kalau dipakai, begitu kamu nambahin
+      google-services.json beneran, akan muncul konflik "duplicate resource"
+      karena dua sumber nyoba bikin string dengan nama sama.
+
+      Cara isi:
+      1. Bikin project di https://console.firebase.google.com, aktifin
+         Authentication > Sign-in method > Google.
+      2. Download google-services.json dari Project Settings, taruh di
+         folder app/ (sejajar sama build.gradle.kts).
+      3. Di Firebase Console, buka Authentication > Sign-in method > Google
+         > Web SDK configuration, copy "Web client ID"-nya (bentuknya kayak
+         xxxxx-xxxxx.apps.googleusercontent.com).
+      4. Ganti nilai di bawah ini sama Web Client ID itu.
+    -->
+    <string name="google_web_client_id" translatable="false">936105562787-4rrc0ju88d4t2u82u9us4r6hi7q0e70t.apps.googleusercontent.com</string>
 </resources>

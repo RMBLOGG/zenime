@@ -1,8 +1,11 @@
 package com.example.ui.screens.settings
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,18 +22,25 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.HighQuality
+import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
@@ -38,6 +48,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -49,11 +60,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import com.example.R
 import com.example.ui.theme.CardOutlineBorder
 import com.example.ui.theme.ZenimePrimary
@@ -72,6 +87,12 @@ fun SettingsScreen(
     val defaultQuality by viewModel.defaultQuality.collectAsStateWithLifecycle()
     val autoSkipIntro by viewModel.autoSkipIntro.collectAsStateWithLifecycle()
     val autoSkipOutro by viewModel.autoSkipOutro.collectAsStateWithLifecycle()
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
+    val isSigningIn by viewModel.isSigningIn.collectAsStateWithLifecycle()
+    val loginError by viewModel.loginError.collectAsStateWithLifecycle()
+
+    val context = LocalContext.current
+    var showSignOutConfirm by remember { mutableStateOf(false) }
 
     var showQualityMenu by remember { mutableStateOf(false) }
 
@@ -94,7 +115,126 @@ fun SettingsScreen(
                     .padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
-            // Section: Tampilan & Tema
+            // Section: Akun
+            Text(
+                text = "Akun",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = ZenimePrimary
+                )
+            )
+
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, CardOutlineBorder, RoundedCornerShape(14.dp))
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    val user = currentUser
+                    if (user == null) {
+                        // Belum login
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(imageVector = Icons.Default.AccountCircle, contentDescription = null, tint = ZenimePrimary)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text("Belum Login", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold))
+                                Text(
+                                    "Login buat sinkronin pengaturan kamu",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        OutlinedButton(
+                            onClick = { viewModel.signInWithGoogle(context) },
+                            enabled = !isSigningIn,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            border = BorderStroke(1.dp, CardOutlineBorder)
+                        ) {
+                            if (isSigningIn) {
+                                CircularProgressIndicator(
+                                    color = ZenimePrimary,
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text("Menghubungkan...")
+                            } else {
+                                Text("G", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text("Masuk dengan Google")
+                            }
+                        }
+
+                        if (loginError != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = loginError ?: "",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    } else {
+                        // Udah login
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val photoUrl = user.photoUrl?.toString()
+                            if (!photoUrl.isNullOrEmpty()) {
+                                AsyncImage(
+                                    model = photoUrl,
+                                    contentDescription = user.displayName,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.AccountCircle,
+                                    contentDescription = null,
+                                    tint = ZenimePrimary,
+                                    modifier = Modifier.size(44.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = user.displayName ?: "Pengguna Zenime",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = user.email ?: "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+
+                            IconButton(onClick = { showSignOutConfirm = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.Logout,
+                                    contentDescription = "Keluar",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+
             Text(
                 text = "Tampilan & Tema",
                 style = MaterialTheme.typography.titleMedium.copy(
@@ -203,7 +343,7 @@ fun SettingsScreen(
                             OutlinedCard(
                                 onClick = { showQualityMenu = true },
                                 shape = RoundedCornerShape(8.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, CardOutlineBorder)
+                                border = BorderStroke(1.dp, CardOutlineBorder)
                             ) {
                                 Text(
                                     text = defaultQuality,
@@ -353,4 +493,27 @@ fun SettingsScreen(
         }
     }
 }
+
+    if (showSignOutConfirm) {
+        AlertDialog(
+            onDismissRequest = { showSignOutConfirm = false },
+            title = { Text("Keluar dari Akun?") },
+            text = { Text("Kamu bisa login lagi kapan aja lewat halaman ini.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.signOut()
+                        showSignOutConfirm = false
+                    }
+                ) {
+                    Text("Keluar", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSignOutConfirm = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
 }
