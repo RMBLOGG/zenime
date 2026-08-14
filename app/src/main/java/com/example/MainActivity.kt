@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.example.data.api.NetworkModule
+import com.example.data.api.RemoteConfigManager
 import com.example.data.local.UserPreferencesRepository
 import com.example.data.local.ZenimeDatabase
 import com.example.data.repository.AnimeRepository
@@ -38,6 +39,10 @@ class MainActivity : ComponentActivity() {
         // ke-render -- supaya poster udah nyampe/lagi keburu kecache pas
         // LoginScreen tampil, bukan mulai fetch baru pas layar itu dibuka.
         lifecycleScope.launch {
+            // Ambil base URL terbaru dari Firebase Remote Config dulu (kalau
+            // ada koneksi), baru mulai request API pertama supaya langsung
+            // pakai base URL yang sesuai.
+            RemoteConfigManager.refresh()
             repository.getHome().collect { }
         }
 
