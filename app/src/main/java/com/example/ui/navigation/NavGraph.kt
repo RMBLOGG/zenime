@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -85,6 +86,7 @@ import com.example.ui.screens.settings.SettingsViewModel
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import com.example.ui.theme.CardOutlineBorder
+import com.example.ui.theme.ZenimeBackgroundDark
 import com.example.ui.theme.ZenimeSurfaceDark
 import com.example.ui.theme.ZenimePrimary
 import com.example.util.findActivity
@@ -363,36 +365,57 @@ fun FloatingPillBottomBar(
     val centerScreen = bottomNavScreens[2]
     val centerSelected = currentRoute == centerScreen.route
 
-    val pillHeight = 64.dp
-    val centerButtonSize = 60.dp
+    val pillHeight = 66.dp
+    val centerButtonSize = 58.dp
     // Seberapa jauh tombol tengah "nongol" ke atas pill.
-    val centerButtonRaise = 22.dp
+    val centerButtonRaise = 24.dp
+    val pillShape = NotchedPillShape(cornerRadius = 33.dp, notchRadius = centerButtonSize / 2 + 7.dp)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 24.dp),
+            .padding(horizontal = 20.dp),
         contentAlignment = Alignment.TopCenter
     ) {
-        // Pill dasar -- warna netral gelap (bukan merah), dengan notch/lekukan
-        // di tengah atas tempat tombol utama duduk, biar keliatan menyatu
-        // kayak referensi (bukan cuma numpuk di atas doang).
+        // Pill dasar -- efek "glass": permukaan gelap semi-transparan dengan
+        // gradient halus (lebih terang dikit di atas, lebih gelap di bawah)
+        // buat kesan kedalaman, plus border tipis gradient yang mensimulasikan
+        // highlight kaca di tepi atas. Ini yang bikin kerasa lebih modern
+        // dibanding pill warna solid rata.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(pillHeight)
-                .clip(NotchedPillShape(cornerRadius = 32.dp, notchRadius = centerButtonSize / 2 + 6.dp))
-                .background(ZenimeSurfaceDark)
+                .shadow(
+                    elevation = 20.dp,
+                    shape = pillShape,
+                    ambientColor = Color.Black.copy(alpha = 0.5f),
+                    spotColor = Color.Black.copy(alpha = 0.5f)
+                )
+                .clip(pillShape)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            ZenimeSurfaceDark.copy(alpha = 0.98f),
+                            ZenimeBackgroundDark.copy(alpha = 0.98f)
+                        )
+                    )
+                )
                 .border(
                     width = 1.dp,
-                    color = CardOutlineBorder,
-                    shape = NotchedPillShape(cornerRadius = 32.dp, notchRadius = centerButtonSize / 2 + 6.dp)
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.14f),
+                            CardOutlineBorder.copy(alpha = 0.4f)
+                        )
+                    ),
+                    shape = pillShape
                 )
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 18.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -410,12 +433,12 @@ fun FloatingPillBottomBar(
         // Glow halus di belakang tombol tengah, biar nyala kayak referensi.
         Box(
             modifier = Modifier
-                .size(centerButtonSize + 28.dp)
-                .offset(y = -centerButtonRaise - 6.dp)
+                .size(centerButtonSize + 32.dp)
+                .offset(y = -centerButtonRaise - 8.dp)
                 .background(
                     brush = Brush.radialGradient(
                         colors = listOf(
-                            ZenimePrimary.copy(alpha = 0.35f),
+                            ZenimePrimary.copy(alpha = 0.4f),
                             Color.Transparent
                         )
                     ),
@@ -423,24 +446,36 @@ fun FloatingPillBottomBar(
                 )
         )
 
-        // Tombol tengah -- dinaikkan di atas pill, warna merah (ZenimePrimary),
-        // gantiin posisi tombol hijau di referensi.
+        // Tombol tengah -- dinaikkan di atas pill, gradient merah (bukan
+        // warna solid datar) biar keliatan ada dimensi/pop, dengan cincin
+        // highlight tipis di tepi atas mensimulasikan pantulan cahaya kaca.
         Box(
             modifier = Modifier
                 .size(centerButtonSize)
                 .offset(y = -centerButtonRaise)
-                .shadow(elevation = 10.dp, shape = CircleShape, ambientColor = ZenimePrimary, spotColor = ZenimePrimary)
+                .shadow(elevation = 14.dp, shape = CircleShape, ambientColor = ZenimePrimary, spotColor = ZenimePrimary)
                 .clip(CircleShape)
-                .background(ZenimePrimary)
+                .background(
+                    Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFFFF5C72),
+                            ZenimePrimary
+                        ),
+                        center = androidx.compose.ui.geometry.Offset(0.3f, 0.25f),
+                        radius = 90f
+                    )
+                )
                 .border(
-                    width = if (centerSelected) 2.dp else 0.dp,
-                    color = Color.White.copy(alpha = 0.6f),
+                    width = 1.2.dp,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.55f),
+                            Color.White.copy(alpha = 0f)
+                        )
+                    ),
                     shape = CircleShape
                 )
-                .testTag("nav_item_${centerScreen.route}")
-                .then(
-                    Modifier.padding(0.dp)
-                ),
+                .testTag("nav_item_${centerScreen.route}"),
             contentAlignment = Alignment.Center
         ) {
             IconButton(onClick = { onNavigate(centerScreen) }) {
@@ -448,7 +483,7 @@ fun FloatingPillBottomBar(
                     imageVector = if (centerSelected) centerScreen.selectedIcon!! else centerScreen.unselectedIcon!!,
                     contentDescription = centerScreen.title,
                     tint = Color.White,
-                    modifier = Modifier.size(26.dp)
+                    modifier = Modifier.size(25.dp)
                 )
             }
         }
@@ -462,21 +497,32 @@ private fun NavIconButton(
     onClick: () -> Unit
 ) {
     val icon = if (selected) screen.selectedIcon!! else screen.unselectedIcon!!
-    IconButton(
-        onClick = onClick,
-        modifier = Modifier
-            .size(44.dp)
-            .background(
-                color = if (selected) ZenimePrimary.copy(alpha = 0.16f) else Color.Transparent,
-                shape = CircleShape
-            )
-            .testTag("nav_item_${screen.route}")
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = screen.title,
-            tint = if (selected) ZenimePrimary else Color.White.copy(alpha = 0.55f),
-            modifier = Modifier.size(22.dp)
+        IconButton(
+            onClick = onClick,
+            modifier = Modifier
+                .size(40.dp)
+                .testTag("nav_item_${screen.route}")
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = screen.title,
+                tint = if (selected) ZenimePrimary else Color.White.copy(alpha = 0.5f),
+                modifier = Modifier.size(22.dp)
+            )
+        }
+        // Titik indikator kecil di bawah icon aktif -- gaya modern minimalis,
+        // gantiin lingkaran block penuh yang kesannya lebih flat/lama.
+        Box(
+            modifier = Modifier
+                .size(4.dp)
+                .background(
+                    color = if (selected) ZenimePrimary else Color.Transparent,
+                    shape = CircleShape
+                )
         )
     }
 }
