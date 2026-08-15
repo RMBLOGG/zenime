@@ -179,7 +179,7 @@ fun ZenimeAppNavHost(
             // Login Screen (wajib sebelum masuk app)
             composable(Screen.Login.route) {
                 val loginViewModel: LoginViewModel = viewModel(
-                    factory = viewModelFactory { initializer { LoginViewModel(authRepository, repository) } }
+                    factory = viewModelFactory { initializer { LoginViewModel(authRepository) } }
                 )
                 LoginScreen(
                     viewModel = loginViewModel,

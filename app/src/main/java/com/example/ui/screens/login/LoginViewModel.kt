@@ -3,8 +3,6 @@ package com.example.ui.screens.login
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.data.common.Result
-import com.example.data.repository.AnimeRepository
 import com.example.data.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,12 +17,12 @@ import kotlinx.coroutines.launch
  * masing-masing tetap nyambung ke FirebaseAuth.getInstance() yang sama kok,
  * tapi mending satu sumber biar konsisten & gampang di-test.
  *
- * repository dipakai buat narik poster anime (dari data homepage yang udah
- * ke-cache) yang ditampilin sebagai backdrop grid di belakang tombol login.
+ * Poster backdrop-nya TIDAK ambil dari AnimeRepository/getHome() lagi --
+ * lihat LoginBackdropPosters buat alasannya (intinya: biar user yang baru
+ * install pun langsung lihat poster asli tanpa nunggu network sama sekali).
  */
 class LoginViewModel(
-    private val authRepository: AuthRepository,
-    private val repository: AnimeRepository
+    private val authRepository: AuthRepository
 ) : ViewModel() {
 
     private val _isSigningIn = MutableStateFlow(false)
@@ -33,32 +31,7 @@ class LoginViewModel(
     private val _loginError = MutableStateFlow<String?>(null)
     val loginError: StateFlow<String?> = _loginError
 
-    private val _posterUrls = MutableStateFlow<List<String>>(emptyList())
-    val posterUrls: StateFlow<List<String>> = _posterUrls
-
-    init {
-        loadPosters()
-    }
-
-    private fun loadPosters() {
-        viewModelScope.launch {
-            repository.getHome().collect { result ->
-                if (result is Result.Success) {
-                    val urls = buildList {
-                        result.data.popular?.forEach { it.image_poster?.let(::add) }
-                        result.data.hot?.forEach { it.image_poster?.let(::add) }
-                        result.data.new?.forEach { it.image_poster?.let(::add) }
-                        result.data.random?.forEach { it.image_poster?.let(::add) }
-                    }.distinct()
-
-                    if (urls.isNotEmpty()) {
-                        // Diulang biar grid tetep kepenuhan walau data awalnya dikit.
-                        _posterUrls.value = (urls + urls + urls).take(24)
-                    }
-                }
-            }
-        }
-    }
+    val posterUrls: List<String> = LoginBackdropPosters.urls
 
     fun signInWithGoogle(context: Context, onSuccess: () -> Unit) {
         if (_isSigningIn.value) return

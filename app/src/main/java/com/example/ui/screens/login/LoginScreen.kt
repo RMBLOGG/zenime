@@ -43,7 +43,6 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.R
-import com.example.ui.components.shimmerBrush
 import com.example.ui.theme.CardOutlineBorder
 import com.example.ui.theme.ZenimeBackgroundDark
 import com.example.ui.theme.ZenimePrimary
@@ -54,9 +53,9 @@ import com.example.util.findActivity
  * destination di NavGraph kalau belum ada sesi Firebase aktif -- lihat
  * ZenimeAppNavHost.
  *
- * Backdrop-nya grid poster anime (dari homepage repository) yang diputar
- * miring. Sebelum data poster kebaca dari API, grid diisi placeholder
- * shimmer dulu (bukan layar hitam kosong) supaya kesannya langsung muncul.
+ * Backdrop-nya grid poster anime dari LoginBackdropPosters (daftar tetap,
+ * BUKAN dari endpoint /home) -- jadi langsung tampil dari detik pertama,
+ * gak nunggu network sama sekali, termasuk buat user yang baru install.
  */
 @Composable
 fun LoginScreen(
@@ -66,7 +65,7 @@ fun LoginScreen(
 ) {
     val isSigningIn by viewModel.isSigningIn.collectAsStateWithLifecycle()
     val loginError by viewModel.loginError.collectAsStateWithLifecycle()
-    val posterUrls by viewModel.posterUrls.collectAsStateWithLifecycle()
+    val posterUrls = viewModel.posterUrls
     val context = LocalContext.current
 
     // Sembunyiin navigation bar sistem selama di halaman ini biar backdrop
@@ -99,10 +98,9 @@ fun LoginScreen(
             .fillMaxSize()
             .background(ZenimeBackgroundDark)
     ) {
-        // Layer 1: grid poster yang diputar miring, statis (bukan buat discroll).
-        // Selalu 24 slot: keisi poster asli kalau udah ada, sisanya shimmer
-        // placeholder -- jadi grid-nya langsung tampil penuh dari awal,
-        // gak nunggu network selesai dulu baru muncul.
+        // Layer 1: grid poster tetap (LoginBackdropPosters) yang diputar
+        // miring, statis (bukan buat discroll). Selalu ada isinya dari
+        // render pertama -- gak ada shimmer/kosong nunggu network lagi.
         LazyVerticalGrid(
             columns = GridCells.Fixed(3),
             userScrollEnabled = false,
@@ -116,25 +114,15 @@ fun LoginScreen(
                     scaleY = 1.35f
                 }
         ) {
-            items(24) { index ->
-                val url = posterUrls.getOrNull(index)
-                if (url != null) {
-                    AsyncImage(
-                        model = url,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier
-                            .aspectRatio(0.7f)
-                            .clip(RoundedCornerShape(4.dp))
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .aspectRatio(0.7f)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(shimmerBrush())
-                    )
-                }
+            items(posterUrls) { url ->
+                AsyncImage(
+                    model = url,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .aspectRatio(0.7f)
+                        .clip(RoundedCornerShape(4.dp))
+                )
             }
         }
 
