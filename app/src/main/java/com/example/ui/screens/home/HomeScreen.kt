@@ -115,7 +115,7 @@ fun HomeScreen(
                     ) {
                         ErrorStateView(
                             message = state.message,
-                            onRetry = { viewModel.loadHome() }
+                            onRetry = { viewModel.loadHome(forceConfigRefresh = true) }
                         )
                     }
                 }

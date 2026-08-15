@@ -59,6 +59,26 @@ object RemoteConfigManager {
     }
 
     /**
+     * Sama seperti refresh(), tapi motong minimumFetchIntervalInSeconds
+     * (paksa fetch ke server, gak peduli kapan fetch terakhir). Dipakai
+     * pas user manual pencet "Coba Lagi" di layar error -- supaya begitu
+     * admin baru aja publish api_base_url baru di Console, user gak perlu
+     * nunggu sampai 1 jam atau force-close app buat itu kebaca.
+     *
+     * Aman dipanggil sesering apa pun karena cuma jalan atas aksi manual
+     * user (tombol retry), bukan otomatis tiap buka layar.
+     */
+    suspend fun forceRefresh() {
+        try {
+            remoteConfig.fetch(0).await()
+            remoteConfig.activate().await()
+        } catch (_: Exception) {
+            // Fetch gagal (mis. offline) — biarin, currentBaseUrl() bakal
+            // tetap pakai nilai cache lokal yang ada.
+        }
+    }
+
+    /**
      * Base URL saat ini, murni dari Firebase Remote Config. Return null
      * kalau:
      * - Parameter "api_base_url" kosong/belum di-set di Console (baik
