@@ -6,14 +6,16 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import android.content.pm.ActivityInfo
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
@@ -30,17 +32,25 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -72,6 +82,10 @@ import com.example.ui.screens.search.SearchScreen
 import com.example.ui.screens.search.SearchViewModel
 import com.example.ui.screens.settings.SettingsScreen
 import com.example.ui.screens.settings.SettingsViewModel
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import com.example.ui.theme.CardOutlineBorder
+import com.example.ui.theme.ZenimeSurfaceDark
 import com.example.ui.theme.ZenimePrimary
 import com.example.util.findActivity
 
@@ -344,54 +358,191 @@ fun FloatingPillBottomBar(
     onNavigate: (Screen) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // 5 item: 2 di kiri, 1 di tengah (dinaikkan, jadi tombol utama), 2 di kanan.
+    val sideScreens = bottomNavScreens.filterIndexed { index, _ -> index != 2 }
+    val centerScreen = bottomNavScreens[2]
+    val centerSelected = currentRoute == centerScreen.route
+
+    val pillHeight = 64.dp
+    val centerButtonSize = 60.dp
+    // Seberapa jauh tombol tengah "nongol" ke atas pill.
+    val centerButtonRaise = 22.dp
+
     Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.TopCenter
     ) {
-        Surface(
+        // Pill dasar -- warna netral gelap (bukan merah), dengan notch/lekukan
+        // di tengah atas tempat tombol utama duduk, biar keliatan menyatu
+        // kayak referensi (bukan cuma numpuk di atas doang).
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(60.dp),
-            shape = RoundedCornerShape(30.dp),
-            color = ZenimePrimary, // Solid Crimson Red
-            shadowElevation = 16.dp
+                .height(pillHeight)
+                .clip(NotchedPillShape(cornerRadius = 32.dp, notchRadius = centerButtonSize / 2 + 6.dp))
+                .background(ZenimeSurfaceDark)
+                .border(
+                    width = 1.dp,
+                    color = CardOutlineBorder,
+                    shape = NotchedPillShape(cornerRadius = 32.dp, notchRadius = centerButtonSize / 2 + 6.dp)
+                )
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 12.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                bottomNavScreens.forEach { screen ->
-                    val selected = currentRoute == screen.route
-                    val icon = if (selected) screen.selectedIcon!! else screen.unselectedIcon!!
-
-                    IconButton(
-                        onClick = { onNavigate(screen) },
-                        modifier = Modifier
-                            .size(44.dp)
-                            .background(
-                                color = if (selected) Color.White.copy(alpha = 0.28f) else Color.Transparent,
-                                shape = CircleShape
-                            )
-                            .then(
-                                if (selected) Modifier.border(1.2.dp, Color.White.copy(alpha = 0.5f), CircleShape)
-                                else Modifier
-                            )
-                            .testTag("nav_item_${screen.route}")
-                    ) {
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = screen.title,
-                            tint = if (selected) Color.White else Color.White.copy(alpha = 0.7f),
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
+                sideScreens.take(2).forEach { screen ->
+                    NavIconButton(screen = screen, selected = currentRoute == screen.route, onClick = { onNavigate(screen) })
+                }
+                // Ruang kosong buat notch/tombol tengah.
+                Spacer(modifier = Modifier.width(centerButtonSize))
+                sideScreens.drop(2).forEach { screen ->
+                    NavIconButton(screen = screen, selected = currentRoute == screen.route, onClick = { onNavigate(screen) })
                 }
             }
         }
+
+        // Glow halus di belakang tombol tengah, biar nyala kayak referensi.
+        Box(
+            modifier = Modifier
+                .size(centerButtonSize + 28.dp)
+                .offset(y = -centerButtonRaise - 6.dp)
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            ZenimePrimary.copy(alpha = 0.35f),
+                            Color.Transparent
+                        )
+                    ),
+                    shape = CircleShape
+                )
+        )
+
+        // Tombol tengah -- dinaikkan di atas pill, warna merah (ZenimePrimary),
+        // gantiin posisi tombol hijau di referensi.
+        Box(
+            modifier = Modifier
+                .size(centerButtonSize)
+                .offset(y = -centerButtonRaise)
+                .shadow(elevation = 10.dp, shape = CircleShape, ambientColor = ZenimePrimary, spotColor = ZenimePrimary)
+                .clip(CircleShape)
+                .background(ZenimePrimary)
+                .border(
+                    width = if (centerSelected) 2.dp else 0.dp,
+                    color = Color.White.copy(alpha = 0.6f),
+                    shape = CircleShape
+                )
+                .testTag("nav_item_${centerScreen.route}")
+                .then(
+                    Modifier.padding(0.dp)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            IconButton(onClick = { onNavigate(centerScreen) }) {
+                Icon(
+                    imageVector = if (centerSelected) centerScreen.selectedIcon!! else centerScreen.unselectedIcon!!,
+                    contentDescription = centerScreen.title,
+                    tint = Color.White,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun NavIconButton(
+    screen: Screen,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val icon = if (selected) screen.selectedIcon!! else screen.unselectedIcon!!
+    IconButton(
+        onClick = onClick,
+        modifier = Modifier
+            .size(44.dp)
+            .background(
+                color = if (selected) ZenimePrimary.copy(alpha = 0.16f) else Color.Transparent,
+                shape = CircleShape
+            )
+            .testTag("nav_item_${screen.route}")
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = screen.title,
+            tint = if (selected) ZenimePrimary else Color.White.copy(alpha = 0.55f),
+            modifier = Modifier.size(22.dp)
+        )
+    }
+}
+
+/**
+ * Shape pill dengan lekukan (notch) setengah lingkaran di tengah sisi atas --
+ * tempat tombol nav utama "duduk" biar keliatan menyatu, bukan cuma numpuk
+ * di atas pill. Notch-nya dibikin pakai cubicTo (kurva-S) supaya transisinya
+ * halus, bukan sudut tajam.
+ */
+class NotchedPillShape(
+    private val cornerRadius: Dp,
+    private val notchRadius: Dp
+) : Shape {
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density
+    ): Outline {
+        val cornerPx = with(density) { cornerRadius.toPx() }
+        val notchPx = with(density) { notchRadius.toPx() }
+        val centerX = size.width / 2f
+
+        val path = Path().apply {
+            moveTo(cornerPx, 0f)
+            lineTo(centerX - notchPx, 0f)
+            cubicTo(
+                centerX - notchPx * 0.55f, 0f,
+                centerX - notchPx * 0.85f, notchPx * 1.15f,
+                centerX, notchPx * 1.15f
+            )
+            cubicTo(
+                centerX + notchPx * 0.85f, notchPx * 1.15f,
+                centerX + notchPx * 0.55f, 0f,
+                centerX + notchPx, 0f
+            )
+            lineTo(size.width - cornerPx, 0f)
+            arcTo(
+                rect = Rect(size.width - 2 * cornerPx, 0f, size.width, 2 * cornerPx),
+                startAngleDegrees = -90f,
+                sweepAngleDegrees = 90f,
+                forceMoveTo = false
+            )
+            lineTo(size.width, size.height - cornerPx)
+            arcTo(
+                rect = Rect(size.width - 2 * cornerPx, size.height - 2 * cornerPx, size.width, size.height),
+                startAngleDegrees = 0f,
+                sweepAngleDegrees = 90f,
+                forceMoveTo = false
+            )
+            lineTo(cornerPx, size.height)
+            arcTo(
+                rect = Rect(0f, size.height - 2 * cornerPx, 2 * cornerPx, size.height),
+                startAngleDegrees = 90f,
+                sweepAngleDegrees = 90f,
+                forceMoveTo = false
+            )
+            lineTo(0f, cornerPx)
+            arcTo(
+                rect = Rect(0f, 0f, 2 * cornerPx, 2 * cornerPx),
+                startAngleDegrees = 180f,
+                sweepAngleDegrees = 90f,
+                forceMoveTo = false
+            )
+            close()
+        }
+        return Outline.Generic(path)
     }
 }
