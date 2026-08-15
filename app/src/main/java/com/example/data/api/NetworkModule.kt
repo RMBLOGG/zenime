@@ -23,7 +23,21 @@ object NetworkModule {
      */
     private val dynamicBaseUrlInterceptor = okhttp3.Interceptor { chain ->
         val original = chain.request()
-        val newBase = RemoteConfigManager.currentBaseUrl().toHttpUrlOrNull()
+        val newBaseString = RemoteConfigManager.currentBaseUrl()
+
+        // null artinya belum ada base URL yang bisa dipakai -- baik karena
+        // api_base_url dikosongin di Firebase Console (kill-switch sengaja),
+        // maupun karena app belum pernah berhasil fetch Remote Config sama
+        // sekali. Gagalin request dengan error yang jelas, JANGAN fallback
+        // ke placeholder atau base URL bawaan kode -- gak ada base URL yang
+        // di-hardcode di app ini sama sekali.
+        if (newBaseString == null) {
+            throw java.io.IOException(
+                "Server sedang tidak tersedia. Coba lagi nanti."
+            )
+        }
+
+        val newBase = newBaseString.toHttpUrlOrNull()
         if (newBase == null) {
             chain.proceed(original)
         } else {

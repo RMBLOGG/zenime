@@ -9,16 +9,25 @@ import kotlinx.coroutines.tasks.await
  * Ambil base URL API dari Firebase Remote Config, supaya base URL bisa
  * diganti dari Firebase Console tanpa perlu update APK.
  *
+ * SENGAJA TIDAK ADA base URL cadangan yang di-hardcode di APK. Firebase
+ * Remote Config adalah satu-satunya sumber base URL. Konsekuensinya:
+ * - Kalau parameter "api_base_url" di Console kosong/belum diisi, app
+ *   TIDAK BISA akses API sama sekali (request gagal) -- ini kepake juga
+ *   sebagai kill-switch resmi buat matiin akses API dari jarak jauh.
+ * - Firebase Remote Config sendiri nyimpen hasil fetch terakhir yang
+ *   sukses di local storage device (bukan hardcode kita), jadi begitu
+ *   pernah fetch sukses sekali, app tetap bisa jalan offline pakai nilai
+ *   itu -- ini caching bawaan SDK Firebase, bukan fallback yang kita bikin
+ *   sendiri di kode.
+ *
  * Setup di Firebase Console:
  * 1. Buka Remote Config di project Firebase yang dipakai (google-services.json ini).
- * 2. Tambah parameter baru: key = "api_base_url", default value = DEFAULT_BASE_URL di bawah.
- * 3. Publish. Untuk ganti base URL nanti, tinggal edit value parameter itu lalu Publish lagi.
- *    Client akan pakai nilai baru di sesi berikutnya (setelah fetch berhasil).
+ * 2. Tambah parameter baru: key = "api_base_url", isi value dengan base URL API-nya.
+ * 3. Publish. Untuk ganti base URL nanti (atau matiin app), tinggal edit/kosongin
+ *    value parameter itu lalu Publish lagi.
  */
 object RemoteConfigManager {
 
-    // Dipakai kalau Remote Config belum sempat fetch (mis. run pertama kali offline).
-    private const val DEFAULT_BASE_URL = "http://203.175.11.166:5001/api/"
     private const val KEY_BASE_URL = "api_base_url"
 
     private val remoteConfig by lazy {
@@ -28,26 +37,42 @@ object RemoteConfigManager {
                     minimumFetchIntervalInSeconds = 3600 // cache 1 jam, hemat kuota fetch
                 }
             )
-            setDefaultsAsync(mapOf(KEY_BASE_URL to DEFAULT_BASE_URL))
+            // Sengaja TIDAK setDefaultsAsync(...) -- gak ada nilai cadangan
+            // yang ditanam di kode. Kalau belum pernah fetch sukses sama
+            // sekali, value-nya kosong dan currentBaseUrl() return null.
         }
     }
 
     /**
      * Ambil base URL terbaru dari server Firebase (fetch + activate).
-     * Kalau gagal (offline dll), diam-diam pakai nilai cache/default yang sudah ada.
-     * Panggil ini sekali saja saat app start, sebelum request API pertama kalau bisa.
+     * Kalau fetch gagal (offline dll), diam-diam lanjut pakai nilai hasil
+     * fetch sukses terakhir yang udah ke-cache Firebase SDK di device ini.
+     * Panggil ini sekali saja saat app start, sebelum request API pertama.
      */
     suspend fun refresh() {
         try {
             remoteConfig.fetchAndActivate().await()
         } catch (_: Exception) {
-            // Fetch gagal (mis. offline) — lanjut pakai nilai cache/default, tidak fatal.
+            // Fetch gagal (mis. offline) — lanjut pakai cache lokal Firebase
+            // SDK dari fetch sukses sebelumnya (kalau ada).
         }
     }
 
-    /** Base URL saat ini (cache lokal dari fetch terakhir, atau default). */
-    fun currentBaseUrl(): String {
+    /**
+     * Base URL saat ini, murni dari Firebase Remote Config. Return null
+     * kalau:
+     * - Parameter "api_base_url" kosong/belum di-set di Console (baik
+     *   sengaja dikosongin sebagai kill-switch, atau memang belum pernah
+     *   diisi sama sekali), ATAU
+     * - App belum pernah berhasil fetch config sama sekali (mis. install
+     *   baru + langsung dibuka offline sebelum ada koneksi).
+     *
+     * Di kedua kasus itu, TIDAK ADA fallback ke URL manapun yang
+     * di-hardcode di kode -- request API-nya wajib gagal, bukan diam-diam
+     * jalan ke server lain.
+     */
+    fun currentBaseUrl(): String? {
         val value = remoteConfig.getString(KEY_BASE_URL)
-        return value.ifBlank { DEFAULT_BASE_URL }
+        return value.ifBlank { null }
     }
 }
