@@ -1,5 +1,6 @@
 package com.example.ui.screens.home
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -22,8 +23,14 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -36,15 +43,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -415,146 +421,14 @@ fun FullBleedHeroBannerCarousel(
 }
 
 /**
- * Gaya "Card Peek" -- tiap slide berupa kartu rounded yang gak penuh lebar
- * layar, dikit "ngintip" slide sebelahnya di kiri-kanan (gaya Disney+ /
- * Netflix "Coming Soon" row). Swipeable manual (HorizontalPager) SEKALIGUS
- * auto-advance, beda dari gaya Full Bleed yang cuma auto-advance tanpa swipe.
- */
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
-@Composable
-fun CardPeekHeroCarousel(
-    bannerItems: List<AnimeItem>,
-    onAnimeClick: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    autoplay: Boolean = true,
-    intervalMs: Long = 4500L
-) {
-    if (bannerItems.isEmpty()) return
-
-    val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { bannerItems.size })
-    val coroutineScope = rememberCoroutineScope()
-
-    LaunchedEffect(bannerItems, autoplay, intervalMs) {
-        if (autoplay && bannerItems.size > 1) {
-            while (true) {
-                delay(intervalMs)
-                val next = (pagerState.currentPage + 1) % bannerItems.size
-                pagerState.animateScrollToPage(next)
-            }
-        }
-    }
-
-    Column(modifier = modifier.fillMaxWidth()) {
-        androidx.compose.foundation.pager.HorizontalPager(
-            state = pagerState,
-            contentPadding = PaddingValues(horizontal = 28.dp),
-            pageSpacing = 12.dp,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(200.dp)
-        ) { page ->
-            val anime = bannerItems[page]
-            // Kartu yang lagi di tengah tampil penuh; yang lagi "diintip"
-            // di tepi sedikit diperkecil + diredupin, kasih kesan depth.
-            val pageOffset = ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
-            val scale = 1f - (0.08f * kotlin.math.abs(pageOffset)).coerceIn(0f, 0.08f)
-            val alpha = 1f - (0.35f * kotlin.math.abs(pageOffset)).coerceIn(0f, 0.35f)
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        this.alpha = alpha
-                    }
-                    .clip(RoundedCornerShape(20.dp))
-                    .clickable { onAnimeClick(anime.id) }
-            ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(anime.image_cover ?: anime.image_poster)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = anime.title ?: "Hero Banner",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.75f)
-                                )
-                            )
-                        )
-                )
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(16.dp)
-                ) {
-                    anime.type?.let { type ->
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = ZenimePrimary
-                        ) {
-                            Text(
-                                text = type,
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(6.dp))
-                    }
-                    Text(
-                        text = anime.title ?: "Tanpa Judul",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 17.sp
-                        ),
-                        color = Color.White,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.Center
-        ) {
-            bannerItems.indices.forEach { index ->
-                Box(
-                    modifier = Modifier
-                        .padding(horizontal = 3.dp)
-                        .height(6.dp)
-                        .width(if (index == pagerState.currentPage) 20.dp else 6.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(
-                            if (index == pagerState.currentPage) ZenimePrimary
-                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                        )
-                )
-            }
-        }
-    }
-}
-
-/**
- * Gaya "Minimal" -- strip compact, poster kecil + info ringkas, jauh lebih
- * pendek dari dua gaya lain. Buat user yang lebih mentingin cepet nyampe
- * ke daftar anime di bawahnya daripada banner gede yang makan tempat.
+ * Gaya "Crunchyroll" -- hero besar dengan judul, badge status/genre,
+ * sinopsis ringkas, dan tombol CTA pill besar "Mulai Menonton" + tombol
+ * bookmark bulat di sampingnya. Nyontek layout hero Crunchyroll: gambar di
+ * atas transisi ke background solid di bawah (bukan gradient nutupin
+ * gambar doang), teks & tombol duduk di area solid itu biar kebaca jelas.
  */
 @Composable
-fun MinimalHeroCarousel(
+fun CrunchyrollHeroCarousel(
     bannerItems: List<AnimeItem>,
     onAnimeClick: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -574,76 +448,181 @@ fun MinimalHeroCarousel(
         }
     }
 
-    val currentAnime = bannerItems[currentIndex.coerceIn(0, bannerItems.lastIndex)]
+    val anime = bannerItems[currentIndex.coerceIn(0, bannerItems.lastIndex)]
+    var isBookmarked by remember(anime.id) { mutableStateOf(false) }
 
-    Box(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .height(120.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .clickable { onAnimeClick(currentAnime.id) }
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(currentAnime.image_cover ?: currentAnime.image_poster)
-                .crossfade(true)
-                .build(),
-            contentDescription = currentAnime.title ?: "Hero Banner",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = 0.88f),
-                            Color.Black.copy(alpha = 0.35f),
-                            Color.Transparent
+                .fillMaxWidth()
+                .height(340.dp)
+                .clickable { onAnimeClick(anime.id) }
+        ) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(anime.image_cover ?: anime.image_poster)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = anime.title ?: "Hero Banner",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            // Gradient nyambungin gambar ke background solid di bawah,
+            // bukan sekedar gelapin gambar -- biar transisinya mulus kayak
+            // referensi Crunchyroll.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Transparent,
+                                MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
+                                MaterialTheme.colorScheme.background
+                            ),
+                            startY = 0f
                         )
                     )
-                )
-        )
-        Row(
+            )
+        }
+
+        Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                currentAnime.type?.let { type ->
-                    Text(
-                        text = type.uppercase(),
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = ZenimePrimary
-                    )
-                    Spacer(modifier = Modifier.height(3.dp))
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = anime.title ?: "Tanpa Judul",
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 22.sp
+                ),
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Baris badge: status + tipe + genre pertama, dipisah titik --
+            // persis pola "12+ • Sulih Suara | Takarir • Romansa, Fantasi"
+            // di referensi, tapi pakai data yang beneran ada.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                anime.status?.let { status ->
+                    Surface(
+                        shape = RoundedCornerShape(5.dp),
+                        color = ZenimePrimary.copy(alpha = 0.16f)
+                    ) {
+                        Text(
+                            text = status,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = ZenimePrimary,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
                 }
+                val metaLine = listOfNotNull(anime.type, anime.genre).joinToString(" • ")
+                if (metaLine.isNotEmpty()) {
+                    Text(
+                        text = metaLine,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            anime.synopsis?.let { synopsis ->
+                Spacer(modifier = Modifier.height(10.dp))
                 Text(
-                    text = currentAnime.title ?: "Tanpa Judul",
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp
-                    ),
-                    color = Color.White,
-                    maxLines = 2,
+                    text = synopsis,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Spacer(modifier = Modifier.width(10.dp))
-            Surface(
-                shape = CircleShape,
-                color = ZenimePrimary,
-                modifier = Modifier.size(40.dp)
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // CTA row: tombol pill besar "Mulai Menonton" + tombol bookmark
+            // bulat outline di sampingnya, sama kayak referensi.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = ZenimePrimary,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp)
+                        .clickable { onAnimeClick(anime.id) }
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Mulai Menonton",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Surface(
+                    shape = CircleShape,
+                    color = Color.Transparent,
+                    border = BorderStroke(1.5.dp, ZenimePrimary),
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clickable { isBookmarked = !isBookmarked }
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Icon(
+                            imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                            contentDescription = "Simpan ke Daftar",
+                            tint = ZenimePrimary,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Start
             ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Mainkan Anime",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
+                bannerItems.indices.forEach { index ->
+                    Box(
+                        modifier = Modifier
+                            .padding(end = 5.dp)
+                            .height(5.dp)
+                            .width(if (index == currentIndex) 22.dp else 5.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(
+                                if (index == currentIndex) ZenimePrimary
+                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
+                            )
                     )
                 }
             }
@@ -652,9 +631,187 @@ fun MinimalHeroCarousel(
 }
 
 /**
+ * Gaya "Dayynime" -- kartu carousel dengan meta info chip (ikon + teks)
+ * kayak tipe, status, genre, plus badge ranking "Trending N" di pojok
+ * kiri atas. Nyontek pola card list Dayynime yang nunjukin info teknis
+ * langsung di atas gambar, bukan di area terpisah kayak gaya Crunchyroll.
+ */
+@Composable
+fun DayynimeHeroCarousel(
+    bannerItems: List<AnimeItem>,
+    onAnimeClick: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    autoplay: Boolean = true,
+    intervalMs: Long = 4500L
+) {
+    if (bannerItems.isEmpty()) return
+
+    var currentIndex by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(bannerItems, autoplay, intervalMs) {
+        if (autoplay && bannerItems.size > 1) {
+            while (true) {
+                delay(intervalMs)
+                currentIndex = (currentIndex + 1) % bannerItems.size
+            }
+        }
+    }
+
+    val anime = bannerItems[currentIndex.coerceIn(0, bannerItems.lastIndex)]
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .height(260.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .clickable { onAnimeClick(anime.id) }
+        ) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(anime.image_cover ?: anime.image_poster)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = anime.title ?: "Hero Banner",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.25f),
+                                Color.Black.copy(alpha = 0.88f)
+                            )
+                        )
+                    )
+            )
+
+            // Badge ranking pojok kiri atas -- posisi anime ini di daftar
+            // banner (urutan asli dari API), bukan angka karangan.
+            Surface(
+                shape = RoundedCornerShape(50),
+                color = ZenimePrimary,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(12.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocalFireDepartment,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Trending ${currentIndex + 1}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White
+                    )
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = anime.title ?: "Tanpa Judul",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 19.sp
+                    ),
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Baris chip meta info (ikon + teks) -- persis pola
+                // "Episode X Episodes | 24 min | TV" di referensi, tapi
+                // pakai field yang emang tersedia dari API (type, time,
+                // status) daripada ngarang angka episode.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    anime.type?.let { type ->
+                        DayynimeMetaChip(icon = Icons.Default.Tv, text = type)
+                    }
+                    anime.time?.let { time ->
+                        DayynimeMetaChip(icon = Icons.Default.Schedule, text = time)
+                    }
+                    anime.status?.let { status ->
+                        DayynimeMetaChip(icon = Icons.Default.FiberManualRecord, text = status)
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.Center
+        ) {
+            bannerItems.indices.forEach { index ->
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 3.dp)
+                        .height(6.dp)
+                        .width(if (index == currentIndex) 20.dp else 6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(
+                            if (index == currentIndex) ZenimePrimary
+                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                        )
+                )
+            }
+        }
+    }
+}
+
+/** Chip kecil ikon+teks buat baris meta info di [DayynimeHeroCarousel]. */
+@Composable
+private fun DayynimeMetaChip(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) {
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = Color.Black.copy(alpha = 0.45f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.85f),
+                modifier = Modifier.size(11.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = 0.9f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+/**
  * Switcher gaya Hero Carousel -- baca preferensi "Gaya Tampilan" dari
- * Pengaturan (FULL_BLEED / CARD_PEEK / MINIMAL) dan render composable yang
- * sesuai. Satu titik masuk, dipanggil dari HomeScreen.
+ * Pengaturan (FULL_BLEED / CRUNCHYROLL / DAYYNIME) dan render composable
+ * yang sesuai. Satu titik masuk, dipanggil dari HomeScreen.
  */
 @Composable
 fun HeroBannerCarousel(
@@ -666,14 +823,14 @@ fun HeroBannerCarousel(
     modifier: Modifier = Modifier
 ) {
     when (style) {
-        "CARD_PEEK" -> CardPeekHeroCarousel(
+        "CRUNCHYROLL" -> CrunchyrollHeroCarousel(
             bannerItems = bannerItems,
             onAnimeClick = onAnimeClick,
             modifier = modifier,
             autoplay = autoplay,
             intervalMs = intervalMs
         )
-        "MINIMAL" -> MinimalHeroCarousel(
+        "DAYYNIME" -> DayynimeHeroCarousel(
             bannerItems = bannerItems,
             onAnimeClick = onAnimeClick,
             modifier = modifier,

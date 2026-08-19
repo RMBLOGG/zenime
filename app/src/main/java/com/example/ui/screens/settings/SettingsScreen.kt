@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -207,40 +206,41 @@ private fun HeroStylePreviewThumb(style: String, selected: Boolean) {
             .padding(4.dp)
     ) {
         when (style) {
-            "CARD_PEEK" -> Row(
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            "CRUNCHYROLL" -> Column(
+                verticalArrangement = Arrangement.spacedBy(2.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 Box(
                     modifier = Modifier
-                        .weight(0.2f)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(ZenimePrimary.copy(alpha = 0.25f))
-                )
-                Box(
-                    modifier = Modifier
-                        .weight(0.6f)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(3.dp))
+                        .fillMaxWidth()
+                        .weight(0.55f)
+                        .clip(RoundedCornerShape(2.dp))
                         .background(ZenimePrimary.copy(alpha = 0.7f))
                 )
                 Box(
                     modifier = Modifier
+                        .fillMaxWidth()
                         .weight(0.2f)
-                        .fillMaxHeight()
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(ZenimePrimary.copy(alpha = 0.25f))
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(ZenimePrimary)
                 )
             }
-            "MINIMAL" -> Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.55f)
-                    .align(Alignment.CenterStart)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(ZenimePrimary.copy(alpha = 0.7f))
-            ) {}
+            "DAYYNIME" -> Box(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(ZenimePrimary.copy(alpha = 0.7f))
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(2.dp)
+                        .size(width = 14.dp, height = 5.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(Color.White.copy(alpha = 0.9f))
+                )
+            }
             else -> Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -634,8 +634,8 @@ fun SettingsScreen(
 
                             listOf(
                                 Triple("FULL_BLEED", "Full Bleed (Default)", "Banner besar penuh layar, info di bawah"),
-                                Triple("CARD_PEEK", "Card Peek", "Kartu rounded, ngintip slide sebelah, bisa digeser"),
-                                Triple("MINIMAL", "Minimal", "Strip compact, lebih cepat sampai ke daftar anime")
+                                Triple("CRUNCHYROLL", "Crunchyroll Style", "Sinopsis + tombol \"Mulai Menonton\" & bookmark"),
+                                Triple("DAYYNIME", "Dayynime Style", "Card dengan chip info tipe, durasi & status")
                             ).forEach { (key, label, desc) ->
                                 val selected = heroStyle == key
                                 Row(
