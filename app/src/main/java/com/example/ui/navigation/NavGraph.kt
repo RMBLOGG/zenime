@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import android.content.pm.ActivityInfo
+import android.view.WindowManager
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.DateRange
@@ -53,6 +54,9 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -169,6 +173,36 @@ fun ZenimeAppNavHost(
             ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         } else {
             ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
+    // Immersive mode (sembunyiin status bar & navigation bar) + keep-screen-on
+    // buat PlayerScreen -- di-drive dari BACKSTACK ENTRY (bukan cuma string
+    // route pattern-nya kayak effect orientasi di atas). Ini penting: route
+    // PATTERN "player/{episodeId}/{animeId}" nilainya SAMA PERSIS pas pindah
+    // dari episode 6 ke episode 7 (baik lewat tombol "Episode Selanjutnya"
+    // maupun sidebar Daftar Episode), jadi kalau di-key ke currentRoute
+    // (String) doang, effect ini gak bakal ke-trigger ulang pas ganti
+    // episode -- status bar yang sempet muncul (misal abis di-swipe) gak
+    // ke-hide lagi. navBackStackEntry beda identitas tiap kali navigate(),
+    // walau route pattern-nya sama, jadi ini kunci yang lebih aman.
+    LaunchedEffect(navBackStackEntry) {
+        val activity = context.findActivity() ?: return@LaunchedEffect
+        val window = activity.window
+        val isPlayerRoute = currentRoute == Screen.Player.route
+
+        if (isPlayerRoute) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            val insetsController = WindowInsetsControllerCompat(window, window.decorView)
+            insetsController.hide(WindowInsetsCompat.Type.systemBars())
+            insetsController.systemBarsBehavior =
+                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            WindowCompat.setDecorFitsSystemWindows(window, true)
+            val insetsController = WindowInsetsControllerCompat(window, window.decorView)
+            insetsController.show(WindowInsetsCompat.Type.systemBars())
         }
     }
 

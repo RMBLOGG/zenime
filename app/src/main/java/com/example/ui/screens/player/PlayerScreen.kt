@@ -4,11 +4,7 @@ import android.media.AudioManager
 import android.net.Uri
 import android.provider.Settings
 import android.view.ViewGroup
-import android.view.WindowManager
 import android.widget.FrameLayout
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
@@ -157,41 +153,15 @@ fun PlayerScreen(
 ) {
     val context = LocalContext.current
 
-    // Orientasi landscape buat PlayerScreen di-lock di level NavGraph
-    // (berdasarkan current route), BUKAN di sini. Kalau di-lock per-composable
-    // kayak sebelumnya, transisi "Episode Selanjutnya" (dispose PlayerScreen
-    // lama + compose yang baru, sempat overlap pas animasi) bikin race:
-    // onDispose PlayerScreen lama kejalan SETELAH PlayerScreen baru sempet
-    // nge-set landscape, jadi malah balik ke portrait. Lihat NavGraph.kt.
-
-    // Layar jangan sampe mati/kekunci sendiri selama nonton, meskipun gak ada
-    // sentuhan ke layar (nonton anime kan biasanya cuma diliatin, gak dipegang terus).
-    DisposableEffect(Unit) {
-        val activity = context.findActivity()
-        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
-        // Sembunyikan status bar & navigation bar (immersive) selama nonton,
-        // biar gak ada bar sistem yang nongol di atas/samping video.
-        val window = activity?.window
-        if (window != null) {
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-            val insetsController = WindowInsetsControllerCompat(window, window.decorView)
-            insetsController.hide(WindowInsetsCompat.Type.systemBars())
-            insetsController.systemBarsBehavior =
-                WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
-
-        onDispose {
-            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
-            // Balikin status bar & navigation bar pas keluar dari PlayerScreen.
-            if (window != null) {
-                WindowCompat.setDecorFitsSystemWindows(window, true)
-                val insetsController = WindowInsetsControllerCompat(window, window.decorView)
-                insetsController.show(WindowInsetsCompat.Type.systemBars())
-            }
-        }
-    }
+    // Orientasi landscape, immersive mode (sembunyiin status/nav bar), dan
+    // keep-screen-on buat PlayerScreen SEMUANYA di-lock di level NavGraph
+    // (berdasarkan current route), BUKAN di dalam PlayerScreen. Kalau
+    // ditaruh per-composable (DisposableEffect di dalam PlayerScreen),
+    // transisi "Episode Selanjutnya" (dispose PlayerScreen lama + compose
+    // yang baru, sempat overlap pas animasi) bikin race: onDispose
+    // PlayerScreen LAMA kejalan SETELAH PlayerScreen BARU sempet nge-set
+    // immersive, jadi malah nampilin balik status bar & nav bar sistem di
+    // episode barunya. Lihat NavGraph.kt buat implementasi yang bener.
 
     // Daftarin ke PipController selama PlayerScreen ini hidup, biar
     // MainActivity tau boleh auto-masuk PiP pas user pindah app. Dilepas
