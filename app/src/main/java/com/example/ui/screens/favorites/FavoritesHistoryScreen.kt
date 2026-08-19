@@ -203,7 +203,13 @@ fun FavoritesHistoryScreen(
                             items(watchHistory, key = { it.animeId }) { historyItem ->
                                 WatchHistoryCard(
                                     item = historyItem,
-                                    onCardClick = { onAnimeClick(historyItem.animeId) },
+                                    // Tap di mana pun pada kartu -- bukan cuma
+                                    // tombol play kecil -- langsung lanjut
+                                    // nonton episode terakhir. Halaman detail
+                                    // gak relevan lagi di sini karena tujuan
+                                    // riwayat emang buat "lanjutin nonton",
+                                    // bukan "lihat info anime".
+                                    onCardClick = { onPlayEpisodeClick(historyItem.episodeId, historyItem.animeId) },
                                     onResumeClick = { onPlayEpisodeClick(historyItem.episodeId, historyItem.animeId) },
                                     onDeleteClick = { viewModel.deleteHistoryItem(historyItem.animeId) }
                                 )
@@ -268,7 +274,10 @@ fun WatchHistoryCard(
     val progressFrac = if (item.durationMs > 0) {
         (item.progressMs.toFloat() / item.durationMs.toFloat()).coerceIn(0f, 1f)
     } else 0f
-    val percentWatched = (progressFrac * 100).toInt()
+    // Menit tonton (bukan persen) -- lebih kebayang durasinya ketimbang
+    // angka "21%" yang gak jelas itu dari total berapa menit.
+    val minutesWatched = (item.progressMs / 60000L).toInt()
+    val totalMinutes = if (item.durationMs > 0) (item.durationMs / 60000L).toInt() else null
 
     // Swipe ke arah mana pun (kiri atau kanan) buat hapus -- tombol trash
     // di kartu tetep ada juga sebagai cara alternatif, dua-duanya manggil
@@ -411,9 +420,10 @@ fun WatchHistoryCard(
                             .clip(RoundedCornerShape(3.dp))
                     )
                     Text(
-                        text = "$percentWatched%",
+                        text = if (totalMinutes != null) "$minutesWatched/$totalMinutes mnt" else "$minutesWatched mnt",
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = ZenimePrimary
+                        color = ZenimePrimary,
+                        maxLines = 1
                     )
                 }
             }
