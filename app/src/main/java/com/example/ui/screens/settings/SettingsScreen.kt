@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -225,20 +226,23 @@ private fun HeroStylePreviewThumb(style: String, selected: Boolean) {
                         .background(ZenimePrimary)
                 )
             }
-            "DAYYNIME" -> Box(modifier = Modifier.fillMaxSize()) {
+            "DAYYNIME" -> Row(
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(4.dp))
+                        .weight(0.8f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(3.dp))
                         .background(ZenimePrimary.copy(alpha = 0.7f))
                 )
                 Box(
                     modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(2.dp)
-                        .size(width = 14.dp, height = 5.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(Color.White.copy(alpha = 0.9f))
+                        .weight(0.2f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(ZenimePrimary.copy(alpha = 0.3f))
                 )
             }
             else -> Box(
@@ -635,7 +639,7 @@ fun SettingsScreen(
                             listOf(
                                 Triple("FULL_BLEED", "Full Bleed (Default)", "Banner besar penuh layar, info di bawah"),
                                 Triple("CRUNCHYROLL", "Crunchyroll Style", "Sinopsis + tombol \"Mulai Menonton\" & bookmark"),
-                                Triple("DAYYNIME", "Dayynime Style", "Card dengan chip info tipe, durasi & status")
+                                Triple("DAYYNIME", "Dayynime Style", "Peek carousel + badge Trending, bisa digeser")
                             ).forEach { (key, label, desc) ->
                                 val selected = heroStyle == key
                                 Row(

@@ -26,10 +26,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.FiberManualRecord
-import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -631,11 +631,12 @@ fun CrunchyrollHeroCarousel(
 }
 
 /**
- * Gaya "Dayynime" -- kartu carousel dengan meta info chip (ikon + teks)
- * kayak tipe, status, genre, plus badge ranking "Trending N" di pojok
- * kiri atas. Nyontek pola card list Dayynime yang nunjukin info teknis
- * langsung di atas gambar, bukan di area terpisah kayak gaya Crunchyroll.
+ * Gaya "Dayynime" -- PEEK CAROUSEL (bukan single-card): card aktif hampir
+ * penuh lebar, tapi sliver card berikutnya keliatan dikit di tepi kanan
+ * (persis pola aslinya). Badge "Trending N" berdiri SENDIRI di atas
+ * carousel, bukan nempel di pojok gambar. Dot indicator bulat kecil.
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun DayynimeHeroCarousel(
     bannerItems: List<AnimeItem>,
@@ -646,110 +647,120 @@ fun DayynimeHeroCarousel(
 ) {
     if (bannerItems.isEmpty()) return
 
-    var currentIndex by remember { mutableIntStateOf(0) }
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { bannerItems.size })
 
     LaunchedEffect(bannerItems, autoplay, intervalMs) {
         if (autoplay && bannerItems.size > 1) {
             while (true) {
                 delay(intervalMs)
-                currentIndex = (currentIndex + 1) % bannerItems.size
+                val next = (pagerState.currentPage + 1) % bannerItems.size
+                pagerState.animateScrollToPage(next)
             }
         }
     }
 
-    val anime = bannerItems[currentIndex.coerceIn(0, bannerItems.lastIndex)]
-
     Column(modifier = modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .height(260.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .clickable { onAnimeClick(anime.id) }
-        ) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(anime.image_cover ?: anime.image_poster)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = anime.title ?: "Hero Banner",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.25f),
-                                Color.Black.copy(alpha = 0.88f)
-                            )
-                        )
-                    )
-            )
-
-            // Badge ranking pojok kiri atas -- posisi anime ini di daftar
-            // banner (urutan asli dari API), bukan angka karangan.
+        // Badge "Trending N" -- baris SENDIRI di atas carousel, bukan
+        // overlay di pojok gambar. Angkanya ngikutin posisi carousel yang
+        // lagi aktif (urutan asli dari API), sama kayak referensi.
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
             Surface(
                 shape = RoundedCornerShape(50),
-                color = ZenimePrimary,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(12.dp)
+                color = ZenimePrimary
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.LocalFireDepartment,
+                        imageVector = Icons.Default.Star,
                         contentDescription = null,
                         tint = Color.White,
                         modifier = Modifier.size(13.dp)
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Trending ${currentIndex + 1}",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        text = "Trending ${pagerState.currentPage + 1}",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                         color = Color.White
                     )
                 }
             }
+        }
 
-            Column(
+        // contentPadding asimetris (start kecil, end besar) -- ini yang
+        // bikin sliver card berikutnya keliatan di tepi kanan, sementara
+        // card aktif nempel rata di kiri, persis referensi.
+        androidx.compose.foundation.pager.HorizontalPager(
+            state = pagerState,
+            contentPadding = PaddingValues(start = 16.dp, end = 52.dp),
+            pageSpacing = 10.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(230.dp)
+        ) { page ->
+            val anime = bannerItems[page]
+            Box(
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(16.dp)
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable { onAnimeClick(anime.id) }
             ) {
-                Text(
-                    text = anime.title ?: "Tanpa Judul",
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.ExtraBold,
-                        fontSize = 19.sp
-                    ),
-                    color = Color.White,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(anime.image_cover ?: anime.image_poster)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = anime.title ?: "Hero Banner",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.25f),
+                                    Color.Black.copy(alpha = 0.88f)
+                                )
+                            )
+                        )
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(14.dp)
+                ) {
+                    Text(
+                        text = anime.title ?: "Tanpa Judul",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 17.sp
+                        ),
+                        color = Color.White,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
 
-                // Baris chip meta info (ikon + teks) -- persis pola
-                // "Episode X Episodes | 24 min | TV" di referensi, tapi
-                // pakai field yang emang tersedia dari API (type, time,
-                // status) daripada ngarang angka episode.
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    anime.type?.let { type ->
-                        DayynimeMetaChip(icon = Icons.Default.Tv, text = type)
-                    }
-                    anime.time?.let { time ->
-                        DayynimeMetaChip(icon = Icons.Default.Schedule, text = time)
-                    }
-                    anime.status?.let { status ->
-                        DayynimeMetaChip(icon = Icons.Default.FiberManualRecord, text = status)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Baris chip meta info (ikon + teks) -- persis pola
+                    // "Episode X Episodes | 24 min | TV" di referensi, tapi
+                    // pakai field yang emang tersedia dari API (type, time,
+                    // status) daripada ngarang angka episode.
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        anime.type?.let { type ->
+                            DayynimeMetaChip(icon = Icons.Default.Tv, text = type)
+                        }
+                        anime.time?.let { time ->
+                            DayynimeMetaChip(icon = Icons.Default.Schedule, text = time)
+                        }
+                        anime.status?.let { status ->
+                            DayynimeMetaChip(icon = Icons.Default.FiberManualRecord, text = status)
+                        }
                     }
                 }
             }
@@ -757,19 +768,20 @@ fun DayynimeHeroCarousel(
 
         Spacer(modifier = Modifier.height(10.dp))
 
+        // Dot indicator BULAT KECIL -- bukan bar panjang, sesuai referensi asli.
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             horizontalArrangement = Arrangement.Center
         ) {
             bannerItems.indices.forEach { index ->
+                val active = index == pagerState.currentPage
                 Box(
                     modifier = Modifier
                         .padding(horizontal = 3.dp)
-                        .height(6.dp)
-                        .width(if (index == currentIndex) 20.dp else 6.dp)
-                        .clip(RoundedCornerShape(3.dp))
+                        .size(if (active) 8.dp else 6.dp)
+                        .clip(CircleShape)
                         .background(
-                            if (index == currentIndex) ZenimePrimary
+                            if (active) ZenimePrimary
                             else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
                         )
                 )
