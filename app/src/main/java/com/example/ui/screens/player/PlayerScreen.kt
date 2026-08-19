@@ -94,6 +94,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -104,6 +105,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackParameters
@@ -1049,57 +1053,28 @@ private data class PlayerMenuOption(
 )
 
 /**
- * Panel dropdown custom buat pengaturan player (kualitas, kecepatan) —
- * gantiin DropdownMenu bawaan Material3 yang tampilannya kotak polos gak
- * konsisten sama tema player. Panel gelap solid, rounded, dengan judul,
- * highlight lembut + centang di opsi yang lagi aktif, mirip pengaturan
- * player di app streaming profesional.
+ * Popup di Compose bikin window Android baru yang KELUAR dari window
+ * activity utama -- jadi gak otomatis kewarisin flag immersive (status/nav
+ * bar disembunyiin) punya window utama. Begitu popup ini ambil fokus,
+ * sistem nampilin balik status & nav bar karena window yang baru fokus
+ * belum pernah minta buat disembunyiin.
+ *
+ * Fix-nya: minta window si popup ini sendiri buat sembunyiin system bars,
+ * lewat ViewCompat (bukan lewat `window` Activity, karena popup bukan
+ * bagian dari situ). Dipanggil sekali tiap kali popup ke-compose.
  */
 @Composable
-private fun PlayerDropdownMenu(
-    expanded: Boolean,
-    onDismissRequest: () -> Unit,
-    title: String,
-    options: List<PlayerMenuOption>,
-    modifier: Modifier = Modifier
-) {
-    if (!expanded) return
-
-    val density = LocalDensity.current
-
-    Popup(
-        alignment = Alignment.TopEnd,
-        offset = with(density) { IntOffset(x = 0, y = 48.dp.roundToPx()) },
-        onDismissRequest = onDismissRequest,
-        properties = PopupProperties(focusable = true)
-    ) {
-        val visibleState = remember { MutableTransitionState(false) }
-        LaunchedEffect(Unit) { visibleState.targetState = true }
-
-        AnimatedVisibility(
-            visibleState = visibleState,
-            enter = fadeIn(tween(140)) + scaleIn(initialScale = 0.9f, animationSpec = tween(140)),
-            exit = fadeOut(tween(100)) + scaleOut(targetScale = 0.9f, animationSpec = tween(100))
-        ) {
-            Column(
-                modifier = modifier
-                    .widthIn(min = 180.dp, max = 260.dp)
-                    .shadow(elevation = 16.dp, shape = RoundedCornerShape(16.dp), clip = false)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFF16171C).copy(alpha = 0.97f))
-                    .border(
-                        BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
-                        RoundedCornerShape(16.dp)
-                    )
-                    .padding(vertical = 6.dp)
-            ) {
-                PlayerMenuSection(title = title, options = options)
-            }
-        }
+private fun ImmersivePopupEffect() {
+    val view = LocalView.current
+    LaunchedEffect(Unit) {
+        val insetsController = ViewCompat.getWindowInsetsController(view) ?: return@LaunchedEffect
+        insetsController.hide(WindowInsetsCompat.Type.systemBars())
+        insetsController.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 }
 
-/** Judul section + list opsi -- dipakai bareng di [PlayerDropdownMenu] dan [PlayerSettingsMenu]. */
+/** Judul section + list opsi -- dipakai di [PlayerSettingsMenu]. */
 @Composable
 private fun PlayerMenuSection(title: String, options: List<PlayerMenuOption>) {
     Text(
@@ -1169,6 +1144,8 @@ private fun PlayerSettingsMenu(
         onDismissRequest = onDismissRequest,
         properties = PopupProperties(focusable = true)
     ) {
+        ImmersivePopupEffect()
+
         val visibleState = remember { MutableTransitionState(false) }
         LaunchedEffect(Unit) { visibleState.targetState = true }
 
