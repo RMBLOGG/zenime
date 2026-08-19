@@ -53,14 +53,13 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.Forward10
-import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircleFilled
 import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
@@ -206,8 +205,10 @@ fun PlayerScreen(
     var isControlsVisible by remember { mutableStateOf(true) }
     var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
 
-    var showQualityMenu by remember { mutableStateOf(false) }
-    var showSpeedMenu by remember { mutableStateOf(false) }
+    // Kualitas & kecepatan digabung jadi satu menu "Settings" (satu ikon),
+    // gaya app streaming modern -- daripada dua ikon terpisah yang bikin
+    // top bar penuh.
+    var showSettingsMenu by remember { mutableStateOf(false) }
 
     val isInPip by PipController.isInPipMode.collectAsState()
 
@@ -280,8 +281,7 @@ fun PlayerScreen(
     // bawah).
     LaunchedEffect(isInPip) {
         if (isInPip) {
-            showQualityMenu = false
-            showSpeedMenu = false
+            showSettingsMenu = false
             showEpisodeList = false
             isControlsVisible = false
         }
@@ -665,22 +665,37 @@ fun PlayerScreen(
 
                                     Spacer(modifier = Modifier.width(10.dp))
 
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = "Episode ${epDetail?.index ?: ""}",
-                                            style = MaterialTheme.typography.titleMedium.copy(
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 16.sp
-                                            ),
-                                            color = Color.White,
-                                            maxLines = 1
-                                        )
+                                    Column(
+                                        modifier = Modifier.weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                                    ) {
+                                        // Badge "EP N" kecil, gaya chip -- lebih enak
+                                        // dipindai mata daripada teks polos nyambung
+                                        // sama judul di baris yang sama.
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = PlayerAccent.copy(alpha = 0.16f)
+                                        ) {
+                                            Text(
+                                                text = "EP ${epDetail?.index ?: "-"}",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 11.sp
+                                                ),
+                                                color = PlayerAccent,
+                                                maxLines = 1,
+                                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                                            )
+                                        }
                                         val epTitle = epDetail?.title
                                         if (!epTitle.isNullOrEmpty()) {
                                             Text(
                                                 text = epTitle,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = Color.White.copy(alpha = 0.7f),
+                                                style = MaterialTheme.typography.titleSmall.copy(
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    fontSize = 15.sp
+                                                ),
+                                                color = Color.White,
                                                 maxLines = 1
                                             )
                                         }
@@ -698,7 +713,7 @@ fun PlayerScreen(
                                         }
                                     )
 
-                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
 
                                     // Episode List Sidebar Trigger
                                     PlayerIconButton(
@@ -707,54 +722,38 @@ fun PlayerScreen(
                                         onClick = { showEpisodeList = true }
                                     )
 
-                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
 
-                                    // Quality Picker Icon
+                                    // Settings -- kualitas & kecepatan digabung jadi
+                                    // satu menu, satu ikon aja (bukan dua terpisah).
                                     Box {
                                         PlayerIconButton(
-                                            icon = Icons.Default.HighQuality,
-                                            contentDescription = "Pilih Kualitas",
-                                            onClick = { showQualityMenu = true }
+                                            icon = Icons.Default.Settings,
+                                            contentDescription = "Pengaturan Video",
+                                            onClick = { showSettingsMenu = true },
+                                            badge = if (playbackSpeed != 1.0f) "${playbackSpeed}x" else null
                                         )
-                                        PlayerDropdownMenu(
-                                            expanded = showQualityMenu,
-                                            onDismissRequest = { showQualityMenu = false },
-                                            title = "Kualitas Video",
-                                            options = servers.map { server ->
+                                        PlayerSettingsMenu(
+                                            expanded = showSettingsMenu,
+                                            onDismissRequest = { showSettingsMenu = false },
+                                            qualityOptions = servers.map { server ->
                                                 PlayerMenuOption(
                                                     label = "${server.name ?: "Server"} (${server.quality ?: "720p"})",
                                                     isSelected = selectedServer?.id == server.id,
                                                     onClick = {
                                                         viewModel.selectServer(server)
-                                                        showQualityMenu = false
+                                                        showSettingsMenu = false
                                                     }
                                                 )
-                                            }
-                                        )
-                                    }
-
-                                    Spacer(modifier = Modifier.width(6.dp))
-
-                                    // Playback Speed Menu
-                                    Box {
-                                        PlayerIconButton(
-                                            icon = Icons.Default.Speed,
-                                            contentDescription = "Kecepatan Putar",
-                                            onClick = { showSpeedMenu = true },
-                                            badge = if (playbackSpeed != 1.0f) "${playbackSpeed}x" else null
-                                        )
-                                        PlayerDropdownMenu(
-                                            expanded = showSpeedMenu,
-                                            onDismissRequest = { showSpeedMenu = false },
-                                            title = "Kecepatan Putar",
-                                            options = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).map { speed ->
+                                            },
+                                            speedOptions = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).map { speed ->
                                                 PlayerMenuOption(
                                                     label = "${speed}x",
                                                     isSelected = playbackSpeed == speed,
                                                     onClick = {
                                                         playbackSpeed = speed
                                                         exoPlayer.playbackParameters = PlaybackParameters(speed)
-                                                        showSpeedMenu = false
+                                                        showSettingsMenu = false
                                                     }
                                                 )
                                             }
@@ -781,8 +780,13 @@ fun PlayerScreen(
 
                                     Box(
                                         modifier = Modifier
-                                            .size(72.dp)
-                                            .shadow(elevation = 10.dp, shape = CircleShape, clip = false)
+                                            .size(76.dp)
+                                            .shadow(
+                                                elevation = 14.dp,
+                                                shape = CircleShape,
+                                                clip = false,
+                                                ambientColor = PlayerAccent.copy(alpha = 0.5f)
+                                            )
                                             .clip(CircleShape)
                                             .background(Color.White)
                                             .clickable(
@@ -818,21 +822,10 @@ fun PlayerScreen(
                                     )
                                 }
 
-                                // Manual "Lewati Intro" pill — tetep muncul walau
-                                // auto-skip nyala/mati, buat jaga-jaga kalau lompatan
-                                // otomatisnya kurang pas.
-                                if (currentPosition < INTRO_SKIP_MS && duration > MIN_DURATION_FOR_SKIP_MS) {
-                                    PlayerPill(
-                                        text = "Lewati Intro",
-                                        icon = Icons.Default.FastForward,
-                                        modifier = Modifier
-                                            .align(Alignment.BottomEnd)
-                                            .padding(bottom = 84.dp, end = 16.dp),
-                                        onClick = { exoPlayer.seekTo(INTRO_SKIP_MS) }
-                                    )
-                                }
-
-                                // Bottom Scrubber + Next Episode Row
+                                // Bottom Scrubber + Skip Intro + Next Episode
+                                // Semua pill ditumpuk dalam satu Column (bukan
+                                // absolute-position sendiri2) biar nggak pernah
+                                // tabrakan walau kondisinya bareng.
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -840,19 +833,46 @@ fun PlayerScreen(
                                         .padding(horizontal = 16.dp, vertical = 12.dp)
                                 ) {
                                     val nextEpId = nextEpDetail?.id
-                                    if (!nextEpId.isNullOrEmpty()) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.End
-                                        ) {
-                                            PlayerPill(
-                                                text = "Episode Selanjutnya",
-                                                icon = Icons.Default.SkipNext,
-                                                filled = true,
-                                                onClick = { onNextEpisodeClick(nextEpId) }
-                                            )
+                                    val showSkipIntro = currentPosition < INTRO_SKIP_MS &&
+                                        duration > MIN_DURATION_FOR_SKIP_MS
+                                    val showNextEpisode = !nextEpId.isNullOrEmpty()
+
+                                    AnimatedVisibility(
+                                        visible = showSkipIntro || showNextEpisode,
+                                        enter = fadeIn(tween(180)) + slideInHorizontally(
+                                            animationSpec = tween(180),
+                                            initialOffsetX = { it / 4 }
+                                        ),
+                                        exit = fadeOut(tween(140)) + slideOutHorizontally(
+                                            animationSpec = tween(140),
+                                            targetOffsetX = { it / 4 }
+                                        )
+                                    ) {
+                                        Column {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.End
+                                            ) {
+                                                // Prioritaskan satu pill aja biar minimalis:
+                                                // selama intro, tombol skip intro dulu yang
+                                                // tampil. Begitu intro lewat, baru tombol
+                                                // episode selanjutnya muncul.
+                                                when {
+                                                    showSkipIntro -> PlayerPill(
+                                                        text = "Lewati Intro",
+                                                        icon = Icons.Default.FastForward,
+                                                        onClick = { exoPlayer.seekTo(INTRO_SKIP_MS) }
+                                                    )
+                                                    showNextEpisode -> PlayerPill(
+                                                        text = "Episode Selanjutnya",
+                                                        icon = Icons.Default.SkipNext,
+                                                        filled = true,
+                                                        onClick = { onNextEpisodeClick(nextEpId!!) }
+                                                    )
+                                                }
+                                            }
+                                            Spacer(modifier = Modifier.height(10.dp))
                                         }
-                                        Spacer(modifier = Modifier.height(10.dp))
                                     }
 
                                     VideoProgressBar(
@@ -1073,53 +1093,124 @@ private fun PlayerDropdownMenu(
                     )
                     .padding(vertical = 6.dp)
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                    color = Color.White.copy(alpha = 0.5f),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                )
-
-                options.forEach { option ->
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { MutableInteractionSource() },
-                                onClick = option.onClick
-                            )
-                            .background(
-                                if (option.isSelected) PlayerAccent.copy(alpha = 0.14f) else Color.Transparent
-                            )
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
-                    ) {
-                        Text(
-                            text = option.label,
-                            style = MaterialTheme.typography.bodyMedium.copy(
-                                fontWeight = if (option.isSelected) FontWeight.Bold else FontWeight.Normal
-                            ),
-                            color = if (option.isSelected) PlayerAccent else Color.White.copy(alpha = 0.85f),
-                            modifier = Modifier.weight(1f)
-                        )
-                        if (option.isSelected) {
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = null,
-                                tint = PlayerAccent,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
+                PlayerMenuSection(title = title, options = options)
             }
         }
     }
 }
 
-/** Pill kecil buat aksi sekunder (lewati intro, episode selanjutnya). */
+/** Judul section + list opsi -- dipakai bareng di [PlayerDropdownMenu] dan [PlayerSettingsMenu]. */
+@Composable
+private fun PlayerMenuSection(title: String, options: List<PlayerMenuOption>) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+        color = Color.White.copy(alpha = 0.5f),
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+    )
+
+    options.forEach { option ->
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = option.onClick
+                )
+                .background(
+                    if (option.isSelected) PlayerAccent.copy(alpha = 0.14f) else Color.Transparent
+                )
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+        ) {
+            Text(
+                text = option.label,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = if (option.isSelected) FontWeight.Bold else FontWeight.Normal
+                ),
+                color = if (option.isSelected) PlayerAccent else Color.White.copy(alpha = 0.85f),
+                modifier = Modifier.weight(1f)
+            )
+            if (option.isSelected) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    tint = PlayerAccent,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Menu "Settings" gabungan -- kualitas video & kecepatan putar dalam satu
+ * panel, dipisah garis tipis antar section. Gantiin dua ikon+dropdown
+ * terpisah biar top bar lebih minimalis, mirip menu pengaturan satu pintu
+ * di app streaming modern (YouTube, Netflix).
+ */
+@Composable
+private fun PlayerSettingsMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    qualityOptions: List<PlayerMenuOption>,
+    speedOptions: List<PlayerMenuOption>,
+    modifier: Modifier = Modifier
+) {
+    if (!expanded) return
+
+    val density = LocalDensity.current
+
+    Popup(
+        alignment = Alignment.TopEnd,
+        offset = with(density) { IntOffset(x = 0, y = 48.dp.roundToPx()) },
+        onDismissRequest = onDismissRequest,
+        properties = PopupProperties(focusable = true)
+    ) {
+        val visibleState = remember { MutableTransitionState(false) }
+        LaunchedEffect(Unit) { visibleState.targetState = true }
+
+        AnimatedVisibility(
+            visibleState = visibleState,
+            enter = fadeIn(tween(140)) + scaleIn(initialScale = 0.9f, animationSpec = tween(140)),
+            exit = fadeOut(tween(100)) + scaleOut(targetScale = 0.9f, animationSpec = tween(100))
+        ) {
+            Column(
+                modifier = modifier
+                    .widthIn(min = 200.dp, max = 260.dp)
+                    .shadow(elevation = 16.dp, shape = RoundedCornerShape(16.dp), clip = false)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFF16171C).copy(alpha = 0.97f))
+                    .border(
+                        BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+                        RoundedCornerShape(16.dp)
+                    )
+                    .padding(vertical = 6.dp)
+            ) {
+                PlayerMenuSection(title = "Kualitas Video", options = qualityOptions)
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .height(1.dp)
+                        .background(Color.White.copy(alpha = 0.08f))
+                )
+
+                PlayerMenuSection(title = "Kecepatan Putar", options = speedOptions)
+            }
+        }
+    }
+}
+
+/**
+ * Pill "glass" buat aksi sekunder (lewati intro, episode selanjutnya) --
+ * ikon di lingkaran kecil duluan baru teks, border tipis + latar semi-transparan
+ * biar kesannya "frosted glass" kayak overlay di Crunchyroll/Netflix,
+ * bukan kotak solid nempel gitu aja.
+ */
 @Composable
 private fun PlayerPill(
     text: String,
@@ -1129,10 +1220,16 @@ private fun PlayerPill(
     filled: Boolean = false
 ) {
     Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = if (filled) PlayerAccent else Color.Black.copy(alpha = 0.55f),
+        shape = RoundedCornerShape(50),
+        color = if (filled) PlayerAccent else Color(0xFF1A1B20).copy(alpha = 0.72f),
+        border = if (!filled) BorderStroke(1.dp, Color.White.copy(alpha = 0.14f)) else null,
         modifier = modifier
-            .shadow(elevation = if (filled) 6.dp else 0.dp, shape = RoundedCornerShape(24.dp), clip = false)
+            .shadow(
+                elevation = if (filled) 10.dp else 4.dp,
+                shape = RoundedCornerShape(50),
+                clip = false,
+                ambientColor = if (filled) PlayerAccent.copy(alpha = 0.4f) else Color.Black
+            )
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
@@ -1141,19 +1238,30 @@ private fun PlayerPill(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+            modifier = Modifier.padding(start = 10.dp, end = 18.dp, top = 9.dp, bottom = 9.dp)
         ) {
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .background(if (filled) Color.Black.copy(alpha = 0.15f) else PlayerAccent.copy(alpha = 0.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (filled) Color.Black else PlayerAccent,
+                    modifier = Modifier.size(13.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(9.dp))
             Text(
                 text = text,
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.5.sp
+                ),
                 color = if (filled) Color.Black else Color.White
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Icon(
-                imageVector = icon,
-                contentDescription = text,
-                tint = if (filled) Color.Black else Color.White,
-                modifier = Modifier.size(16.dp)
             )
         }
     }
