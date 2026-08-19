@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -22,12 +24,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.Source
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -183,6 +190,67 @@ private fun SettingsRowDivider() {
     )
 }
 
+/**
+ * Mini ilustrasi gaya carousel (bukan foto asli, cuma bentuk kotak-kotak
+ * sederhana) -- biar user langsung kebayang bedanya "Full Bleed" vs "Card
+ * Peek" vs "Minimal" tanpa harus buka Beranda dulu buat coba-coba.
+ */
+@Composable
+private fun HeroStylePreviewThumb(style: String, selected: Boolean) {
+    val borderColor = if (selected) ZenimePrimary else CardOutlineBorder
+    Box(
+        modifier = Modifier
+            .size(width = 56.dp, height = 40.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(1.dp, borderColor, RoundedCornerShape(8.dp))
+            .padding(4.dp)
+    ) {
+        when (style) {
+            "CARD_PEEK" -> Row(
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(0.2f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(ZenimePrimary.copy(alpha = 0.25f))
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(0.6f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(ZenimePrimary.copy(alpha = 0.7f))
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(0.2f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(ZenimePrimary.copy(alpha = 0.25f))
+                )
+            }
+            "MINIMAL" -> Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.55f)
+                    .align(Alignment.CenterStart)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(ZenimePrimary.copy(alpha = 0.7f))
+            ) {}
+            else -> Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(ZenimePrimary.copy(alpha = 0.7f))
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -194,6 +262,11 @@ fun SettingsScreen(
     val defaultQuality by viewModel.defaultQuality.collectAsStateWithLifecycle()
     val autoSkipIntro by viewModel.autoSkipIntro.collectAsStateWithLifecycle()
     val autoSkipOutro by viewModel.autoSkipOutro.collectAsStateWithLifecycle()
+    val heroStyle by viewModel.heroStyle.collectAsStateWithLifecycle()
+    val heroAutoplay by viewModel.heroAutoplay.collectAsStateWithLifecycle()
+    val heroIntervalMs by viewModel.heroIntervalMs.collectAsStateWithLifecycle()
+    val heroItemCount by viewModel.heroItemCount.collectAsStateWithLifecycle()
+    val heroSource by viewModel.heroSource.collectAsStateWithLifecycle()
     val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
     val isSigningIn by viewModel.isSigningIn.collectAsStateWithLifecycle()
     val loginError by viewModel.loginError.collectAsStateWithLifecycle()
@@ -201,6 +274,8 @@ fun SettingsScreen(
     val context = LocalContext.current
     var showSignOutConfirm by remember { mutableStateOf(false) }
     var showQualityMenu by remember { mutableStateOf(false) }
+    var showIntervalMenu by remember { mutableStateOf(false) }
+    var showItemCountMenu by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -530,6 +605,230 @@ fun SettingsScreen(
                                 )
                             }
                         )
+                    }
+                }
+
+                // ---------------- Section: Tampilan Beranda (Hero Carousel) ----------------
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SettingsGroupLabel("Tampilan Beranda")
+
+                    SettingsGroupCard {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                SettingsIconChip(icon = Icons.Default.ViewCarousel)
+                                Spacer(modifier = Modifier.width(14.dp))
+                                Column {
+                                    Text(
+                                        "Gaya Hero Carousel",
+                                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
+                                    )
+                                    Text(
+                                        "Layout banner unggulan di paling atas Beranda",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            listOf(
+                                Triple("FULL_BLEED", "Full Bleed (Default)", "Banner besar penuh layar, info di bawah"),
+                                Triple("CARD_PEEK", "Card Peek", "Kartu rounded, ngintip slide sebelah, bisa digeser"),
+                                Triple("MINIMAL", "Minimal", "Strip compact, lebih cepat sampai ke daftar anime")
+                            ).forEach { (key, label, desc) ->
+                                val selected = heroStyle == key
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(
+                                            if (selected) ZenimePrimary.copy(alpha = 0.08f) else Color.Transparent
+                                        )
+                                        .clickable { viewModel.setHeroStyle(key) }
+                                        .padding(vertical = 8.dp, horizontal = 8.dp)
+                                ) {
+                                    // Mini preview visual per gaya -- biar user
+                                    // gak cuma nebak dari nama doang, kelihatan
+                                    // langsung bedanya gimana.
+                                    HeroStylePreviewThumb(style = key, selected = selected)
+
+                                    Spacer(modifier = Modifier.width(12.dp))
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            label,
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold
+                                            ),
+                                            color = if (selected) ZenimePrimary else MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            desc,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+
+                                    RadioButton(
+                                        selected = selected,
+                                        onClick = { viewModel.setHeroStyle(key) },
+                                        colors = RadioButtonDefaults.colors(selectedColor = ZenimePrimary)
+                                    )
+                                }
+                            }
+                        }
+
+                        SettingsRowDivider()
+
+                        SettingsRow(
+                            icon = Icons.Default.Autorenew,
+                            title = "Auto-Slide Otomatis",
+                            subtitle = "Geser banner sendiri tanpa disentuh",
+                            trailing = {
+                                Switch(
+                                    checked = heroAutoplay,
+                                    onCheckedChange = { viewModel.setHeroAutoplay(it) },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color.White,
+                                        checkedTrackColor = ZenimePrimary
+                                    )
+                                )
+                            }
+                        )
+
+                        SettingsRowDivider()
+
+                        SettingsRow(
+                            icon = Icons.Default.Timer,
+                            title = "Kecepatan Slide",
+                            subtitle = if (heroAutoplay) "Jeda antar pergantian banner" else "Aktifkan Auto-Slide dulu",
+                            trailing = {
+                                Box {
+                                    OutlinedCard(
+                                        onClick = { if (heroAutoplay) showIntervalMenu = true },
+                                        shape = RoundedCornerShape(9.dp),
+                                        colors = CardDefaults.outlinedCardColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                        ),
+                                        border = BorderStroke(1.dp, CardOutlineBorder)
+                                    ) {
+                                        Text(
+                                            text = "${heroIntervalMs / 1000f}".removeSuffix(".0") + "s",
+                                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                            color = if (heroAutoplay) ZenimePrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                        )
+                                    }
+
+                                    DropdownMenu(
+                                        expanded = showIntervalMenu,
+                                        onDismissRequest = { showIntervalMenu = false }
+                                    ) {
+                                        listOf(3000, 4500, 6000, 8000).forEach { ms ->
+                                            val label = "${ms / 1000f}".removeSuffix(".0") + " Detik"
+                                            DropdownMenuItem(
+                                                text = { Text(label, fontWeight = if (ms == heroIntervalMs) FontWeight.Bold else FontWeight.Normal) },
+                                                onClick = {
+                                                    viewModel.setHeroIntervalMs(ms)
+                                                    showIntervalMenu = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        )
+
+                        SettingsRowDivider()
+
+                        SettingsRow(
+                            icon = Icons.Default.FormatListNumbered,
+                            title = "Jumlah Anime di Carousel",
+                            subtitle = "Berapa judul unggulan yang ditampilin",
+                            trailing = {
+                                Box {
+                                    OutlinedCard(
+                                        onClick = { showItemCountMenu = true },
+                                        shape = RoundedCornerShape(9.dp),
+                                        colors = CardDefaults.outlinedCardColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                                        ),
+                                        border = BorderStroke(1.dp, CardOutlineBorder)
+                                    ) {
+                                        Text(
+                                            text = "$heroItemCount",
+                                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                            color = ZenimePrimary,
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                        )
+                                    }
+
+                                    DropdownMenu(
+                                        expanded = showItemCountMenu,
+                                        onDismissRequest = { showItemCountMenu = false }
+                                    ) {
+                                        listOf(3, 4, 5, 6, 8).forEach { count ->
+                                            DropdownMenuItem(
+                                                text = { Text("$count Anime", fontWeight = if (count == heroItemCount) FontWeight.Bold else FontWeight.Normal) },
+                                                onClick = {
+                                                    viewModel.setHeroItemCount(count)
+                                                    showItemCountMenu = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        )
+
+                        SettingsRowDivider()
+
+                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                SettingsIconChip(icon = Icons.Default.Source)
+                                Spacer(modifier = Modifier.width(14.dp))
+                                Text("Sumber Banner", style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold))
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            listOf(
+                                "AUTO" to "Otomatis (Rekomendasi Sistem)",
+                                "HOT" to "Sedang Tayang",
+                                "POPULAR" to "Terpopuler",
+                                "RANDOM" to "Rekomendasi Pilihan"
+                            ).forEach { (key, label) ->
+                                val selected = heroSource == key
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(
+                                            if (selected) ZenimePrimary.copy(alpha = 0.08f) else Color.Transparent
+                                        )
+                                        .clickable { viewModel.setHeroSource(key) }
+                                        .padding(vertical = 4.dp, horizontal = 4.dp)
+                                ) {
+                                    RadioButton(
+                                        selected = selected,
+                                        onClick = { viewModel.setHeroSource(key) },
+                                        colors = RadioButtonDefaults.colors(selectedColor = ZenimePrimary)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        label,
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                                        )
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 

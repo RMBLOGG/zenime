@@ -90,6 +90,41 @@ class SettingsViewModel(
             initialValue = true
         )
 
+    val heroStyle: StateFlow<String> = repository.userPrefs.heroStyleFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "FULL_BLEED"
+        )
+
+    val heroAutoplay: StateFlow<Boolean> = repository.userPrefs.heroAutoplayFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
+    val heroIntervalMs: StateFlow<Int> = repository.userPrefs.heroIntervalMsFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 4500
+        )
+
+    val heroItemCount: StateFlow<Int> = repository.userPrefs.heroItemCountFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 6
+        )
+
+    val heroSource: StateFlow<String> = repository.userPrefs.heroSourceFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "AUTO"
+        )
+
     fun setThemeMode(mode: String) {
         viewModelScope.launch {
             repository.userPrefs.setThemeMode(mode)
@@ -117,6 +152,36 @@ class SettingsViewModel(
     fun setAutoSkipOutro(enabled: Boolean) {
         viewModelScope.launch {
             repository.userPrefs.setAutoSkipOutro(enabled)
+        }
+    }
+
+    fun setHeroStyle(style: String) {
+        viewModelScope.launch {
+            repository.userPrefs.setHeroStyle(style)
+        }
+    }
+
+    fun setHeroAutoplay(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.userPrefs.setHeroAutoplay(enabled)
+        }
+    }
+
+    fun setHeroIntervalMs(intervalMs: Int) {
+        viewModelScope.launch {
+            repository.userPrefs.setHeroIntervalMs(intervalMs)
+        }
+    }
+
+    fun setHeroItemCount(count: Int) {
+        viewModelScope.launch {
+            repository.userPrefs.setHeroItemCount(count)
+        }
+    }
+
+    fun setHeroSource(source: String) {
+        viewModelScope.launch {
+            repository.userPrefs.setHeroSource(source)
         }
     }
 }
