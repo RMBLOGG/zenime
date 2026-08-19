@@ -639,7 +639,7 @@ fun SettingsScreen(
                             listOf(
                                 Triple("FULL_BLEED", "Full Bleed (Default)", "Banner besar penuh layar, info di bawah"),
                                 Triple("CRUNCHYROLL", "Crunchyroll Style", "Sinopsis + tombol \"Mulai Menonton\" & bookmark"),
-                                Triple("DAYYNIME", "Dayynime Style", "Peek carousel + badge Trending, bisa digeser")
+                                Triple("DAYYNIME", "Dayynime Style", "Peek carousel dengan chip info, bisa digeser")
                             ).forEach { (key, label, desc) ->
                                 val selected = heroStyle == key
                                 Row(

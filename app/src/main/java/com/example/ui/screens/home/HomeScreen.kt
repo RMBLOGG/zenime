@@ -29,7 +29,6 @@ import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -633,8 +632,7 @@ fun CrunchyrollHeroCarousel(
 /**
  * Gaya "Dayynime" -- PEEK CAROUSEL (bukan single-card): card aktif hampir
  * penuh lebar, tapi sliver card berikutnya keliatan dikit di tepi kanan
- * (persis pola aslinya). Badge "Trending N" berdiri SENDIRI di atas
- * carousel, bukan nempel di pojok gambar. Dot indicator bulat kecil.
+ * (persis pola aslinya). Dot indicator bulat kecil.
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -660,34 +658,6 @@ fun DayynimeHeroCarousel(
     }
 
     Column(modifier = modifier.fillMaxWidth()) {
-        // Badge "Trending N" -- baris SENDIRI di atas carousel, bukan
-        // overlay di pojok gambar. Angkanya ngikutin posisi carousel yang
-        // lagi aktif (urutan asli dari API), sama kayak referensi.
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
-            Surface(
-                shape = RoundedCornerShape(50),
-                color = ZenimePrimary
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Star,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Trending ${pagerState.currentPage + 1}",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White
-                    )
-                }
-            }
-        }
-
         // contentPadding asimetris (start kecil, end besar) -- ini yang
         // bikin sliver card berikutnya keliatan di tepi kanan, sementara
         // card aktif nempel rata di kiri, persis referensi.
