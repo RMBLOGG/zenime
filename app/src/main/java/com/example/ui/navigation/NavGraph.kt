@@ -81,6 +81,9 @@ import com.example.ui.screens.login.LoginScreen
 import com.example.ui.screens.login.LoginViewModel
 import com.example.ui.screens.player.PlayerScreen
 import com.example.ui.screens.player.PlayerViewModel
+import com.example.ui.screens.premium.PremiumScreen
+import com.example.ui.screens.premium.PremiumViewModel
+import com.example.data.repository.PremiumRepository
 import com.example.ui.screens.schedule.ScheduleScreen
 import com.example.ui.screens.schedule.ScheduleViewModel
 import com.example.ui.screens.search.SearchScreen
@@ -110,6 +113,8 @@ sealed class Screen(
     data object Schedule : Screen("schedule", "Jadwal", Icons.Filled.DateRange, Icons.Outlined.DateRange)
     data object Favorites : Screen("favorites", "Koleksi", Icons.Filled.Bookmark, Icons.Outlined.Bookmark)
     data object Settings : Screen("settings", "Pengaturan", Icons.Filled.Settings, Icons.Outlined.Settings)
+
+    data object Premium : Screen("premium")
 
     data object Detail : Screen("detail/{animeId}") {
         fun createRoute(animeId: String) = "detail/$animeId"
@@ -316,8 +321,22 @@ fun ZenimeAppNavHost(
                     factory = viewModelFactory { initializer { SettingsViewModel(repository) } }
                 )
                 SettingsScreen(
-                    viewModel = settingsViewModel
+                    viewModel = settingsViewModel,
+                    onPremiumClick = { navController.navigate(Screen.Premium.route) }
                 )
+            }
+
+            // Premium Screen -- daftar paket, kode akun buat checkout di storefront
+            composable(Screen.Premium.route) {
+                val uid = currentUser?.uid
+                if (uid != null) {
+                    val premiumViewModel: PremiumViewModel = viewModel(
+                        factory = viewModelFactory {
+                            initializer { PremiumViewModel(PremiumRepository(), uid) }
+                        }
+                    )
+                    PremiumScreen(viewModel = premiumViewModel)
+                }
             }
 
             // Detail Screen
