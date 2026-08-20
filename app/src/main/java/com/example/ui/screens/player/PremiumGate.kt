@@ -51,12 +51,11 @@ private sealed interface GateState {
 }
 
 /**
- * Bungkus konten player di balik pengecekan akses. Cuma episode 1-3 yang
- * ekslusif Premium (lihat util.isEpisodeLocked) -- episode lain, termasuk
- * yang paling baru, tetap bisa ditonton siapa aja. Selama proses cek,
- * tampilin loading. Kalau gagal cek (misal gak ada internet), tetap
- * dianggap Blocked -- jangan biarin nonton kalau statusnya gak bisa
- * dipastikan.
+ * Bungkus konten player di balik pengecekan akses. Episode 1-3 gratis buat
+ * siapa aja (lihat util.isEpisodeLocked), episode 4 ke atas -- termasuk
+ * yang paling baru -- ekslusif Premium. Selama proses cek, tampilin
+ * loading. Kalau gagal cek (misal gak ada internet), tetap dianggap
+ * Blocked -- jangan biarin nonton kalau statusnya gak bisa dipastikan.
  */
 @Composable
 fun PremiumGate(

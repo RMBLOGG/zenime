@@ -1,16 +1,16 @@
 package com.example.util
 
 /**
- * Episode 1-3 dikunci buat non-premium -- bukan episode terbaru yang
- * dikunci (biar user baru tetep bisa langsung nonton rilisan terkini
- * tanpa premium), tapi awal-awal ceritanya yang jadi eksklusif premium.
+ * Episode 1-3 GRATIS buat non-premium (trial), episode 4 ke atas
+ * (termasuk yang paling baru) yang dikunci -- premium wajib buat lanjut
+ * nonton lebih jauh dari situ.
  */
-private val LOCKED_EPISODE_NUMBERS = 1..3
+private val FREE_EPISODE_NUMBERS = 1..3
 
 fun isEpisodeLocked(episodeIndex: String?, isPremium: Boolean): Boolean {
     if (isPremium) return false
     val number = episodeIndex?.trim()?.toIntOrNull() ?: return false
-    return number in LOCKED_EPISODE_NUMBERS
+    return number !in FREE_EPISODE_NUMBERS
 }
 
 /** Kualitas maksimal (dalam "p", misal 480 = 480p) yang boleh diputer non-premium. */
