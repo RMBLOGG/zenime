@@ -152,6 +152,7 @@ fun PlayerScreen(
     viewModel: PlayerViewModel,
     onBackClick: () -> Unit,
     onNextEpisodeClick: (nextEpId: String) -> Unit,
+    isPremium: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -181,7 +182,13 @@ fun PlayerScreen(
     // tiap pindah episode (lihat NavGraph: PlayerViewModel baru dibikin per
     // episodeId), jadi LaunchedEffect(Unit) di sini otomatis cuma jalan
     // sekali per episode -- BUKAN tiap kali user pencet tombol play.
+    //
+    // Member Premium bebas iklan -- iklan cuma ditampilin kalau isPremium
+    // false. Sekarang PremiumGate emang ngeblok non-premium buat nonton
+    // sama sekali, jadi ini juga jaga-jaga kalau nanti modelnya diubah ke
+    // freemium (non-premium boleh nonton tapi kena iklan).
     LaunchedEffect(Unit) {
+        if (isPremium) return@LaunchedEffect
         val activity = context.findActivity()
         if (activity != null) {
             AdManager.showInterstitial(activity) {}

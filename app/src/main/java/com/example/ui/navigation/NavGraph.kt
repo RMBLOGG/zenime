@@ -376,7 +376,7 @@ fun ZenimeAppNavHost(
                             popUpTo(Screen.Player.route) { inclusive = true }
                         }
                     }
-                ) {
+                ) { isPremium ->
                     PlayerScreen(
                         viewModel = playerViewModel,
                         onBackClick = { navController.popBackStack() },
@@ -384,7 +384,8 @@ fun ZenimeAppNavHost(
                             navController.navigate(Screen.Player.createRoute(nextEpId, animeId)) {
                                 popUpTo(Screen.Player.route) { inclusive = true }
                             }
-                        }
+                        },
+                        isPremium = isPremium
                     )
                 }
             }

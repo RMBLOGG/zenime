@@ -58,7 +58,7 @@ fun PremiumGate(
     firebaseUid: String?,
     onBackClick: () -> Unit,
     onUpgradeClick: () -> Unit,
-    content: @Composable () -> Unit
+    content: @Composable (isPremium: Boolean) -> Unit
 ) {
     var state by remember(firebaseUid) { mutableStateOf<GateState>(GateState.Checking) }
 
@@ -89,7 +89,9 @@ fun PremiumGate(
             }
         }
 
-        is GateState.Allowed -> content()
+        // Cuma bisa nyampe state Allowed kalau statusnya emang premium
+        // (lihat LaunchedEffect di atas), jadi aman nge-pass true di sini.
+        is GateState.Allowed -> content(true)
 
         is GateState.Blocked -> {
             PremiumRequiredScreen(
