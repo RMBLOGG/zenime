@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -26,6 +27,12 @@ class DetailViewModel(
     // sampai kebukti sebaliknya.
     private val _isPremium = MutableStateFlow(false)
     val isPremium: StateFlow<Boolean> = _isPremium.asStateFlow()
+
+    // Link video buat preview auto-play di hero section (ambil dari
+    // episode 1, bukan trailer resmi -- API upstream gak nyediain trailer
+    // beneran). Null selama belum siap / gagal / anime gak punya episode.
+    private val _previewUrl = MutableStateFlow<String?>(null)
+    val previewUrl: StateFlow<String?> = _previewUrl.asStateFlow()
 
     private val _detailState = MutableStateFlow<Result<AnimeItem>>(Result.Loading)
     val detailState: StateFlow<Result<AnimeItem>> = _detailState.asStateFlow()
@@ -51,6 +58,23 @@ class DetailViewModel(
         loadDetail()
         loadEpisodes()
         loadPremiumStatus()
+        loadPreview()
+    }
+
+    private fun loadPreview() {
+        viewModelScope.launch {
+            val episodesResult = repository.getAllEpisodes(animeId).first { it !is Result.Loading }
+            val episodes = (episodesResult as? Result.Success)?.data ?: return@launch
+            val firstEpisode = episodes.find { it.index?.trim() == "1" } ?: return@launch
+
+            val streamResult = repository.getEpisodeStream(firstEpisode.id).first { it !is Result.Loading }
+            val link = (streamResult as? Result.Success)?.data?.servers?.firstOrNull()?.link
+            if (!link.isNullOrBlank()) {
+                _previewUrl.value = link
+            }
+            // Gagal ambil stream / gak ada server -- biarin null, DetailScreen
+            // otomatis fallback ke poster statis (lihat HeroPreviewPlayer).
+        }
     }
 
     private fun loadPremiumStatus() {

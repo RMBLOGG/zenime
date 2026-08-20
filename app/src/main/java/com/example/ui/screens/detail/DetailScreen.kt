@@ -1,5 +1,9 @@
 package com.example.ui.screens.detail
 
+import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -42,6 +46,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -58,6 +64,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.MediaItem
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
+import androidx.media3.ui.PlayerView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -71,6 +84,7 @@ import com.example.ui.components.ShimmerPosterItem
 import com.example.ui.theme.CardOutlineBorder
 import com.example.ui.theme.StarYellow
 import com.example.ui.theme.ZenimePrimary
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -85,6 +99,7 @@ fun DetailScreen(
     val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
     val watchHistory by viewModel.watchHistory.collectAsStateWithLifecycle()
     val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
+    val previewUrl by viewModel.previewUrl.collectAsStateWithLifecycle()
 
     var isSynopsisExpanded by remember { mutableStateOf(false) }
 
@@ -141,14 +156,14 @@ fun DetailScreen(
                                     .fillMaxWidth()
                                     .height(360.dp)
                             ) {
-                                // Full-bleed cover/poster artwork
-                                AsyncImage(
-                                    model = ImageRequest.Builder(LocalContext.current)
-                                        .data(anime.image_cover ?: anime.image_poster)
-                                        .crossfade(true)
-                                        .build(),
+                                // Full-bleed cover/poster artwork -- otomatis
+                                // ganti ke preview 15 detik (dari episode 1,
+                                // ADA SUARA) begitu link-nya siap, terus balik
+                                // lagi ke poster statis pas kelar.
+                                HeroPreviewPlayer(
+                                    posterUrl = anime.image_cover ?: anime.image_poster,
+                                    previewUrl = previewUrl,
                                     contentDescription = anime.title,
-                                    contentScale = ContentScale.Crop,
                                     modifier = Modifier.fillMaxSize()
                                 )
 
@@ -564,4 +579,106 @@ fun EpisodeHorizontalCard(
             }
         }
     }
+}
+
+private const val PREVIEW_DURATION_MS = 15_000L
+
+/**
+ * Poster statis di hero section, auto-ganti ke video preview (clip dari
+ * episode 1, BUKAN trailer resmi -- API upstream gak nyediain trailer)
+ * begitu link-nya siap. Ada suara langsung (bukan muted), muter
+ * [PREVIEW_DURATION_MS], terus balik lagi ke poster statis.
+ *
+ * Kalau [previewUrl] gagal/gak ada (anime gak punya episode 1, atau
+ * network error), tetep nampilin poster statis aja -- gak ada error yang
+ * kelihatan ke user, karena ini emang cuma "bonus" bukan fitur wajib.
+ */
+@OptIn(UnstableApi::class)
+@Composable
+private fun HeroPreviewPlayer(
+    posterUrl: String?,
+    previewUrl: String?,
+    contentDescription: String?,
+    modifier: Modifier = Modifier
+) {
+    var hasFinishedPreview by remember(previewUrl) { mutableStateOf(false) }
+    val showPreview = previewUrl != null && !hasFinishedPreview
+
+    Box(modifier = modifier) {
+        // Poster statis -- selalu di-render di belakang, biar begitu preview
+        // kelar (atau belum siap sama sekali) transisinya mulus tanpa flash.
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(posterUrl)
+                .crossfade(true)
+                .build(),
+            contentDescription = contentDescription,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+
+        AnimatedVisibility(
+            visible = showPreview,
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            if (previewUrl != null) {
+                HeroPreviewVideo(
+                    previewUrl = previewUrl,
+                    onFinished = { hasFinishedPreview = true }
+                )
+            }
+        }
+    }
+}
+
+@OptIn(UnstableApi::class)
+@Composable
+private fun HeroPreviewVideo(
+    previewUrl: String,
+    onFinished: () -> Unit
+) {
+    val context = LocalContext.current
+
+    val exoPlayer = remember(previewUrl) {
+        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setDefaultRequestProperties(
+                mapOf(
+                    "Referer" to "https://animeinweb.com/",
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                )
+            )
+        val mediaSource = ProgressiveMediaSource.Factory(httpDataSourceFactory)
+            .createMediaSource(MediaItem.fromUri(Uri.parse(previewUrl)))
+
+        ExoPlayer.Builder(context).build().apply {
+            setMediaSource(mediaSource)
+            volume = 1f
+            repeatMode = ExoPlayer.REPEAT_MODE_OFF
+            prepare()
+            playWhenReady = true
+        }
+    }
+
+    // Stop otomatis setelah PREVIEW_DURATION_MS, terlepas video-nya lebih
+    // panjang dari itu atau enggak (episode utuh biasanya jauh lebih lama).
+    LaunchedEffect(exoPlayer) {
+        delay(PREVIEW_DURATION_MS)
+        onFinished()
+    }
+
+    DisposableEffect(exoPlayer) {
+        onDispose { exoPlayer.release() }
+    }
+
+    AndroidView(
+        modifier = Modifier.fillMaxSize(),
+        factory = { ctx ->
+            PlayerView(ctx).apply {
+                player = exoPlayer
+                useController = false
+                resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+            }
+        }
+    )
 }
