@@ -5,16 +5,20 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.AuthRepository
+import com.example.data.repository.PremiumRepository
+import com.example.data.repository.PremiumStatus
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class SettingsViewModel(
     private val repository: AnimeRepository,
-    private val authRepository: AuthRepository = AuthRepository()
+    private val authRepository: AuthRepository = AuthRepository(),
+    private val premiumRepository: PremiumRepository = PremiumRepository()
 ) : ViewModel() {
 
     val currentUser: StateFlow<FirebaseUser?> = authRepository.currentUser
@@ -23,6 +27,24 @@ class SettingsViewModel(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = authRepository.currentUser.value
         )
+
+    // Status premium akun yang lagi login -- null berarti belum dicek/lagi
+    // dicek/user belum login. Otomatis diambil ulang tiap currentUser
+    // berubah (login/logout/ganti akun).
+    private val _premiumStatus = MutableStateFlow<PremiumStatus?>(null)
+    val premiumStatus: StateFlow<PremiumStatus?> = _premiumStatus
+
+    init {
+        viewModelScope.launch {
+            currentUser.collectLatest { user ->
+                _premiumStatus.value = null
+                if (user != null) {
+                    premiumRepository.checkPremiumStatus(user.uid)
+                        .onSuccess { status -> _premiumStatus.value = status }
+                }
+            }
+        }
+    }
 
     // Status login lagi diproses -- dipakai buat nampilin loading & nyegah
     // dobel-tap tombol login pas request masih jalan.
@@ -183,5 +205,25 @@ class SettingsViewModel(
         viewModelScope.launch {
             repository.userPrefs.setHeroSource(source)
         }
+    }
+}
+
+/** Format "Aktif hingga dd MMM yyyy (sisa X hari)" dari expires_at ISO string. */
+fun formatPremiumRemaining(expiresAtIso: String): String {
+    return try {
+        val expiresAt = java.time.Instant.parse(expiresAtIso)
+        val now = java.time.Instant.now()
+        val daysLeft = java.time.Duration.between(now, expiresAt).toDays()
+        val formatter = java.time.format.DateTimeFormatter
+            .ofPattern("d MMM yyyy", java.util.Locale("id", "ID"))
+            .withZone(java.time.ZoneId.systemDefault())
+        val dateText = formatter.format(expiresAt)
+        when {
+            daysLeft < 0 -> "Sudah berakhir"
+            daysLeft == 0L -> "Aktif hingga $dateText (berakhir hari ini)"
+            else -> "Aktif hingga $dateText (sisa $daysLeft hari)"
+        }
+    } catch (e: Exception) {
+        "Premium aktif"
     }
 }

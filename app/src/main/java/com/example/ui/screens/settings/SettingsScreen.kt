@@ -264,6 +264,7 @@ fun SettingsScreen(
     onPremiumClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val premiumStatus by viewModel.premiumStatus.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val dynamicColor by viewModel.dynamicColor.collectAsStateWithLifecycle()
     val defaultQuality by viewModel.defaultQuality.collectAsStateWithLifecycle()
@@ -482,12 +483,42 @@ fun SettingsScreen(
                                         SettingsIconChip(icon = Icons.Default.Star)
                                         Spacer(modifier = Modifier.width(14.dp))
                                         Column {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    "Premium",
+                                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                val isPremiumActive = premiumStatus?.isPremium == true
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(20.dp))
+                                                        .background(
+                                                            if (isPremiumActive)
+                                                                ZenimePrimary.copy(alpha = 0.18f)
+                                                            else
+                                                                MaterialTheme.colorScheme.surfaceVariant
+                                                        )
+                                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                                ) {
+                                                    Text(
+                                                        if (isPremiumActive) "AKTIF" else "BELUM AKTIF",
+                                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                        color = if (isPremiumActive)
+                                                            ZenimePrimary
+                                                        else
+                                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+                                            val expiresAt = premiumStatus?.expiresAt
+                                            val subtitleText = if (premiumStatus?.isPremium == true && expiresAt != null) {
+                                                com.example.ui.screens.settings.formatPremiumRemaining(expiresAt)
+                                            } else {
+                                                "Lihat paket & aktifkan Premium"
+                                            }
                                             Text(
-                                                "Premium",
-                                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
-                                            )
-                                            Text(
-                                                "Lihat paket & aktifkan Premium",
+                                                subtitleText,
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
