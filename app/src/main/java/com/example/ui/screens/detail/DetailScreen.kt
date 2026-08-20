@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
@@ -64,6 +65,7 @@ import com.example.data.common.Result
 import com.example.data.model.EpisodeItem
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.ShimmerEpisodeList
+import com.example.util.isEpisodeLocked
 import com.example.ui.components.ShimmerHorizontalSection
 import com.example.ui.components.ShimmerPosterItem
 import com.example.ui.theme.CardOutlineBorder
@@ -82,6 +84,7 @@ fun DetailScreen(
     val episodesState by viewModel.episodesState.collectAsStateWithLifecycle()
     val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
     val watchHistory by viewModel.watchHistory.collectAsStateWithLifecycle()
+    val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
 
     var isSynopsisExpanded by remember { mutableStateOf(false) }
 
@@ -407,6 +410,7 @@ fun DetailScreen(
                                     episode = ep,
                                     posterUrl = ep.resolvedImageUrl ?: anime.image_cover ?: anime.image_poster,
                                     isWatched = isWatched,
+                                    isLocked = isEpisodeLocked(ep.index, isPremium),
                                     onClick = {
                                         onEpisodeClick(ep.id, ep.title ?: "Episode ${ep.index}")
                                     }
@@ -426,6 +430,7 @@ fun EpisodeHorizontalCard(
     posterUrl: String?,
     isWatched: Boolean,
     onClick: () -> Unit,
+    isLocked: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -478,24 +483,39 @@ fun EpisodeHorizontalCard(
                 ) {
                     Surface(
                         shape = CircleShape,
-                        color = if (isWatched) ZenimePrimary else Color.White.copy(alpha = 0.9f),
+                        color = when {
+                            isLocked -> ZenimePrimary
+                            isWatched -> ZenimePrimary
+                            else -> Color.White.copy(alpha = 0.9f)
+                        },
                         modifier = Modifier.size(26.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            if (isWatched) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = "Watched",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = "Play",
-                                    tint = ZenimePrimary,
-                                    modifier = Modifier.size(16.dp)
-                                )
+                            when {
+                                isLocked -> {
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = "Episode Premium",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                                isWatched -> {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = "Watched",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                                else -> {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "Play",
+                                        tint = ZenimePrimary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
                             }
                         }
                     }

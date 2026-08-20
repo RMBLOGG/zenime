@@ -53,6 +53,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
@@ -126,6 +127,8 @@ import com.example.data.model.EpisodeItem
 import com.example.ui.components.ErrorStateView
 import com.example.util.PipController
 import com.example.util.findActivity
+import com.example.util.isQualityLocked
+import com.example.util.qualityValueP
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
@@ -153,6 +156,7 @@ fun PlayerScreen(
     onBackClick: () -> Unit,
     onNextEpisodeClick: (nextEpId: String) -> Unit,
     isPremium: Boolean = false,
+    onUpgradeClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -472,6 +476,24 @@ fun PlayerScreen(
                     val nextEpDetail = streamData.episodeNext
                     val servers = streamData.servers ?: emptyList()
 
+                    // Non-premium dibatasin max 480p. Kalau server yang lagi
+                    // dipilih (default dari repository.getEpisodeStream) ternyata
+                    // di atas itu, otomatis turunin ke server bagus tertinggi yang
+                    // masih boleh diputer -- jangan biarin non-premium nonton
+                    // kualitas tinggi cuma gara-gara itu default-nya.
+                    LaunchedEffect(servers, isPremium, selectedServer?.id) {
+                        if (isPremium) return@LaunchedEffect
+                        val current = selectedServer
+                        if (current != null && isQualityLocked(current.quality, isPremium = false)) {
+                            val fallback = servers
+                                .filter { !isQualityLocked(it.quality, isPremium = false) }
+                                .maxByOrNull { qualityValueP(it.quality) ?: -1 }
+                            if (fallback != null) {
+                                viewModel.selectServer(fallback)
+                            }
+                        }
+                    }
+
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -748,12 +770,19 @@ fun PlayerScreen(
                                             expanded = showSettingsMenu,
                                             onDismissRequest = { showSettingsMenu = false },
                                             qualityOptions = servers.map { server ->
+                                                val locked = isQualityLocked(server.quality, isPremium)
                                                 PlayerMenuOption(
                                                     label = "${server.name ?: "Server"} (${server.quality ?: "720p"})",
                                                     isSelected = selectedServer?.id == server.id,
+                                                    isLocked = locked,
                                                     onClick = {
-                                                        viewModel.selectServer(server)
                                                         showSettingsMenu = false
+                                                        if (locked) {
+                                                            // Kualitas di atas 480p ekslusif Premium.
+                                                            onUpgradeClick()
+                                                        } else {
+                                                            viewModel.selectServer(server)
+                                                        }
                                                     }
                                                 )
                                             },
@@ -1056,7 +1085,8 @@ private fun PlayerIconButton(
 private data class PlayerMenuOption(
     val label: String,
     val isSelected: Boolean,
-    val onClick: () -> Unit
+    val onClick: () -> Unit,
+    val isLocked: Boolean = false
 )
 
 /**
@@ -1111,10 +1141,22 @@ private fun PlayerMenuSection(title: String, options: List<PlayerMenuOption>) {
                 style = MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = if (option.isSelected) FontWeight.Bold else FontWeight.Normal
                 ),
-                color = if (option.isSelected) PlayerAccent else Color.White.copy(alpha = 0.85f),
+                color = when {
+                    option.isLocked -> Color.White.copy(alpha = 0.4f)
+                    option.isSelected -> PlayerAccent
+                    else -> Color.White.copy(alpha = 0.85f)
+                },
                 modifier = Modifier.weight(1f)
             )
-            if (option.isSelected) {
+            if (option.isLocked) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = "Kualitas Premium",
+                    tint = PlayerAccent,
+                    modifier = Modifier.size(15.dp)
+                )
+            } else if (option.isSelected) {
                 Spacer(modifier = Modifier.width(8.dp))
                 Icon(
                     imageVector = Icons.Default.Check,

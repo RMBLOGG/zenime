@@ -37,44 +37,73 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.data.common.Result
+import com.example.data.repository.AnimeRepository
 import com.example.data.repository.PremiumRepository
 import com.example.ui.theme.ZenimePrimary
+import com.example.util.isEpisodeLocked
 
 private sealed interface GateState {
     data object Checking : GateState
-    data object Allowed : GateState
+    data class Allowed(val isPremium: Boolean) : GateState
     data object Blocked : GateState
     data class CheckFailed(val message: String) : GateState
 }
 
 /**
- * Bungkus konten player di balik pengecekan status premium. Selama
- * proses cek, tampilin loading. Kalau gagal cek (misal gak ada
- * internet), tetap dianggap Blocked -- jangan biarin nonton kalau
- * statusnya gak bisa dipastikan.
+ * Bungkus konten player di balik pengecekan akses. Cuma episode 1-3 yang
+ * ekslusif Premium (lihat util.isEpisodeLocked) -- episode lain, termasuk
+ * yang paling baru, tetap bisa ditonton siapa aja. Selama proses cek,
+ * tampilin loading. Kalau gagal cek (misal gak ada internet), tetap
+ * dianggap Blocked -- jangan biarin nonton kalau statusnya gak bisa
+ * dipastikan.
  */
 @Composable
 fun PremiumGate(
     firebaseUid: String?,
+    episodeId: String,
+    animeId: String,
+    repository: AnimeRepository,
     onBackClick: () -> Unit,
     onUpgradeClick: () -> Unit,
     content: @Composable (isPremium: Boolean) -> Unit
 ) {
-    var state by remember(firebaseUid) { mutableStateOf<GateState>(GateState.Checking) }
+    var state by remember(firebaseUid, episodeId) { mutableStateOf<GateState>(GateState.Checking) }
 
-    LaunchedEffect(firebaseUid) {
-        if (firebaseUid.isNullOrBlank()) {
-            state = GateState.Blocked
+    LaunchedEffect(firebaseUid, episodeId) {
+        state = GateState.Checking
+
+        val isPremium = if (firebaseUid.isNullOrBlank()) {
+            false
+        } else {
+            PremiumRepository().checkPremiumStatus(firebaseUid).getOrNull()?.isPremium ?: false
+        }
+
+        if (isPremium) {
+            state = GateState.Allowed(true)
             return@LaunchedEffect
         }
-        val repository = PremiumRepository()
-        repository.checkPremiumStatus(firebaseUid)
-            .onSuccess { status ->
-                state = if (status.isPremium) GateState.Allowed else GateState.Blocked
+
+        // Non-premium (atau belum login) -- cek dulu apakah episode ini
+        // termasuk yang dikunci (episode 1-3) sebelum mutusin Allowed/Blocked.
+        // AnimeRepository nge-cache daftar episode, jadi ini murah kalau
+        // DetailScreen/PlayerViewModel udah pernah nge-load duluan.
+        repository.getAllEpisodes(animeId).collect { result ->
+            when (result) {
+                is Result.Success -> {
+                    val episode = result.data.find { it.id == episodeId }
+                    state = if (isEpisodeLocked(episode?.index, isPremium = false)) {
+                        GateState.Blocked
+                    } else {
+                        GateState.Allowed(false)
+                    }
+                }
+                is Result.Error -> {
+                    state = GateState.CheckFailed(result.message)
+                }
+                Result.Loading -> {}
             }
-            .onFailure { e ->
-                state = GateState.CheckFailed(e.message ?: "Gagal memeriksa status Premium")
-            }
+        }
     }
 
     when (val s = state) {
@@ -89,13 +118,11 @@ fun PremiumGate(
             }
         }
 
-        // Cuma bisa nyampe state Allowed kalau statusnya emang premium
-        // (lihat LaunchedEffect di atas), jadi aman nge-pass true di sini.
-        is GateState.Allowed -> content(true)
+        is GateState.Allowed -> content(s.isPremium)
 
         is GateState.Blocked -> {
             PremiumRequiredScreen(
-                message = "Fitur nonton khusus buat member Premium. Aktifkan Premium dulu buat lanjut nonton.",
+                message = "Episode ini khusus buat member Premium. Aktifkan Premium dulu buat lanjut nonton.",
                 onBackClick = onBackClick,
                 onUpgradeClick = onUpgradeClick
             )
@@ -103,7 +130,7 @@ fun PremiumGate(
 
         is GateState.CheckFailed -> {
             PremiumRequiredScreen(
-                message = "Gagal memeriksa status Premium kamu (${s.message}). Coba lagi sebentar.",
+                message = "Gagal memeriksa status akses kamu (${s.message}). Coba lagi sebentar.",
                 onBackClick = onBackClick,
                 onUpgradeClick = onUpgradeClick
             )

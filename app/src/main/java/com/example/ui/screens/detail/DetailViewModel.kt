@@ -7,6 +7,7 @@ import com.example.data.local.WatchHistoryEntity
 import com.example.data.model.AnimeItem
 import com.example.data.model.EpisodeItem
 import com.example.data.repository.AnimeRepository
+import com.example.data.repository.PremiumRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -16,8 +17,15 @@ import kotlinx.coroutines.launch
 
 class DetailViewModel(
     private val repository: AnimeRepository,
-    val animeId: String
+    val animeId: String,
+    private val firebaseUid: String? = null
 ) : ViewModel() {
+
+    // Dipakai buat nge-lock episode 1-3 di daftar episode (lihat
+    // EpisodeHorizontalCard). Default false -- aman-nya anggap non-premium
+    // sampai kebukti sebaliknya.
+    private val _isPremium = MutableStateFlow(false)
+    val isPremium: StateFlow<Boolean> = _isPremium.asStateFlow()
 
     private val _detailState = MutableStateFlow<Result<AnimeItem>>(Result.Loading)
     val detailState: StateFlow<Result<AnimeItem>> = _detailState.asStateFlow()
@@ -42,6 +50,18 @@ class DetailViewModel(
     init {
         loadDetail()
         loadEpisodes()
+        loadPremiumStatus()
+    }
+
+    private fun loadPremiumStatus() {
+        val uid = firebaseUid
+        if (uid.isNullOrBlank()) return
+        viewModelScope.launch {
+            PremiumRepository().checkPremiumStatus(uid)
+                .onSuccess { _isPremium.value = it.isPremium }
+                // Gagal cek (misal offline) -- biarin default false (non-premium)
+                // biar UI konservatif nge-lock, bukan malah nampilin semua kebuka.
+        }
     }
 
     fun loadDetail() {

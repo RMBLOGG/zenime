@@ -346,7 +346,9 @@ fun ZenimeAppNavHost(
                 arguments = listOf(navArgument("animeId") { type = NavType.StringType })
             ) { backStackEntry ->
                 val animeId = backStackEntry.arguments?.getString("animeId") ?: ""
-                val detailViewModel = remember(animeId) { DetailViewModel(repository, animeId) }
+                val detailViewModel = remember(animeId, currentUser?.uid) {
+                    DetailViewModel(repository, animeId, currentUser?.uid)
+                }
                 DetailScreen(
                     viewModel = detailViewModel,
                     onBackClick = { navController.popBackStack() },
@@ -370,6 +372,9 @@ fun ZenimeAppNavHost(
 
                 PremiumGate(
                     firebaseUid = currentUser?.uid,
+                    episodeId = episodeId,
+                    animeId = animeId,
+                    repository = repository,
                     onBackClick = { navController.popBackStack() },
                     onUpgradeClick = {
                         navController.navigate(Screen.Premium.route) {
@@ -385,7 +390,10 @@ fun ZenimeAppNavHost(
                                 popUpTo(Screen.Player.route) { inclusive = true }
                             }
                         },
-                        isPremium = isPremium
+                        isPremium = isPremium,
+                        onUpgradeClick = {
+                            navController.navigate(Screen.Premium.route)
+                        }
                     )
                 }
             }
