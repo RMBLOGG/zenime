@@ -81,6 +81,7 @@ import com.example.ui.screens.login.LoginScreen
 import com.example.ui.screens.login.LoginViewModel
 import com.example.ui.screens.player.PlayerScreen
 import com.example.ui.screens.player.PlayerViewModel
+import com.example.ui.screens.player.PremiumGate
 import com.example.ui.screens.premium.PremiumScreen
 import com.example.ui.screens.premium.PremiumViewModel
 import com.example.data.repository.PremiumRepository
@@ -367,15 +368,25 @@ fun ZenimeAppNavHost(
                 val animeId = backStackEntry.arguments?.getString("animeId") ?: ""
                 val playerViewModel = remember(episodeId, animeId) { PlayerViewModel(repository, episodeId, animeId) }
 
-                PlayerScreen(
-                    viewModel = playerViewModel,
+                PremiumGate(
+                    firebaseUid = currentUser?.uid,
                     onBackClick = { navController.popBackStack() },
-                    onNextEpisodeClick = { nextEpId ->
-                        navController.navigate(Screen.Player.createRoute(nextEpId, animeId)) {
+                    onUpgradeClick = {
+                        navController.navigate(Screen.Premium.route) {
                             popUpTo(Screen.Player.route) { inclusive = true }
                         }
                     }
-                )
+                ) {
+                    PlayerScreen(
+                        viewModel = playerViewModel,
+                        onBackClick = { navController.popBackStack() },
+                        onNextEpisodeClick = { nextEpId ->
+                            navController.navigate(Screen.Player.createRoute(nextEpId, animeId)) {
+                                popUpTo(Screen.Player.route) { inclusive = true }
+                            }
+                        }
+                    )
+                }
             }
         }
 

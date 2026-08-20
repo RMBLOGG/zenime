@@ -22,3 +22,10 @@ data class ZenimeCodeResponse(
     @Json(name = "zenime_code") val zenimeCode: String? = null,
     @Json(name = "message") val message: String? = null
 )
+
+@JsonClass(generateAdapter = true)
+data class PremiumStatusResponse(
+    @Json(name = "is_premium") val isPremium: Boolean = false,
+    @Json(name = "expires_at") val expiresAt: String? = null,
+    @Json(name = "message") val message: String? = null
+)

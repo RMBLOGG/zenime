@@ -24,10 +24,18 @@ class PremiumRepository {
             if (code != null) {
                 Result.success(code)
             } else {
-                Result.failure(IllegalStateException(response.message ?: "Gagal mengambil kode akun"))
-            }
+    /** Cek status premium user; dipanggil sebelum nonton buat gating. */
+    suspend fun checkPremiumStatus(firebaseUid: String): Result<PremiumStatus> {
+        return try {
+            val response = api.checkPremiumStatus(mapOf("firebase_uid" to firebaseUid))
+            Result.success(PremiumStatus(response.isPremium, response.expiresAt))
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 }
+
+data class PremiumStatus(
+    val isPremium: Boolean,
+    val expiresAt: String?
+)

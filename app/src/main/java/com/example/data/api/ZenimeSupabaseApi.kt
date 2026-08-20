@@ -1,6 +1,7 @@
 package com.example.data.api
 
 import com.example.data.model.PremiumPackagesResponse
+import com.example.data.model.PremiumStatusResponse
 import com.example.data.model.ZenimeCodeResponse
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -13,4 +14,7 @@ interface ZenimeSupabaseApi {
 
     @POST("functions/v1/zenime-get-code")
     suspend fun getZenimeCode(@Body body: Map<String, String>): ZenimeCodeResponse
+
+    @POST("functions/v1/zenime-check-premium")
+    suspend fun checkPremiumStatus(@Body body: Map<String, String>): PremiumStatusResponse
 }
