@@ -24,6 +24,13 @@ class PremiumRepository {
             if (code != null) {
                 Result.success(code)
             } else {
+                Result.failure(IllegalStateException(response.message ?: "Gagal mengambil kode akun"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     /** Cek status premium user; dipanggil sebelum nonton buat gating. */
     suspend fun checkPremiumStatus(firebaseUid: String): Result<PremiumStatus> {
         return try {
