@@ -4,6 +4,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.remoteconfig.remoteConfig
 import com.google.firebase.remoteconfig.remoteConfigSettings
 import kotlinx.coroutines.tasks.await
+import org.json.JSONObject
 
 /**
  * Ambil base URL API dari Firebase Remote Config, supaya base URL bisa
@@ -30,6 +31,25 @@ object RemoteConfigManager {
 
     private const val KEY_BASE_URL = "api_base_url"
 
+    // --- Force update ---
+    // KEY_MIN_VERSION_CODE: versionCode (angka, BUKAN versionName) minimal
+    // yang boleh dipakai. Kalau versionCode APK yang lagi jalan < nilai ini,
+    // ForceUpdateScreen ditampilkan dan app diblokir total (lihat MainActivity).
+    // Kosongin atau isi 0 di Console = force update mati (semua versi boleh).
+    private const val KEY_MIN_VERSION_CODE = "min_version_code"
+    // KEY_UPDATE_URL: link yang dibuka pas user pencet tombol "Update" --
+    // bisa link Play Store, atau link download .apk langsung (mis. di-host
+    // di Firebase Hosting/Storage).
+    private const val KEY_UPDATE_URL = "update_download_url"
+    // KEY_UPDATE_MESSAGE: pesan yang ditampilkan di popup, opsional.
+    private const val KEY_UPDATE_MESSAGE = "update_message"
+
+    // --- Feature flags ---
+    // KEY_FEATURE_FLAGS: JSON object flat, mis. {"downloads":false,"live_chat":true}.
+    // Fitur yang KEY-nya gak ada di JSON dianggap AKTIF (default true) --
+    // supaya nambah fitur baru gak perlu daftarin dulu di Console.
+    private const val KEY_FEATURE_FLAGS = "feature_flags"
+
     private val remoteConfig by lazy {
         Firebase.remoteConfig.apply {
             setConfigSettingsAsync(
@@ -52,6 +72,7 @@ object RemoteConfigManager {
     suspend fun refresh() {
         try {
             remoteConfig.fetchAndActivate().await()
+            featureFlagsCache = null // config baru ke-activate, buang cache lama
         } catch (_: Exception) {
             // Fetch gagal (mis. offline) — lanjut pakai cache lokal Firebase
             // SDK dari fetch sukses sebelumnya (kalau ada).
@@ -72,6 +93,7 @@ object RemoteConfigManager {
         try {
             remoteConfig.fetch(0).await()
             remoteConfig.activate().await()
+            featureFlagsCache = null // config baru ke-activate, buang cache lama
         } catch (_: Exception) {
             // Fetch gagal (mis. offline) — biarin, currentBaseUrl() bakal
             // tetap pakai nilai cache lokal yang ada.
@@ -94,5 +116,48 @@ object RemoteConfigManager {
     fun currentBaseUrl(): String? {
         val value = remoteConfig.getString(KEY_BASE_URL)
         return value.ifBlank { null }
+    }
+
+    /**
+     * VersionCode minimal yang diizinkan jalan. 0 kalau parameter belum
+     * di-set di Console (artinya: force update mati, semua versi boleh).
+     */
+    fun minVersionCode(): Long = remoteConfig.getLong(KEY_MIN_VERSION_CODE)
+
+    /** Link yang dibuka pas user pencet tombol update di ForceUpdateScreen. */
+    fun updateDownloadUrl(): String = remoteConfig.getString(KEY_UPDATE_URL)
+
+    /** Pesan custom buat ForceUpdateScreen. Kosong kalau belum di-set di Console. */
+    fun updateMessage(): String = remoteConfig.getString(KEY_UPDATE_MESSAGE)
+
+    // Cache hasil parse JSON feature_flags biar gak parse ulang tiap
+    // isFeatureEnabled() dipanggil. Di-reset tiap kali refresh()/forceRefresh()
+    // sukses activate config baru (lihat activateFeatureFlagsCache di bawah).
+    private var featureFlagsCache: JSONObject? = null
+
+    /**
+     * Cek apakah sebuah fitur aktif dari parameter "feature_flags" di
+     * Firebase Console. Key yang gak ada di JSON dianggap aktif (default
+     * true) supaya fitur baru gak perlu didaftarin dulu di Console sebelum
+     * dipakai.
+     *
+     * Contoh isi parameter "feature_flags" di Console:
+     * {"downloads": false, "live_chat": true}
+     */
+    fun isFeatureEnabled(key: String, default: Boolean = true): Boolean {
+        val flags = featureFlagsCache ?: parseFeatureFlags().also { featureFlagsCache = it }
+        if (!flags.has(key)) return default
+        return flags.optBoolean(key, default)
+    }
+
+    private fun parseFeatureFlags(): JSONObject {
+        val raw = remoteConfig.getString(KEY_FEATURE_FLAGS)
+        return try {
+            if (raw.isBlank()) JSONObject() else JSONObject(raw)
+        } catch (_: Exception) {
+            // JSON di Console salah format -- daripada app crash, anggap
+            // semua fitur pakai default masing-masing.
+            JSONObject()
+        }
     }
 }

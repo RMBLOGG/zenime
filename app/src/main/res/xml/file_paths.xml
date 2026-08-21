@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Path yang di-expose FileProvider ke content:// URI. Cuma folder
+    "Download/" di dalam external-files-path app sendiri (getExternalFilesDir)
+    yang di-share -- ini persis folder tujuan download APK di ApkDownloader,
+    SENGAJA sesempit ini (bukan seluruh external storage) supaya
+    PackageInstaller cuma bisa baca file update, gak file lain punya app.
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <external-files-path
+        name="apk_updates"
+        path="Download/" />
+</paths>

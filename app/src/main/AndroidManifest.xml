@@ -3,6 +3,12 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Wajib buat pasang APK update yang didownload di dalam app sendiri
+         (lewat PackageInstaller system, dipicu dari ApkDownloader.launchInstall).
+         Ini "special permission" -- gak muncul dialog runtime kayak kamera/lokasi,
+         tapi PackageInstaller sistem yang bakal nanyain user buat aktifin
+         "Izinkan dari sumber ini" khusus buat app ini kalau belum diaktifin. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-feature
         android:name="android.software.picture-in-picture"
         android:required="false" />
@@ -30,6 +36,21 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Kasih akses content:// URI ke file APK yang didownload
+             ApkDownloader ke folder app-specific (getExternalFilesDir),
+             supaya bisa dikasih ke PackageInstaller sistem tanpa file://
+             (file:// URI dari app sendiri ke app lain diblokir StrictMode
+             sejak API 24+, wajib pakai FileProvider). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>
