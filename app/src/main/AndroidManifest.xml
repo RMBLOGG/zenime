@@ -5,7 +5,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Wajib buat pasang APK update yang didownload di dalam app sendiri
          (lewat PackageInstaller system, dipicu dari ApkDownloader.launchInstall).
-         Ini "special permission" -- gak muncul dialog runtime kayak kamera/lokasi,
+         Ini "special permission", gak muncul dialog runtime kayak kamera/lokasi,
          tapi PackageInstaller sistem yang bakal nanyain user buat aktifin
          "Izinkan dari sumber ini" khusus buat app ini kalau belum diaktifin. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
