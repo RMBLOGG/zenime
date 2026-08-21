@@ -2,7 +2,7 @@
 <!--
     Path yang di-expose FileProvider ke content:// URI. Cuma folder
     "Download/" di dalam external-files-path app sendiri (getExternalFilesDir)
-    yang di-share -- ini persis folder tujuan download APK di ApkDownloader,
+    yang di-share, ini persis folder tujuan download APK di ApkDownloader,
     SENGAJA sesempit ini (bukan seluruh external storage) supaya
     PackageInstaller cuma bisa baca file update, gak file lain punya app.
 -->
