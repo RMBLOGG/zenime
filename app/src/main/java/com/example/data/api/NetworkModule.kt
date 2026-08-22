@@ -14,6 +14,13 @@ object NetworkModule {
     // Dipakai hanya sebagai base URL "dummy" saat inisialisasi Retrofit.
     // URL sebenarnya di-rewrite tiap request oleh interceptor di bawah,
     // berdasarkan RemoteConfigManager.currentBaseUrl().
+    //
+    // PENTING: sejak pindah ke AnimeinApi (backend native ANIMEIN), value
+    // parameter "api_base_url" di Firebase Remote Config Console WAJIB
+    // diganti ke "https://xyz-api.animein.net/" -- kalau masih nunjuk ke
+    // wrapper DayynimeV5/animeinweb lama, semua request bakal 404 karena
+    // path endpoint-nya (data/home/list, 3/2/movie/episode/{id}, dst) beda
+    // total sama path lama (homepage, anime/{id}, dst).
     private const val PLACEHOLDER_BASE_URL = "https://placeholder.invalid/api/"
 
     /**
@@ -63,9 +70,13 @@ object NetworkModule {
         OkHttpClient.Builder()
             .addInterceptor(dynamicBaseUrlInterceptor)
             .addInterceptor { chain ->
+                // Referer animeinweb.com DIHAPUS -- itu spesifik buat proxy
+                // lama yang udah 503, gak relevan buat xyz-api.animein.net.
+                // Test manual lewat browser ke xyz-api.animein.net jalan
+                // tanpa header custom sama sekali, jadi ini sekadar jaga-jaga
+                // (UA generik) bukan requirement yang kekonfirmasi.
                 val request = chain.request().newBuilder()
-                    .header("Referer", "https://animeinweb.com/")
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36")
                     .build()
                 chain.proceed(request)
             }
@@ -83,12 +94,12 @@ object NetworkModule {
             .build()
     }
 
-    val api: DayynimeV5Api by lazy {
+    val api: AnimeinApi by lazy {
         Retrofit.Builder()
             .baseUrl(PLACEHOLDER_BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
-            .create(DayynimeV5Api::class.java)
+            .create(AnimeinApi::class.java)
     }
 }

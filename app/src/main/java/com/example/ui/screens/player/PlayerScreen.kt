@@ -325,8 +325,13 @@ fun PlayerScreen(
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setDefaultRequestProperties(
                 mapOf(
-                    "Referer" to "https://animeinweb.com/",
-                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    // Referer animeinweb.com DIHAPUS -- link video sekarang
+                    // langsung dari storages.animein.net (CDN backend native
+                    // ANIMEIN), bukan lagi proxy animeinweb yang 503. Belum
+                    // dites apakah CDN ini butuh Referer/UA spesifik -- kalau
+                    // video gagal load (403/blocked), coba tambah balik
+                    // Referer ke "https://animein.net/" dulu.
+                    "User-Agent" to "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36"
                 )
             )
 
@@ -391,8 +396,10 @@ fun PlayerScreen(
             val httpDataSourceFactory = DefaultHttpDataSource.Factory()
                 .setDefaultRequestProperties(
                     mapOf(
-                        "Referer" to "https://animeinweb.com/",
-                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                        // Sama kayak block di atas -- Referer animeinweb.com
+                        // dihapus, belum dites apakah CDN storages.animein.net
+                        // butuh Referer sendiri.
+                        "User-Agent" to "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36"
                     )
                 )
 

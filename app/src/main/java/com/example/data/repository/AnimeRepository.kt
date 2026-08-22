@@ -1,6 +1,6 @@
 package com.example.data.repository
 
-import com.example.data.api.DayynimeV5Api
+import com.example.data.api.AnimeinApi
 import com.example.data.common.Result
 import com.example.data.local.FavoriteEntity
 import com.example.data.local.UserPreferencesRepository
@@ -14,6 +14,7 @@ import com.example.data.model.SearchResponse
 import com.example.data.model.StreamResponse
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -22,10 +23,23 @@ import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 
 class AnimeRepository(
-    private val api: DayynimeV5Api,
+    private val api: AnimeinApi,
     private val dao: ZenimeDao,
     val userPrefs: UserPreferencesRepository
 ) {
+
+    // day key Inggris ("monday"..) yang dipake ScheduleViewModel -> format
+    // yang diminta backend native ANIMEIN (SENIN..MINGGU, huruf besar).
+    private fun dayKeyToIndonesian(dayKey: String): String = when (dayKey.lowercase()) {
+        "monday" -> "SENIN"
+        "tuesday" -> "SELASA"
+        "wednesday" -> "RABU"
+        "thursday" -> "KAMIS"
+        "friday" -> "JUMAT"
+        "saturday" -> "SABTU"
+        "sunday" -> "MINGGU"
+        else -> dayKey.uppercase()
+    }
 
     // ---- Cache infrastructure ----------------------------------------
     // In-memory, per-process cache. Ilang kalau proses app di-kill, tapi
@@ -104,7 +118,27 @@ class AnimeRepository(
         val deferred = CompletableDeferred<HomeResponse>()
         homeMutex.withLock { homeInFlight = deferred }
         return try {
-            val response = api.getHome()
+            // 5 panggilan paralel: data/home/list (buat "history" -> fallback
+            // "Baru Ditambahkan" kalau 3/2/home/new kosong) + 4 endpoint
+            // 3/2/home/* yang KONFIRMASI mapping 1:1 ke section HomeScreen.
+            // "today" & "waiting" tetap null -- belum ketemu endpoint
+            // padanannya di backend native.
+            val response = kotlinx.coroutines.coroutineScope {
+                val history = async { api.getHome().data?.history }
+                val hot = async { api.getHomeHot().data?.movie }
+                val new = async { api.getHomeNew().data?.movie }
+                val popular = async { api.getHomePopular().data?.movie }
+                val random = async { api.getHomeRandom().data?.movie }
+                HomeResponse(
+                    hot = hot.await(),
+                    new = new.await() ?: history.await(),
+                    today = null,
+                    popular = popular.await(),
+                    trailer = null,
+                    random = random.await(),
+                    waiting = null
+                )
+            }
             homeCache = CacheEntry(response, System.currentTimeMillis())
             deferred.complete(response)
             response
@@ -134,13 +168,23 @@ class AnimeRepository(
         }
         emit(Result.Loading)
         try {
-            val response = api.search(
-                keyword = query,
+            // KONFIRMASI: 3/2/explore/movie?keyword=... beneran filter by
+            // substring title/synonyms (bukan lagi diabaikan kayak param "q"
+            // dulu). next_page tetap null -- backend native gak ngasih
+            // cursor pagination kayak animeinweb dulu, jadi search cuma
+            // 1 halaman buat sekarang (loadNextPage() belum ngefek).
+            val raw = api.exploreMovie(
+                keyword = query.ifBlank { null },
                 page = page,
-                sort = sort,
-                genreIn = genreIn,
+                genre = genreIn,
                 status = status,
                 type = type
+            ).data
+            val response = SearchResponse(
+                query = query,
+                page = page?.toString(),
+                results = raw?.movie,
+                next_page = null
             )
             searchCache[key] = CacheEntry(response, System.currentTimeMillis())
             emit(Result.Success(response))
@@ -162,7 +206,9 @@ class AnimeRepository(
         }
         emit(Result.Loading)
         try {
-            val response = api.getDetail(id)
+            // KONFIRMASI: 3/2/movie/detail/{id} balikin persis 1 objek movie.
+            val response = api.getMovieDetail(id).data?.movie
+                ?: throw NoSuchElementException("Anime dengan id=$id tidak ditemukan")
             detailCache[id] = CacheEntry(response, System.currentTimeMillis())
             emit(Result.Success(response))
         } catch (e: Exception) {
@@ -188,7 +234,12 @@ class AnimeRepository(
         }
         emit(Result.Loading)
         try {
-            val response = api.getEpisodes(id, page)
+            // Backend native ANIMEIN gak paginasi -- 3/2/movie/episode/{id}
+            // konfirmasi balikin SEMUA episode dalam 1x panggilan tanpa
+            // parameter page. Jadi param `page` di sini diabaikan sepenuhnya
+            // (dipertahankan di signature biar ViewModel pemanggil gak perlu
+            // diubah), dan hasilnya sama aja mau page berapa pun diminta.
+            val response = api.getEpisodes(id).data?.episode.orEmpty()
             episodesCache[key] = CacheEntry(response, System.currentTimeMillis())
             emit(Result.Success(response))
         } catch (e: Exception) {
@@ -200,11 +251,10 @@ class AnimeRepository(
         }
     }.flowOn(Dispatchers.IO)
 
-    // animeinweb /api/anime/{id}/episodes dipaginasi upstream (30/halaman).
-    // Buat anime yang episode-nya banyak (One Piece dkk bisa 1000+), loop semua
-    // halaman di sini sampe ketemu halaman kosong. Batch pertama request TANPA
-    // page param sama sekali (bukan page=1) -- page=1 itu udah batch KEDUA
-    // di upstream. Sama persis pattern yang dipakai di Aniku.
+    // Backend native gak paginasi (beda sama animeinweb dulu yang 30/halaman)
+    // -- 1x panggilan udah dapet semua episode, jadi gak perlu loop lagi.
+    // Fungsi ini dipertahankan (bukan langsung alias ke getEpisodes) supaya
+    // pemanggil yang udah ada gak perlu diubah.
     fun getAllEpisodes(id: String, forceRefresh: Boolean = false): Flow<Result<List<EpisodeItem>>> = flow {
         val cached = allEpisodesCache[id]
         if (!forceRefresh && isFresh(cached, TTL_EPISODES)) {
@@ -213,20 +263,7 @@ class AnimeRepository(
         }
         emit(Result.Loading)
         try {
-            val allEpisodes = mutableListOf<EpisodeItem>()
-            val firstBatch = api.getEpisodes(id, page = null)
-            allEpisodes.addAll(firstBatch)
-            if (firstBatch.isNotEmpty()) {
-                var epPage = 1
-                val MAX_EPISODE_PAGES = 60 // ~1800 episode, jauh di atas anime terpanjang yang ada
-                while (epPage <= MAX_EPISODE_PAGES) {
-                    val pageResult = api.getEpisodes(id, page = epPage)
-                    if (pageResult.isEmpty()) break
-                    allEpisodes.addAll(pageResult)
-                    epPage++
-                }
-            }
-            val result = allEpisodes.toList()
+            val result = api.getEpisodes(id).data?.episode.orEmpty()
             allEpisodesCache[id] = CacheEntry(result, System.currentTimeMillis())
             emit(Result.Success(result))
         } catch (e: Exception) {
@@ -245,7 +282,12 @@ class AnimeRepository(
     fun getEpisodeStream(episodeId: String): Flow<Result<StreamResponse>> = flow {
         emit(Result.Loading)
         try {
-            val response = api.getEpisodeStream(episodeId)
+            val raw = api.getEpisodeStream(episodeId).data
+            val response = StreamResponse(
+                episode = raw?.episode,
+                episodeNext = raw?.episodeNext,
+                servers = raw?.server
+            )
             emit(Result.Success(response))
         } catch (e: Exception) {
             emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat link streaming"))
@@ -261,7 +303,9 @@ class AnimeRepository(
         }
         emit(Result.Loading)
         try {
-            val response = api.getSchedule(day)
+            // ScheduleViewModel ngirim day key Inggris ("monday"..) -- backend
+            // native wajib bahasa Indonesia huruf besar (SENIN..MINGGU).
+            val response = api.getSchedule(dayKeyToIndonesian(day)).data?.movie.orEmpty()
             scheduleCache[day] = CacheEntry(response, System.currentTimeMillis())
             emit(Result.Success(response))
         } catch (e: Exception) {
@@ -282,7 +326,8 @@ class AnimeRepository(
         }
         emit(Result.Loading)
         try {
-            val response = api.getGenres()
+            // KONFIRMASI: 3/2/explore/genre balikin 32 genre lengkap.
+            val response = api.exploreGenre().data.orEmpty()
             genresCache = CacheEntry(response, System.currentTimeMillis())
             emit(Result.Success(response))
         } catch (e: Exception) {
