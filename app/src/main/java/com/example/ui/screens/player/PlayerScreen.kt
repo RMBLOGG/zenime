@@ -326,11 +326,15 @@ fun PlayerScreen(
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setDefaultRequestProperties(
                 mapOf(
-                    // CDN storages.animein.net butuh Referer, kalau nggak
-                    // request video-nya di-403 dan ExoPlayer diem aja tanpa
-                    // pesan error (lihat onPlayerError di listener bawah).
-                    "User-Agent" to "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36",
-                    "Referer" to "https://xyz-api.animein.net/"
+                    // Sempat dicoba nambahin Referer ke sini (dugaan awal
+                    // kenapa video gagal load), tapi dibongkar dari app resmi
+                    // ANIMEIN (v5.1.2) -- app resmi itu sendiri TIDAK nge-set
+                    // header Referer custom buat request video ke
+                    // storages.animein.net. Jadi dihapus lagi biar konsisten
+                    // sama app resmi. Kalau video masih gagal, cek error code
+                    // dari onPlayerError di listener bawah dulu sebelum nebak
+                    // header lagi -- kemungkinan besar bukan soal Referer.
+                    "User-Agent" to "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36"
                 )
             )
 
@@ -396,10 +400,9 @@ fun PlayerScreen(
             val httpDataSourceFactory = DefaultHttpDataSource.Factory()
                 .setDefaultRequestProperties(
                     mapOf(
-                        // Sama kayak block di atas -- CDN storages.animein.net
-                        // butuh Referer, kalau nggak request video-nya di-403.
-                        "User-Agent" to "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36",
-                        "Referer" to "https://xyz-api.animein.net/"
+                        // Sama kayak block di atas -- gak pakai Referer, app
+                        // resmi juga gak nge-set itu.
+                        "User-Agent" to "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36"
                     )
                 )
 
