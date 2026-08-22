@@ -217,6 +217,7 @@ fun PlayerScreen(
     var isBuffering by remember { mutableStateOf(false) }
     var currentPosition by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
+    var playerError by remember { mutableStateOf<String?>(null) }
     var isControlsVisible by remember { mutableStateOf(true) }
     var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
 
@@ -325,13 +326,11 @@ fun PlayerScreen(
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setDefaultRequestProperties(
                 mapOf(
-                    // Referer animeinweb.com DIHAPUS -- link video sekarang
-                    // langsung dari storages.animein.net (CDN backend native
-                    // ANIMEIN), bukan lagi proxy animeinweb yang 503. Belum
-                    // dites apakah CDN ini butuh Referer/UA spesifik -- kalau
-                    // video gagal load (403/blocked), coba tambah balik
-                    // Referer ke "https://animein.net/" dulu.
-                    "User-Agent" to "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36"
+                    // CDN storages.animein.net butuh Referer, kalau nggak
+                    // request video-nya di-403 dan ExoPlayer diem aja tanpa
+                    // pesan error (lihat onPlayerError di listener bawah).
+                    "User-Agent" to "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36",
+                    "Referer" to "https://xyz-api.animein.net/"
                 )
             )
 
@@ -385,6 +384,7 @@ fun PlayerScreen(
     // Update MediaSource when selectedServer changes
     LaunchedEffect(selectedServer) {
         val serverUrl = selectedServer?.link
+        playerError = null
         if (!serverUrl.isNullOrEmpty()) {
             // Kalau ini ganti server/kualitas di TENGAH nonton (bukan load
             // pertama), jaga posisi biar gak balik ke awal. Load pertama
@@ -396,10 +396,10 @@ fun PlayerScreen(
             val httpDataSourceFactory = DefaultHttpDataSource.Factory()
                 .setDefaultRequestProperties(
                     mapOf(
-                        // Sama kayak block di atas -- Referer animeinweb.com
-                        // dihapus, belum dites apakah CDN storages.animein.net
-                        // butuh Referer sendiri.
-                        "User-Agent" to "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36"
+                        // Sama kayak block di atas -- CDN storages.animein.net
+                        // butuh Referer, kalau nggak request video-nya di-403.
+                        "User-Agent" to "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36",
+                        "Referer" to "https://xyz-api.animein.net/"
                     )
                 )
 
@@ -423,6 +423,13 @@ fun PlayerScreen(
             }
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 PipController.setAspectRatio(videoSize.width, videoSize.height)
+            }
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                // Tanpa ini, kalau ExoPlayer gagal load (403 Referer, timeout,
+                // format nggak didukung, dll) player cuma diem di 00:00 tanpa
+                // pesan apa pun -- persis gejala "video gak ke-play".
+                playerError = "Gagal memuat video (${error.errorCodeName}). " +
+                    "Coba server/kualitas lain."
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = playbackState == Player.STATE_BUFFERING
@@ -582,6 +589,19 @@ fun PlayerScreen(
                                 modifier = Modifier
                                     .align(Alignment.Center)
                                     .size(44.dp)
+                            )
+                        }
+
+                        // Kalau ExoPlayer gagal load stream (403/format/dll),
+                        // tampilin pesannya di sini -- sebelumnya diem total,
+                        // gejalanya persis kayak "video nggak ke-play".
+                        playerError?.let { message ->
+                            Text(
+                                text = message,
+                                color = Color.White,
+                                modifier = Modifier
+                                    .align(Alignment.Center)
+                                    .padding(24.dp)
                             )
                         }
 
