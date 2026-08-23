@@ -15,10 +15,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.core.content.pm.PackageInfoCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.example.ads.AdManager
+import com.example.data.api.GithubUpdateChecker
 import com.example.data.api.NetworkModule
 import com.example.data.api.RemoteConfigManager
 import com.example.data.local.UserPreferencesRepository
@@ -35,12 +35,17 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
-    // null = belum kelar ngecek Remote Config (tampilin blank sebentar),
-    // true = versionCode APK ini di bawah minimum -> app diblokir total,
-    // cuma ForceUpdateScreen yang di-compose (ZenimeAppNavHost sama sekali
-    // gak dipanggil, jadi gak ada cara "skip" balik ke app),
-    // false = versi aman, lanjut app seperti biasa.
+    // null = belum kelar ngecek GitHub Releases (tampilin blank sebentar),
+    // true = ada release lebih baru dari versionName APK ini -> app
+    // diblokir total, cuma ForceUpdateScreen yang di-compose (ZenimeAppNavHost
+    // sama sekali gak dipanggil, jadi gak ada cara "skip" balik ke app),
+    // false = versi udah paling baru (atau repo belum ada release/fetch
+    // gagal), lanjut app seperti biasa.
     private var needsUpdate by mutableStateOf<Boolean?>(null)
+
+    // Info release terbaru dari GitHub (tag + link APK + changelog), diisi
+    // bareng needsUpdate. Cuma valid kalau needsUpdate == true.
+    private var latestUpdateInfo by mutableStateOf<GithubUpdateChecker.UpdateInfo?>(null)
 
     // Downloader APK update, di-scope ke Activity ini (bukan singleton)
     // supaya coroutine polling progress-nya ikut mati kalau Activity-nya
@@ -68,22 +73,24 @@ class MainActivity : ComponentActivity() {
         // ke-render -- supaya poster udah nyampe/lagi keburu kecache pas
         // LoginScreen tampil, bukan mulai fetch baru pas layar itu dibuka.
         lifecycleScope.launch {
-            // Ambil base URL terbaru + min_version_code dari Firebase Remote
+            // Ambil base URL terbaru + feature_flags dari Firebase Remote
             // Config dulu (kalau ada koneksi), baru mulai request API pertama
             // supaya langsung pakai base URL yang sesuai.
             RemoteConfigManager.refresh()
 
-            // Bandingin versionCode APK yang lagi jalan sekarang vs minimum
-            // yang di-set admin di Console. minVersionCode() == 0 artinya
-            // parameter belum di-set -> force update mati (semua versi boleh).
-            val currentVersionCode = try {
-                val packageInfo = packageManager.getPackageInfo(packageName, 0)
-                PackageInfoCompat.getLongVersionCode(packageInfo)
+            // Cek release terbaru LANGSUNG ke GitHub (bukan Firebase Remote
+            // Config lagi) -- gak ada cache/throttle, tiap app dibuka pasti
+            // hit GitHub. Kalau repo belum ada release atau fetch gagal
+            // (offline dll), checkForUpdate() balikin null -> anggap aman,
+            // JANGAN block user.
+            val currentVersionName = try {
+                packageManager.getPackageInfo(packageName, 0).versionName ?: "0"
             } catch (_: Exception) {
-                Long.MAX_VALUE // gagal baca versi sendiri -- jangan sampai nge-block orang
+                "999999" // gagal baca versi sendiri -- jangan sampai nge-block orang
             }
-            val minVersionCode = RemoteConfigManager.minVersionCode()
-            needsUpdate = minVersionCode > 0 && currentVersionCode < minVersionCode
+            val update = GithubUpdateChecker.checkForUpdate(currentVersionName)
+            latestUpdateInfo = update
+            needsUpdate = update != null
 
             // Kalau lagi diblokir force update, gak perlu buang-buang request
             // buat prefetch homepage -- toh ZenimeAppNavHost gak bakal di-compose.
@@ -109,13 +116,12 @@ class MainActivity : ComponentActivity() {
                 when (needsUpdate) {
                     true -> {
                         val downloadState by apkDownloader.state.collectAsState()
+                        val downloadUrl = latestUpdateInfo?.downloadUrl.orEmpty()
                         ForceUpdateScreen(
-                            message = RemoteConfigManager.updateMessage().ifBlank {
-                                "Versi aplikasi ini sudah tidak didukung. Update dulu ke versi terbaru untuk lanjut menonton."
-                            },
+                            message = "Versi ${latestUpdateInfo?.tagName.orEmpty()} sudah tersedia. Update dulu ke versi terbaru untuk lanjut menonton.",
                             downloadState = downloadState,
                             onDownloadClick = {
-                                apkDownloader.startDownload(RemoteConfigManager.updateDownloadUrl())
+                                apkDownloader.startDownload(downloadUrl)
                             },
                             onInstallClick = {
                                 (downloadState as? DownloadState.Downloaded)?.let {
@@ -123,7 +129,7 @@ class MainActivity : ComponentActivity() {
                                 }
                             },
                             onRetryClick = {
-                                apkDownloader.startDownload(RemoteConfigManager.updateDownloadUrl())
+                                apkDownloader.startDownload(downloadUrl)
                             }
                         )
                     }

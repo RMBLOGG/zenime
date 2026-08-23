@@ -31,18 +31,9 @@ object RemoteConfigManager {
 
     private const val KEY_BASE_URL = "api_base_url"
 
-    // --- Force update ---
-    // KEY_MIN_VERSION_CODE: versionCode (angka, BUKAN versionName) minimal
-    // yang boleh dipakai. Kalau versionCode APK yang lagi jalan < nilai ini,
-    // ForceUpdateScreen ditampilkan dan app diblokir total (lihat MainActivity).
-    // Kosongin atau isi 0 di Console = force update mati (semua versi boleh).
-    private const val KEY_MIN_VERSION_CODE = "min_version_code"
-    // KEY_UPDATE_URL: link yang dibuka pas user pencet tombol "Update" --
-    // bisa link Play Store, atau link download .apk langsung (mis. di-host
-    // di Firebase Hosting/Storage).
-    private const val KEY_UPDATE_URL = "update_download_url"
-    // KEY_UPDATE_MESSAGE: pesan yang ditampilkan di popup, opsional.
-    private const val KEY_UPDATE_MESSAGE = "update_message"
+    // Catatan: pengecekan force-update TIDAK lagi lewat Remote Config --
+    // sekarang pakai GithubUpdateChecker (cek langsung ke GitHub Releases),
+    // supaya gak kena cache/throttle minimumFetchIntervalInSeconds di bawah.
 
     // --- Feature flags ---
     // KEY_FEATURE_FLAGS: JSON object flat, mis. {"downloads":false,"live_chat":true}.
@@ -117,18 +108,6 @@ object RemoteConfigManager {
         val value = remoteConfig.getString(KEY_BASE_URL)
         return value.ifBlank { null }
     }
-
-    /**
-     * VersionCode minimal yang diizinkan jalan. 0 kalau parameter belum
-     * di-set di Console (artinya: force update mati, semua versi boleh).
-     */
-    fun minVersionCode(): Long = remoteConfig.getLong(KEY_MIN_VERSION_CODE)
-
-    /** Link yang dibuka pas user pencet tombol update di ForceUpdateScreen. */
-    fun updateDownloadUrl(): String = remoteConfig.getString(KEY_UPDATE_URL)
-
-    /** Pesan custom buat ForceUpdateScreen. Kosong kalau belum di-set di Console. */
-    fun updateMessage(): String = remoteConfig.getString(KEY_UPDATE_MESSAGE)
 
     // Cache hasil parse JSON feature_flags biar gak parse ulang tiap
     // isFeatureEnabled() dipanggil. Di-reset tiap kali refresh()/forceRefresh()
