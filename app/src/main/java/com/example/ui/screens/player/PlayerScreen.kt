@@ -431,8 +431,34 @@ fun PlayerScreen(
                 // Tanpa ini, kalau ExoPlayer gagal load (403 Referer, timeout,
                 // format nggak didukung, dll) player cuma diem di 00:00 tanpa
                 // pesan apa pun -- persis gejala "video gak ke-play".
-                playerError = "Gagal memuat video (${error.errorCodeName}). " +
-                    "Coba server/kualitas lain."
+                //
+                // ERROR_CODE_IO_BAD_HTTP_STATUS doang gak ngasih tau status
+                // code aslinya (403? 404? 410?) -- itu ada di cause chain,
+                // dibungkus sebagai HttpDataSource.InvalidResponseCodeException.
+                var cause: Throwable? = error
+                var httpStatus: Int? = null
+                var responseHeaders: Map<String, List<String>>? = null
+                while (cause != null) {
+                    if (cause is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) {
+                        httpStatus = cause.responseCode
+                        responseHeaders = cause.headerFields
+                        break
+                    }
+                    cause = cause.cause
+                }
+                playerError = if (httpStatus != null) {
+                    "Gagal memuat video: server balikin HTTP $httpStatus. Coba server/kualitas lain."
+                } else {
+                    "Gagal memuat video (${error.errorCodeName}). Coba server/kualitas lain."
+                }
+                // Log detail lengkap (termasuk header response) buat debugging --
+                // gak ditampilin di UI biar gak berantakan, tapi kecatet di Logcat.
+                android.util.Log.e(
+                    "ZenimePlayer",
+                    "Playback error: code=${error.errorCode} name=${error.errorCodeName} " +
+                        "httpStatus=$httpStatus headers=$responseHeaders url=${selectedServer?.link}",
+                    error
+                )
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = playbackState == Player.STATE_BUFFERING
