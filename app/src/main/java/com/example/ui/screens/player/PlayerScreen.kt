@@ -323,20 +323,12 @@ fun PlayerScreen(
 
     // ExoPlayer instance
     val exoPlayer = remember {
+        // 403 dari storages.animein.net kemungkinan besar bukan soal Referer
+        // (app resmi juga gak nge-set itu, dan sudah dicoba tanpa Referer,
+        // masih 403). Dugaan sekarang: User-Agent palsu di bawah ini yang
+        // malah mencurigakan buat WAF-nya. Coba default ExoPlayer dulu --
+        // gak override apa-apa, biar HttpDataSource pakai UA bawaannya.
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-            .setDefaultRequestProperties(
-                mapOf(
-                    // Sempat dicoba nambahin Referer ke sini (dugaan awal
-                    // kenapa video gagal load), tapi dibongkar dari app resmi
-                    // ANIMEIN (v5.1.2) -- app resmi itu sendiri TIDAK nge-set
-                    // header Referer custom buat request video ke
-                    // storages.animein.net. Jadi dihapus lagi biar konsisten
-                    // sama app resmi. Kalau video masih gagal, cek error code
-                    // dari onPlayerError di listener bawah dulu sebelum nebak
-                    // header lagi -- kemungkinan besar bukan soal Referer.
-                    "User-Agent" to "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36"
-                )
-            )
 
         ExoPlayer.Builder(context).build().apply {
             playWhenReady = true
@@ -398,13 +390,6 @@ fun PlayerScreen(
             val positionToKeep = if (hasAppliedResume) exoPlayer.currentPosition else 0L
 
             val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-                .setDefaultRequestProperties(
-                    mapOf(
-                        // Sama kayak block di atas -- gak pakai Referer, app
-                        // resmi juga gak nge-set itu.
-                        "User-Agent" to "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36"
-                    )
-                )
 
             val mediaSource = ProgressiveMediaSource.Factory(httpDataSourceFactory)
                 .createMediaSource(MediaItem.fromUri(Uri.parse(serverUrl)))
