@@ -217,7 +217,6 @@ fun PlayerScreen(
     var isBuffering by remember { mutableStateOf(false) }
     var currentPosition by remember { mutableLongStateOf(0L) }
     var duration by remember { mutableLongStateOf(0L) }
-    var playerError by remember { mutableStateOf<String?>(null) }
     var isControlsVisible by remember { mutableStateOf(true) }
     var playbackSpeed by remember { mutableFloatStateOf(1.0f) }
 
@@ -323,12 +322,13 @@ fun PlayerScreen(
 
     // ExoPlayer instance
     val exoPlayer = remember {
-        // 403 dari storages.animein.net kemungkinan besar bukan soal Referer
-        // (app resmi juga gak nge-set itu, dan sudah dicoba tanpa Referer,
-        // masih 403). Dugaan sekarang: User-Agent palsu di bawah ini yang
-        // malah mencurigakan buat WAF-nya. Coba default ExoPlayer dulu --
-        // gak override apa-apa, biar HttpDataSource pakai UA bawaannya.
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+            .setDefaultRequestProperties(
+                mapOf(
+                    "Referer" to "https://animeinweb.com/",
+                    "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                )
+            )
 
         ExoPlayer.Builder(context).build().apply {
             playWhenReady = true
@@ -380,7 +380,6 @@ fun PlayerScreen(
     // Update MediaSource when selectedServer changes
     LaunchedEffect(selectedServer) {
         val serverUrl = selectedServer?.link
-        playerError = null
         if (!serverUrl.isNullOrEmpty()) {
             // Kalau ini ganti server/kualitas di TENGAH nonton (bukan load
             // pertama), jaga posisi biar gak balik ke awal. Load pertama
@@ -390,6 +389,12 @@ fun PlayerScreen(
             val positionToKeep = if (hasAppliedResume) exoPlayer.currentPosition else 0L
 
             val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+                .setDefaultRequestProperties(
+                    mapOf(
+                        "Referer" to "https://animeinweb.com/",
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    )
+                )
 
             val mediaSource = ProgressiveMediaSource.Factory(httpDataSourceFactory)
                 .createMediaSource(MediaItem.fromUri(Uri.parse(serverUrl)))
@@ -411,39 +416,6 @@ fun PlayerScreen(
             }
             override fun onVideoSizeChanged(videoSize: VideoSize) {
                 PipController.setAspectRatio(videoSize.width, videoSize.height)
-            }
-            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                // Tanpa ini, kalau ExoPlayer gagal load (403 Referer, timeout,
-                // format nggak didukung, dll) player cuma diem di 00:00 tanpa
-                // pesan apa pun -- persis gejala "video gak ke-play".
-                //
-                // ERROR_CODE_IO_BAD_HTTP_STATUS doang gak ngasih tau status
-                // code aslinya (403? 404? 410?) -- itu ada di cause chain,
-                // dibungkus sebagai HttpDataSource.InvalidResponseCodeException.
-                var cause: Throwable? = error
-                var httpStatus: Int? = null
-                var responseHeaders: Map<String, List<String>>? = null
-                while (cause != null) {
-                    if (cause is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException) {
-                        httpStatus = cause.responseCode
-                        responseHeaders = cause.headerFields
-                        break
-                    }
-                    cause = cause.cause
-                }
-                playerError = if (httpStatus != null) {
-                    "Gagal memuat video: server balikin HTTP $httpStatus. Coba server/kualitas lain."
-                } else {
-                    "Gagal memuat video (${error.errorCodeName}). Coba server/kualitas lain."
-                }
-                // Log detail lengkap (termasuk header response) buat debugging --
-                // gak ditampilin di UI biar gak berantakan, tapi kecatet di Logcat.
-                android.util.Log.e(
-                    "ZenimePlayer",
-                    "Playback error: code=${error.errorCode} name=${error.errorCodeName} " +
-                        "httpStatus=$httpStatus headers=$responseHeaders url=${selectedServer?.link}",
-                    error
-                )
             }
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = playbackState == Player.STATE_BUFFERING
@@ -603,19 +575,6 @@ fun PlayerScreen(
                                 modifier = Modifier
                                     .align(Alignment.Center)
                                     .size(44.dp)
-                            )
-                        }
-
-                        // Kalau ExoPlayer gagal load stream (403/format/dll),
-                        // tampilin pesannya di sini -- sebelumnya diem total,
-                        // gejalanya persis kayak "video nggak ke-play".
-                        playerError?.let { message ->
-                            Text(
-                                text = message,
-                                color = Color.White,
-                                modifier = Modifier
-                                    .align(Alignment.Center)
-                                    .padding(24.dp)
                             )
                         }
 
