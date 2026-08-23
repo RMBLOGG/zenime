@@ -68,7 +68,7 @@ class ApkDownloader(private val context: Context) {
     /** Mulai download APK dari [url]. Aman dipanggil ulang buat retry. */
     fun startDownload(url: String) {
         if (url.isBlank()) {
-            _state.value = DownloadState.Failed("Link download belum diisi admin di Remote Config.")
+            _state.value = DownloadState.Failed("Link download APK belum ada di release GitHub ini.")
             return
         }
 

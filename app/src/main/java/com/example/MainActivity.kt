@@ -47,6 +47,10 @@ class MainActivity : ComponentActivity() {
     // bareng needsUpdate. Cuma valid kalau needsUpdate == true.
     private var latestUpdateInfo by mutableStateOf<GithubUpdateChecker.UpdateInfo?>(null)
 
+    // versionName APK yang lagi jalan sekarang, buat ditampilin di chip
+    // versi "v{current} -> v{latest}" di ForceUpdateScreen.
+    private var currentVersionName by mutableStateOf("")
+
     // Downloader APK update, di-scope ke Activity ini (bukan singleton)
     // supaya coroutine polling progress-nya ikut mati kalau Activity-nya
     // kelar. Cuma dipakai kalau needsUpdate == true.
@@ -83,12 +87,13 @@ class MainActivity : ComponentActivity() {
             // hit GitHub. Kalau repo belum ada release atau fetch gagal
             // (offline dll), checkForUpdate() balikin null -> anggap aman,
             // JANGAN block user.
-            val currentVersionName = try {
+            val currentVersion = try {
                 packageManager.getPackageInfo(packageName, 0).versionName ?: "0"
             } catch (_: Exception) {
                 "999999" // gagal baca versi sendiri -- jangan sampai nge-block orang
             }
-            val update = GithubUpdateChecker.checkForUpdate(currentVersionName)
+            currentVersionName = currentVersion
+            val update = GithubUpdateChecker.checkForUpdate(currentVersion)
             latestUpdateInfo = update
             needsUpdate = update != null
 
@@ -118,7 +123,9 @@ class MainActivity : ComponentActivity() {
                         val downloadState by apkDownloader.state.collectAsState()
                         val downloadUrl = latestUpdateInfo?.downloadUrl.orEmpty()
                         ForceUpdateScreen(
-                            message = "Versi ${latestUpdateInfo?.tagName.orEmpty()} sudah tersedia. Update dulu ke versi terbaru untuk lanjut menonton.",
+                            currentVersion = currentVersionName,
+                            latestVersion = latestUpdateInfo?.tagName.orEmpty().trimStart('v', 'V'),
+                            releaseNotes = latestUpdateInfo?.releaseBody.orEmpty(),
                             downloadState = downloadState,
                             onDownloadClick = {
                                 apkDownloader.startDownload(downloadUrl)
