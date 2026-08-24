@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.FiberManualRecord
@@ -82,6 +83,7 @@ fun HomeScreen(
     onAnimeClick: (String) -> Unit,
     onSearchClick: () -> Unit,
     onSeeAllOngoingClick: () -> Unit,
+    onChatClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val homeState by viewModel.homeState.collectAsStateWithLifecycle()
@@ -260,6 +262,12 @@ fun HomeScreen(
                 transparentWhenTop = true,
                 title = { ZenimeLogoTitle() },
                 actions = {
+                    ZenimeHeaderActionButton(
+                        icon = Icons.AutoMirrored.Filled.Chat,
+                        contentDescription = "Chat Global",
+                        onClick = onChatClick,
+                        testTag = "home_chat_button"
+                    )
                     ZenimeHeaderActionButton(
                         icon = Icons.Default.Search,
                         contentDescription = "Search Anime",

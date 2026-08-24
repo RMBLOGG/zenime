@@ -71,6 +71,9 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.AuthRepository
+import com.example.data.repository.ChatRepository
+import com.example.ui.screens.chat.ChatScreen
+import com.example.ui.screens.chat.ChatViewModel
 import com.example.ui.screens.detail.DetailScreen
 import com.example.ui.screens.detail.DetailViewModel
 import com.example.ui.screens.favorites.FavoritesHistoryScreen
@@ -116,6 +119,8 @@ sealed class Screen(
     data object Settings : Screen("settings", "Pengaturan", Icons.Filled.Settings, Icons.Outlined.Settings)
 
     data object Premium : Screen("premium")
+
+    data object Chat : Screen("chat")
 
     data object Detail : Screen("detail/{animeId}") {
         fun createRoute(animeId: String) = "detail/$animeId"
@@ -262,6 +267,9 @@ fun ZenimeAppNavHost(
                     },
                     onSeeAllOngoingClick = {
                         navController.navigate(Screen.Search.createRoute(status = "ONGOING"))
+                    },
+                    onChatClick = {
+                        navController.navigate(Screen.Chat.route)
                     }
                 )
             }
@@ -337,6 +345,31 @@ fun ZenimeAppNavHost(
                         }
                     )
                     PremiumScreen(viewModel = premiumViewModel)
+                }
+            }
+
+            // Chat Global -- pesan publik antar semua pengguna, polling tiap
+            // beberapa detik, ada cooldown 5 detik antar kirim (dihandle di ChatViewModel).
+            composable(Screen.Chat.route) {
+                val uid = currentUser?.uid
+                if (uid != null) {
+                    val chatViewModel: ChatViewModel = viewModel(
+                        factory = viewModelFactory {
+                            initializer {
+                                ChatViewModel(
+                                    repository = ChatRepository(),
+                                    firebaseUid = uid,
+                                    username = currentUser?.displayName ?: "Pengguna",
+                                    avatarUrl = currentUser?.photoUrl?.toString()
+                                )
+                            }
+                        }
+                    )
+                    ChatScreen(
+                        viewModel = chatViewModel,
+                        currentFirebaseUid = uid,
+                        onBackClick = { navController.popBackStack() }
+                    )
                 }
             }
 

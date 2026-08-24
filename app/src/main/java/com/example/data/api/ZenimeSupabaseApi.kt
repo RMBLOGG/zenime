@@ -1,11 +1,15 @@
 package com.example.data.api
 
+import com.example.data.model.ChatMessage
+import com.example.data.model.ChatMessageInsert
 import com.example.data.model.PremiumPackagesResponse
 import com.example.data.model.PremiumStatusResponse
 import com.example.data.model.ZenimeCodeResponse
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Headers
 import retrofit2.http.POST
+import retrofit2.http.Query
 
 interface ZenimeSupabaseApi {
 
@@ -17,4 +21,20 @@ interface ZenimeSupabaseApi {
 
     @POST("functions/v1/zenime-check-premium")
     suspend fun checkPremiumStatus(@Body body: Map<String, String>): PremiumStatusResponse
+
+    // --- Chat Global ---
+    // Dua endpoint di bawah manggil langsung tabel `global_chat_messages`
+    // lewat PostgREST bawaan Supabase (bukan Edge Function), jadi cukup
+    // tabel + RLS policy-nya dibikin di dashboard (lihat catatan setup).
+
+    @GET("rest/v1/global_chat_messages")
+    suspend fun getChatMessages(
+        @Query("select") select: String = "id,firebase_uid,username,avatar_url,message,created_at",
+        @Query("order") order: String = "created_at.desc",
+        @Query("limit") limit: Int = 50
+    ): List<ChatMessage>
+
+    @Headers("Prefer: return=representation")
+    @POST("rest/v1/global_chat_messages")
+    suspend fun postChatMessage(@Body body: ChatMessageInsert): List<ChatMessage>
 }
