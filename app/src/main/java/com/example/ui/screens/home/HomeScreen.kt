@@ -170,6 +170,16 @@ fun HomeScreen(
                                 }
                             }
 
+                            // Section donasi SociaBuzz -- diletakkan di bawah hero
+                            // carousel biar keliatan tapi gak ganggu/nutupin
+                            // konten atau nav bar kayak versi floating button.
+                            item {
+                                DonationSection(
+                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                )
+                                Spacer(modifier = Modifier.height(20.dp))
+                            }
+
                             // Section: Sedang Tayang (Ongoing) -- di Dayynime v5, field
                             // "hot" merepresentasikan anime yang lagi tayang, sama seperti
                             // konvensi yang dipakai di Aniku. Sengaja ditaruh paling atas,
@@ -276,14 +286,6 @@ fun HomeScreen(
                     )
                 },
                 modifier = Modifier.align(Alignment.TopCenter)
-            )
-
-            // Tombol donasi SociaBuzz -- versi native dari widget "Button on
-            // Website" mereka, floating di pojok kanan bawah kayak di web.
-            DonationFab(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 24.dp)
             )
         }
     }
