@@ -72,6 +72,7 @@ import androidx.navigation.navArgument
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.ChatRepository
+import com.example.data.repository.PremiumRepository
 import com.example.ui.screens.chat.ChatScreen
 import com.example.ui.screens.chat.ChatViewModel
 import com.example.ui.screens.detail.DetailScreen
@@ -87,7 +88,6 @@ import com.example.ui.screens.player.PlayerViewModel
 import com.example.ui.screens.player.PremiumGate
 import com.example.ui.screens.premium.PremiumScreen
 import com.example.ui.screens.premium.PremiumViewModel
-import com.example.data.repository.PremiumRepository
 import com.example.ui.screens.schedule.ScheduleScreen
 import com.example.ui.screens.schedule.ScheduleViewModel
 import com.example.ui.screens.search.SearchScreen
@@ -358,9 +358,10 @@ fun ZenimeAppNavHost(
                             initializer {
                                 ChatViewModel(
                                     repository = ChatRepository(),
+                                    premiumRepository = PremiumRepository(),
                                     firebaseUid = uid,
-                                    username = currentUser?.displayName ?: "Pengguna",
-                                    avatarUrl = currentUser?.photoUrl?.toString()
+                                    fallbackUsername = currentUser?.displayName ?: "Pengguna",
+                                    fallbackAvatarUrl = currentUser?.photoUrl?.toString()
                                 )
                             }
                         }

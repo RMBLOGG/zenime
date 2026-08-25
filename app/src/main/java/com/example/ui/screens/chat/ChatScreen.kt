@@ -1,5 +1,9 @@
 package com.example.ui.screens.chat
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,12 +29,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
@@ -46,10 +55,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.data.model.ChatMessage
@@ -73,6 +85,7 @@ fun ChatScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+    val context = LocalContext.current
 
     // Auto-scroll ke pesan paling bawah tiap ada pesan baru masuk.
     LaunchedEffect(uiState.messages.size) {
@@ -97,6 +110,15 @@ fun ChatScreen(
                         }
                         Spacer(modifier = Modifier.width(4.dp))
                         ZenimeScreenTitle(title = "Chat Global")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.openProfileDialog() }) {
+                        Icon(
+                            imageVector = Icons.Filled.Person,
+                            contentDescription = "Edit Profil",
+                            tint = Color.White
+                        )
                     }
                 }
             )
@@ -169,6 +191,21 @@ fun ChatScreen(
                     .imePadding()
             )
         }
+    }
+
+    if (uiState.isProfileDialogOpen) {
+        EditProfileDialog(
+            currentUsername = uiState.displayUsername,
+            currentAvatarUrl = uiState.displayAvatarUrl,
+            isPremium = uiState.isPremium,
+            isSaving = uiState.isSavingProfile,
+            isUploadingAvatar = uiState.isUploadingAvatar,
+            errorMessage = uiState.profileError,
+            onPickAvatar = { uri -> viewModel.uploadAvatar(context, uri) },
+            onNonPremiumAvatarTap = { viewModel.notifyAvatarRequiresPremium() },
+            onSaveUsername = { newName -> viewModel.saveUsername(newName) },
+            onDismiss = { viewModel.closeProfileDialog() }
+        )
     }
 }
 
@@ -351,5 +388,165 @@ private fun formatChatTime(isoTimestamp: String): String {
             .format(chatTimeFormatter)
     } catch (e: Exception) {
         ""
+    }
+}
+
+@Composable
+private fun EditProfileDialog(
+    currentUsername: String,
+    currentAvatarUrl: String?,
+    isPremium: Boolean,
+    isSaving: Boolean,
+    isUploadingAvatar: Boolean,
+    errorMessage: String?,
+    onPickAvatar: (Uri) -> Unit,
+    onNonPremiumAvatarTap: () -> Unit,
+    onSaveUsername: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var usernameInput by remember { mutableStateOf(currentUsername) }
+
+    val imagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) onPickAvatar(uri)
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(ZenimeSurfaceDark)
+                .border(1.dp, CardOutlineBorder, RoundedCornerShape(20.dp))
+                .padding(20.dp)
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = "Edit Profil Chat",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                )
+
+                // Avatar + tombol ganti foto.
+                Box(
+                    modifier = Modifier
+                        .size(84.dp)
+                        .clip(CircleShape)
+                        .background(ZenimeBackgroundDark)
+                        .border(1.dp, CardOutlineBorder, CircleShape)
+                        .clickable {
+                            if (isPremium) {
+                                imagePicker.launch("image/*")
+                            } else {
+                                onNonPremiumAvatarTap()
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (!currentAvatarUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = currentAvatarUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                        )
+                    }
+
+                    if (isUploadingAvatar) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.55f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .size(26.dp)
+                                .clip(CircleShape)
+                                .background(ZenimePrimary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.CameraAlt,
+                                contentDescription = "Ganti foto profil",
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    }
+                }
+
+                if (!isPremium) {
+                    Text(
+                        text = "Upload foto profil khusus member Premium. Kamu tetap bisa pakai foto akun Google.",
+                        color = Color.White.copy(alpha = 0.5f),
+                        style = MaterialTheme.typography.labelSmall,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                OutlinedTextField(
+                    value = usernameInput,
+                    onValueChange = { if (it.length <= 24) usernameInput = it },
+                    label = { Text("Username", color = Color.White.copy(alpha = 0.6f)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = ZenimePrimary,
+                        unfocusedBorderColor = CardOutlineBorder,
+                        cursorColor = ZenimePrimary
+                    )
+                )
+
+                errorMessage?.let {
+                    Text(
+                        text = it,
+                        color = ZenimePrimary,
+                        style = MaterialTheme.typography.labelSmall,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.weight(1f),
+                        border = BorderStroke(1.dp, CardOutlineBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                    ) {
+                        Text("Batal")
+                    }
+                    Button(
+                        onClick = { onSaveUsername(usernameInput) },
+                        modifier = Modifier.weight(1f),
+                        enabled = !isSaving,
+                        colors = ButtonDefaults.buttonColors(containerColor = ZenimePrimary)
+                    ) {
+                        if (isSaving) {
+                            CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                        } else {
+                            Text("Simpan")
+                        }
+                    }
+                }
+            }
+        }
     }
 }
