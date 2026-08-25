@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.AuthRepository
+import com.example.data.repository.ChatRepository
 import com.example.data.repository.PremiumRepository
 import com.example.data.repository.PremiumStatus
 import com.google.firebase.auth.FirebaseUser
@@ -18,7 +19,8 @@ import kotlinx.coroutines.launch
 class SettingsViewModel(
     private val repository: AnimeRepository,
     private val authRepository: AuthRepository = AuthRepository(),
-    private val premiumRepository: PremiumRepository = PremiumRepository()
+    private val premiumRepository: PremiumRepository = PremiumRepository(),
+    private val chatRepository: ChatRepository = ChatRepository()
 ) : ViewModel() {
 
     val currentUser: StateFlow<FirebaseUser?> = authRepository.currentUser
@@ -27,6 +29,15 @@ class SettingsViewModel(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = authRepository.currentUser.value
         )
+
+    // Username & avatar custom (diset lewat "Edit Profil" di Chat Global) --
+    // null berarti belum pernah diganti, jadi Settings tetap nampilin nama
+    // & foto akun Google apa adanya. Ikut ke-refresh tiap ganti akun.
+    private val _displayName = MutableStateFlow<String?>(null)
+    val displayName: StateFlow<String?> = _displayName
+
+    private val _displayAvatarUrl = MutableStateFlow<String?>(null)
+    val displayAvatarUrl: StateFlow<String?> = _displayAvatarUrl
 
     // Status premium akun yang lagi login -- null berarti belum dicek/lagi
     // dicek/user belum login. Otomatis diambil ulang tiap currentUser
@@ -38,12 +49,33 @@ class SettingsViewModel(
         viewModelScope.launch {
             currentUser.collectLatest { user ->
                 _premiumStatus.value = null
+                _displayName.value = null
+                _displayAvatarUrl.value = null
                 if (user != null) {
                     premiumRepository.checkPremiumStatus(user.uid)
                         .onSuccess { status -> _premiumStatus.value = status }
+                    loadProfileOverride(user.uid)
                 }
             }
         }
+    }
+
+    private suspend fun loadProfileOverride(uid: String) {
+        val profile = try {
+            chatRepository.getProfile(uid)
+        } catch (e: Exception) {
+            null
+        }
+        if (profile != null) {
+            _displayName.value = profile.username.ifBlank { null }
+            _displayAvatarUrl.value = profile.avatarUrl
+        }
+    }
+
+    /** Dipanggil pas Settings resume, buat nangkep perubahan username/avatar yang barusan diedit di Chat Global. */
+    fun refreshProfileOverride() {
+        val uid = currentUser.value?.uid ?: return
+        viewModelScope.launch { loadProfileOverride(uid) }
     }
 
     // Status login lagi diproses -- dipakai buat nampilin loading & nyegah

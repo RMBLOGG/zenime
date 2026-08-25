@@ -36,7 +36,12 @@ data class ChatUiState(
     val isProfileDialogOpen: Boolean = false,
     val isSavingProfile: Boolean = false,
     val isUploadingAvatar: Boolean = false,
-    val profileError: String? = null
+    val profileError: String? = null,
+
+    // Pesan yang lagi mau di-reply (null = gak lagi reply apa-apa).
+    val replyTarget: ChatMessage? = null,
+    // id pesan yang lagi diproses hapus, buat nampilin loading kecil di bubble-nya.
+    val deletingMessageId: Long? = null
 )
 
 /**
@@ -140,9 +145,12 @@ class ChatViewModel(
                     firebaseUid = firebaseUid,
                     username = state.displayUsername,
                     avatarUrl = state.displayAvatarUrl,
-                    message = safeText
+                    message = safeText,
+                    replyToId = state.replyTarget?.id,
+                    replyToUsername = state.replyTarget?.username,
+                    replyToMessage = state.replyTarget?.message
                 )
-                _uiState.value = _uiState.value.copy(isSending = false)
+                _uiState.value = _uiState.value.copy(isSending = false, replyTarget = null)
                 refreshMessages()
                 startCooldown()
             } catch (e: Exception) {
@@ -243,6 +251,42 @@ class ChatViewModel(
                 _uiState.value = _uiState.value.copy(
                     isUploadingAvatar = false,
                     profileError = e.localizedMessage ?: "Gagal upload foto profil"
+                )
+            }
+        }
+    }
+
+    // --- Reply ---
+
+    fun setReplyTarget(message: ChatMessage) {
+        _uiState.value = _uiState.value.copy(replyTarget = message)
+    }
+
+    fun clearReplyTarget() {
+        _uiState.value = _uiState.value.copy(replyTarget = null)
+    }
+
+    // --- Hapus pesan ---
+
+    /** Cuma bisa hapus pesan sendiri -- dicek dua kali (UI cuma nampilin tombol di pesan sendiri, dan di sini juga). */
+    fun deleteMessage(message: ChatMessage) {
+        if (message.firebaseUid != firebaseUid) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(deletingMessageId = message.id, errorMessage = null)
+            try {
+                repository.deleteMessage(id = message.id, firebaseUid = firebaseUid)
+                _uiState.value = _uiState.value.copy(
+                    deletingMessageId = null,
+                    messages = _uiState.value.messages.filterNot { it.id == message.id }
+                )
+                if (_uiState.value.replyTarget?.id == message.id) {
+                    clearReplyTarget()
+                }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    deletingMessageId = null,
+                    errorMessage = e.localizedMessage ?: "Gagal menghapus pesan"
                 )
             }
         }

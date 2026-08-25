@@ -59,6 +59,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,12 +73,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.AsyncImage
 import com.example.R
 import com.example.ui.theme.CardOutlineBorder
@@ -278,8 +282,23 @@ fun SettingsScreen(
     val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
     val isSigningIn by viewModel.isSigningIn.collectAsStateWithLifecycle()
     val loginError by viewModel.loginError.collectAsStateWithLifecycle()
+    val overrideDisplayName by viewModel.displayName.collectAsStateWithLifecycle()
+    val overrideAvatarUrl by viewModel.displayAvatarUrl.collectAsStateWithLifecycle()
 
     val context = LocalContext.current
+
+    // Nangkep perubahan username/avatar yang diedit user di Chat Global --
+    // di-refresh tiap layar Settings ini balik ke depan (resume).
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.refreshProfileOverride()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     var showSignOutConfirm by remember { mutableStateOf(false) }
     var showQualityMenu by remember { mutableStateOf(false) }
     var showIntervalMenu by remember { mutableStateOf(false) }
@@ -395,7 +414,8 @@ fun SettingsScreen(
                                 }
                             } else {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    val photoUrl = user.photoUrl?.toString()
+                                    val photoUrl = overrideAvatarUrl ?: user.photoUrl?.toString()
+                                    val shownName = overrideDisplayName ?: user.displayName
                                     Box(
                                         modifier = Modifier
                                             .size(52.dp)
@@ -413,7 +433,7 @@ fun SettingsScreen(
                                         if (!photoUrl.isNullOrEmpty()) {
                                             AsyncImage(
                                                 model = photoUrl,
-                                                contentDescription = user.displayName,
+                                                contentDescription = shownName,
                                                 contentScale = ContentScale.Crop,
                                                 modifier = Modifier
                                                     .fillMaxSize()
@@ -433,7 +453,7 @@ fun SettingsScreen(
 
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = user.displayName ?: "Pengguna Zenime",
+                                            text = shownName ?: "Pengguna Zenime",
                                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis

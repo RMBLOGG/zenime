@@ -23,17 +23,38 @@ class ChatRepository(
         firebaseUid: String,
         username: String,
         avatarUrl: String?,
-        message: String
+        message: String,
+        replyToId: Long? = null,
+        replyToUsername: String? = null,
+        replyToMessage: String? = null
     ): ChatMessage {
         val result = api.postChatMessage(
             ChatMessageInsert(
                 firebaseUid = firebaseUid,
                 username = username,
                 avatarUrl = avatarUrl,
-                message = message
+                message = message,
+                replyToId = replyToId,
+                replyToUsername = replyToUsername,
+                replyToMessage = replyToMessage
             )
         )
         return result.first()
+    }
+
+    /**
+     * Hapus pesan milik sendiri. Filter firebase_uid ikut dikirim di query
+     * (bukan cuma dicek di UI) biar request-nya sendiri gak bisa dipakai
+     * buat hapus pesan orang lain.
+     */
+    suspend fun deleteMessage(id: Long, firebaseUid: String) {
+        val response = api.deleteChatMessage(
+            idEq = "eq.$id",
+            firebaseUidEq = "eq.$firebaseUid"
+        )
+        if (!response.isSuccessful) {
+            throw IllegalStateException("Gagal menghapus pesan (${response.code()})")
+        }
     }
 
     /** Ambil profil chat custom (username/avatar override) user, kalau ada. */

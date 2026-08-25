@@ -16,7 +16,10 @@ data class ChatMessage(
     @Json(name = "username") val username: String = "Pengguna",
     @Json(name = "avatar_url") val avatarUrl: String? = null,
     @Json(name = "message") val message: String = "",
-    @Json(name = "created_at") val createdAt: String = ""
+    @Json(name = "created_at") val createdAt: String = "",
+    @Json(name = "reply_to_id") val replyToId: Long? = null,
+    @Json(name = "reply_to_username") val replyToUsername: String? = null,
+    @Json(name = "reply_to_message") val replyToMessage: String? = null
 )
 
 /** Body buat POST insert pesan baru -- tanpa id/created_at (di-generate DB). */
@@ -25,5 +28,8 @@ data class ChatMessageInsert(
     @Json(name = "firebase_uid") val firebaseUid: String,
     @Json(name = "username") val username: String,
     @Json(name = "avatar_url") val avatarUrl: String?,
-    @Json(name = "message") val message: String
+    @Json(name = "message") val message: String,
+    @Json(name = "reply_to_id") val replyToId: Long? = null,
+    @Json(name = "reply_to_username") val replyToUsername: String? = null,
+    @Json(name = "reply_to_message") val replyToMessage: String? = null
 )

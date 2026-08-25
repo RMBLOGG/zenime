@@ -30,8 +30,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,6 +46,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -86,6 +89,7 @@ fun ChatScreen(
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val context = LocalContext.current
+    var pendingDelete by remember { mutableStateOf<ChatMessage?>(null) }
 
     // Auto-scroll ke pesan paling bawah tiap ada pesan baru masuk.
     LaunchedEffect(uiState.messages.size) {
@@ -160,7 +164,10 @@ fun ChatScreen(
                             ) { _, message ->
                                 ChatBubble(
                                     message = message,
-                                    isOwnMessage = message.firebaseUid == currentFirebaseUid
+                                    isOwnMessage = message.firebaseUid == currentFirebaseUid,
+                                    isDeleting = uiState.deletingMessageId == message.id,
+                                    onReply = { viewModel.setReplyTarget(message) },
+                                    onDeleteRequest = { pendingDelete = message }
                                 )
                             }
                         }
@@ -174,6 +181,14 @@ fun ChatScreen(
                     color = ZenimePrimary,
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                )
+            }
+
+            uiState.replyTarget?.let { target ->
+                ReplyPreviewBar(
+                    username = target.username,
+                    message = target.message,
+                    onCancel = { viewModel.clearReplyTarget() }
                 )
             }
 
@@ -207,12 +222,42 @@ fun ChatScreen(
             onDismiss = { viewModel.closeProfileDialog() }
         )
     }
+
+    pendingDelete?.let { target ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            containerColor = ZenimeSurfaceDark,
+            title = { Text("Hapus pesan?", color = Color.White) },
+            text = {
+                Text(
+                    "Pesan ini bakal dihapus buat semua orang di Chat Global.",
+                    color = Color.White.copy(alpha = 0.7f)
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteMessage(target)
+                    pendingDelete = null
+                }) {
+                    Text("Hapus", color = ZenimePrimary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) {
+                    Text("Batal", color = Color.White.copy(alpha = 0.7f))
+                }
+            }
+        )
+    }
 }
 
 @Composable
 private fun ChatBubble(
     message: ChatMessage,
     isOwnMessage: Boolean,
+    isDeleting: Boolean,
+    onReply: () -> Unit,
+    onDeleteRequest: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -262,24 +307,130 @@ private fun ChatBubble(
                     )
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
-                Text(
-                    text = message.message,
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodyMedium
-                )
+                Column {
+                    if (!message.replyToUsername.isNullOrBlank()) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.Black.copy(alpha = 0.18f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Column {
+                                Text(
+                                    text = message.replyToUsername,
+                                    color = if (isOwnMessage) Color.White else ZenimePrimary,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = message.replyToMessage ?: "",
+                                    color = Color.White.copy(alpha = 0.75f),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                    }
+
+                    Text(
+                        text = message.message,
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
             }
 
-            Text(
-                text = formatChatTime(message.createdAt),
-                color = Color.White.copy(alpha = 0.4f),
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                modifier = Modifier.padding(top = 2.dp, start = 4.dp, end = 4.dp)
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = formatChatTime(message.createdAt),
+                    color = Color.White.copy(alpha = 0.4f),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp)
+                )
+                Text(
+                    text = "Balas",
+                    color = Color.White.copy(alpha = 0.5f),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                    modifier = Modifier
+                        .padding(start = 8.dp)
+                        .clickable(onClick = onReply)
+                )
+                if (isOwnMessage) {
+                    if (isDeleting) {
+                        CircularProgressIndicator(
+                            color = Color.White.copy(alpha = 0.5f),
+                            strokeWidth = 1.5.dp,
+                            modifier = Modifier
+                                .padding(start = 8.dp)
+                                .size(10.dp)
+                        )
+                    } else {
+                        Text(
+                            text = "Hapus",
+                            color = Color.White.copy(alpha = 0.5f),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                            modifier = Modifier
+                                .padding(start = 8.dp)
+                                .clickable(onClick = onDeleteRequest)
+                        )
+                    }
+                }
+            }
         }
 
         if (isOwnMessage) {
             Spacer(modifier = Modifier.width(8.dp))
             ChatAvatar(url = message.avatarUrl)
+        }
+    }
+}
+
+@Composable
+private fun ReplyPreviewBar(
+    username: String,
+    message: String,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(ZenimeSurfaceDark)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .height(30.dp)
+                .background(ZenimePrimary)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "Membalas $username",
+                color = ZenimePrimary,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = message,
+                color = Color.White.copy(alpha = 0.6f),
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        IconButton(onClick = onCancel, modifier = Modifier.size(28.dp)) {
+            Icon(
+                imageVector = Icons.Filled.Close,
+                contentDescription = "Batal balas",
+                tint = Color.White.copy(alpha = 0.6f),
+                modifier = Modifier.size(16.dp)
+            )
         }
     }
 }
