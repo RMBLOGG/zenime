@@ -277,6 +277,14 @@ fun HomeScreen(
                 },
                 modifier = Modifier.align(Alignment.TopCenter)
             )
+
+            // Tombol donasi SociaBuzz -- versi native dari widget "Button on
+            // Website" mereka, floating di pojok kanan bawah kayak di web.
+            DonationFab(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 16.dp, bottom = 24.dp)
+            )
         }
     }
 }
