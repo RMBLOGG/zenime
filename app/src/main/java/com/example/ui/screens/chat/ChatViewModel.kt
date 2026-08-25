@@ -52,23 +52,25 @@ data class ChatUiState(
  * timestamp pesan terakhir per firebase_uid sebelum insert).
  *
  * Username & avatar chat: username bisa diganti SEMUA user (disimpan di
- * tabel `chat_profiles`, override nama dari akun Google). Avatar custom
- * (upload dari galeri) DIBATASI khusus user Premium -- dicek lewat
- * PremiumRepository sebelum ngizinin upload; user non-premium tetap pakai
- * foto profil Google-nya.
+ * tabel `chat_profiles`, override nama dari akun Google). Avatar DEFAULT
+ * di chat adalah avatar auto-generate Zenime sendiri (warna + inisial,
+ * lihat GeneratedAvatar.kt) -- BUKAN foto akun Google, biar gak "kebawa"
+ * foto asli user yang belum tentu mau dipajang di chat publik. Avatar
+ * foto asli (upload dari galeri) DIBATASI khusus user Premium.
  */
 class ChatViewModel(
     private val repository: ChatRepository,
     private val premiumRepository: PremiumRepository,
     private val firebaseUid: String,
-    fallbackUsername: String,
-    private val fallbackAvatarUrl: String?
+    fallbackUsername: String
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
         ChatUiState(
             displayUsername = fallbackUsername,
-            displayAvatarUrl = fallbackAvatarUrl
+            // null = belum ada foto custom -> UI nampilin GeneratedAvatar
+            // (avatar warna + inisial), bukan foto Google.
+            displayAvatarUrl = null
         )
     )
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -88,19 +90,20 @@ class ChatViewModel(
             } catch (e: Exception) {
                 null
             }
-            if (profile != null) {
-                _uiState.value = _uiState.value.copy(
-                    displayUsername = profile.username.ifBlank { fallbackUsername },
-                    // Avatar custom (premium) menang; kalau belum pernah upload, tetap
-                    // pakai foto Google bawaan.
-                    displayAvatarUrl = profile.avatarUrl ?: fallbackAvatarUrl
-                )
-            }
 
-            premiumRepository.checkPremiumStatus(firebaseUid)
-                .onSuccess { status ->
-                    _uiState.value = _uiState.value.copy(isPremium = status.isPremium)
-                }
+            val premiumResult = premiumRepository.checkPremiumStatus(firebaseUid)
+            val isPremium = premiumResult.getOrNull()?.isPremium ?: false
+
+            // Foto custom (hasil upload) cuma dipasang kalau user-nya masih
+            // premium. Kalau enggak (baik belum pernah upload, maupun udah
+            // expired), avatar dibiarkan null -> tampil avatar generate.
+            val resolvedAvatarUrl = if (isPremium) profile?.avatarUrl else null
+
+            _uiState.value = _uiState.value.copy(
+                displayUsername = profile?.username?.ifBlank { fallbackUsername } ?: fallbackUsername,
+                displayAvatarUrl = resolvedAvatarUrl,
+                isPremium = isPremium
+            )
         }
     }
 

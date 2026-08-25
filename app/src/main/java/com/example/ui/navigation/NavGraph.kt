@@ -360,8 +360,7 @@ fun ZenimeAppNavHost(
                                     repository = ChatRepository(),
                                     premiumRepository = PremiumRepository(),
                                     firebaseUid = uid,
-                                    fallbackUsername = currentUser?.displayName ?: "Pengguna",
-                                    fallbackAvatarUrl = currentUser?.photoUrl?.toString()
+                                    fallbackUsername = currentUser?.displayName ?: "Pengguna"
                                 )
                             }
                         }

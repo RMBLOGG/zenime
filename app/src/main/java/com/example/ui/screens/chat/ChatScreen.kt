@@ -68,6 +68,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.data.model.ChatMessage
+import com.example.ui.components.GeneratedAvatar
 import com.example.ui.components.ZenimeHeader
 import com.example.ui.components.ZenimeScreenTitle
 import com.example.ui.theme.CardOutlineBorder
@@ -212,6 +213,7 @@ fun ChatScreen(
         EditProfileDialog(
             currentUsername = uiState.displayUsername,
             currentAvatarUrl = uiState.displayAvatarUrl,
+            avatarSeed = currentFirebaseUid,
             isPremium = uiState.isPremium,
             isSaving = uiState.isSavingProfile,
             isUploadingAvatar = uiState.isUploadingAvatar,
@@ -265,7 +267,7 @@ private fun ChatBubble(
         horizontalArrangement = if (isOwnMessage) Arrangement.End else Arrangement.Start
     ) {
         if (!isOwnMessage) {
-            ChatAvatar(url = message.avatarUrl)
+            ChatAvatar(url = message.avatarUrl, seed = message.firebaseUid, label = message.username)
             Spacer(modifier = Modifier.width(8.dp))
         }
 
@@ -382,7 +384,7 @@ private fun ChatBubble(
 
         if (isOwnMessage) {
             Spacer(modifier = Modifier.width(8.dp))
-            ChatAvatar(url = message.avatarUrl)
+            ChatAvatar(url = message.avatarUrl, seed = message.firebaseUid, label = message.username)
         }
     }
 }
@@ -436,14 +438,14 @@ private fun ReplyPreviewBar(
 }
 
 @Composable
-private fun ChatAvatar(url: String?, modifier: Modifier = Modifier) {
+private fun ChatAvatar(url: String?, seed: String, label: String, modifier: Modifier = Modifier) {
     if (url.isNullOrBlank()) {
-        Box(
-            modifier = modifier
-                .size(30.dp)
-                .clip(CircleShape)
-                .background(ZenimeSurfaceDark)
-                .border(1.dp, CardOutlineBorder, CircleShape)
+        GeneratedAvatar(
+            seed = seed,
+            label = label,
+            size = 30.dp,
+            modifier = modifier,
+            borderColor = CardOutlineBorder
         )
     } else {
         AsyncImage(
@@ -546,6 +548,7 @@ private fun formatChatTime(isoTimestamp: String): String {
 private fun EditProfileDialog(
     currentUsername: String,
     currentAvatarUrl: String?,
+    avatarSeed: String,
     isPremium: Boolean,
     isSaving: Boolean,
     isUploadingAvatar: Boolean,
@@ -607,6 +610,12 @@ private fun EditProfileDialog(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .clip(CircleShape)
+                        )
+                    } else {
+                        GeneratedAvatar(
+                            seed = avatarSeed,
+                            label = currentUsername,
+                            size = 84.dp
                         )
                     }
 
