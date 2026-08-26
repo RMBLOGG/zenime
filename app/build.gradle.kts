@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.zenime.app"
     minSdk = 24
     targetSdk = 36
-    versionCode = 1
-    versionName = "1.0"
+    versionCode = 2
+    versionName = "1.1"
 
     // Unity Ads Game ID (Monetization > Apps di dashboard Unity Cloud).
     buildConfigField("String", "UNITY_ADS_GAME_ID", "\"800355766\"")
