@@ -415,7 +415,15 @@ private fun PremiumCheckoutCard(
 
                     Button(
                         onClick = {
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(SupabaseConfig.STOREFRONT_URL))
+                            // Kirim kode akun + paket yang lagi dipilih lewat query param,
+                            // biar web-nya (beli-premium) langsung ke-prefill -- user gak
+                            // perlu copy-paste kode & pilih paket lagi secara manual.
+                            val storefrontUri = Uri.parse(SupabaseConfig.STOREFRONT_URL)
+                                .buildUpon()
+                                .appendQueryParameter("code", zenimeCode)
+                                .appendQueryParameter("package_id", pkg.id)
+                                .build()
+                            val intent = Intent(Intent.ACTION_VIEW, storefrontUri)
                             context.startActivity(intent)
                         },
                         modifier = Modifier.fillMaxWidth(),
