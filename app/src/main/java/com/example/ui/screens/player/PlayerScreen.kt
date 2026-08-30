@@ -5,6 +5,7 @@ import android.net.Uri
 import android.provider.Settings
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
@@ -51,6 +52,10 @@ import androidx.compose.material.icons.filled.BrightnessLow
 import androidx.compose.material.icons.filled.BrightnessMedium
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material.icons.filled.DownloadForOffline
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Lock
@@ -64,12 +69,14 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -115,6 +122,7 @@ import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.ProgressiveMediaSource
@@ -123,13 +131,17 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.ads.AdManager
 import com.example.data.common.Result
+import com.example.data.local.DownloadStatus
+import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.model.EpisodeItem
 import com.example.ui.components.ErrorStateView
 import com.example.util.PipController
 import com.example.util.findActivity
+import com.example.util.isDownloadAllowed
 import com.example.util.isQualityLocked
 import com.example.util.qualityValueP
 import kotlinx.coroutines.delay
+import java.io.File
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
@@ -205,8 +217,11 @@ fun PlayerScreen(
     val autoSkipIntro by viewModel.autoSkipIntro.collectAsStateWithLifecycle()
     val autoSkipOutro by viewModel.autoSkipOutro.collectAsStateWithLifecycle()
     val episodeListState by viewModel.episodeListState.collectAsStateWithLifecycle()
+    val downloadEntry by viewModel.downloadEntry.collectAsStateWithLifecycle()
+    val downloadErrorMessage by viewModel.downloadErrorMessage.collectAsStateWithLifecycle()
 
     var showEpisodeList by remember { mutableStateOf(false) }
+    var showDeleteDownloadConfirm by remember { mutableStateOf(false) }
 
     // Nge-track apakah seek "lanjutin dari terakhir nonton" udah pernah
     // dijalanin. Cuma sekali di awal -- ganti server/kualitas belakangan
@@ -377,17 +392,30 @@ fun PlayerScreen(
         }
     }
 
-    // Update MediaSource when selectedServer changes
-    LaunchedEffect(selectedServer) {
-        val serverUrl = selectedServer?.link
-        if (!serverUrl.isNullOrEmpty()) {
-            // Kalau ini ganti server/kualitas di TENGAH nonton (bukan load
-            // pertama), jaga posisi biar gak balik ke awal. Load pertama
-            // biarin 0 di sini -- posisi "lanjutin dari terakhir nonton"
-            // ditangani terpisah di listener STATE_READY di bawah, soalnya
-            // resumePositionMs dari histori bisa belum kebaca pas titik ini.
-            val positionToKeep = if (hasAppliedResume) exoPlayer.currentPosition else 0L
+    // Update MediaSource when selectedServer changes (atau pas file offline
+    // episode ini kedetek udah COMPLETED -- lihat pengecekan localFile di bawah).
+    LaunchedEffect(selectedServer, downloadEntry?.status) {
+        // Prioritaskan file yang udah di-download (offline) kalau ada dan
+        // masih beneran ada di disk -- gak perlu internet/link server sama
+        // sekali buat kasus ini.
+        val localPath = downloadEntry?.takeIf { it.status == DownloadStatus.COMPLETED }?.localFilePath
+        val localFile = localPath?.let { File(it) }?.takeIf { it.exists() }
 
+        val serverUrl = selectedServer?.link
+        if (localFile == null && serverUrl.isNullOrEmpty()) return@LaunchedEffect
+
+        // Kalau ini ganti server/kualitas di TENGAH nonton (bukan load
+        // pertama), jaga posisi biar gak balik ke awal. Load pertama
+        // biarin 0 di sini -- posisi "lanjutin dari terakhir nonton"
+        // ditangani terpisah di listener STATE_READY di bawah, soalnya
+        // resumePositionMs dari histori bisa belum kebaca pas titik ini.
+        val positionToKeep = if (hasAppliedResume) exoPlayer.currentPosition else 0L
+
+        val mediaSource = if (localFile != null) {
+            // File lokal -- gak butuh header Referer/User-Agent sama sekali.
+            ProgressiveMediaSource.Factory(DefaultDataSource.Factory(context))
+                .createMediaSource(MediaItem.fromUri(Uri.fromFile(localFile)))
+        } else {
             val httpDataSourceFactory = DefaultHttpDataSource.Factory()
                 .setDefaultRequestProperties(
                     mapOf(
@@ -395,17 +423,16 @@ fun PlayerScreen(
                         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
                     )
                 )
-
-            val mediaSource = ProgressiveMediaSource.Factory(httpDataSourceFactory)
+            ProgressiveMediaSource.Factory(httpDataSourceFactory)
                 .createMediaSource(MediaItem.fromUri(Uri.parse(serverUrl)))
-
-            exoPlayer.setMediaSource(mediaSource)
-            if (positionToKeep > 0) {
-                exoPlayer.seekTo(positionToKeep)
-            }
-            exoPlayer.prepare()
-            exoPlayer.playWhenReady = true
         }
+
+        exoPlayer.setMediaSource(mediaSource)
+        if (positionToKeep > 0) {
+            exoPlayer.seekTo(positionToKeep)
+        }
+        exoPlayer.prepare()
+        exoPlayer.playWhenReady = true
     }
 
     // ExoPlayer listener
@@ -799,6 +826,36 @@ fun PlayerScreen(
                                             }
                                         )
                                     }
+
+                                    Spacer(modifier = Modifier.width(6.dp))
+
+                                    // Download offline -- fitur khusus Premium. Non-premium
+                                    // yang mijit langsung diarahin ke onUpgradeClick, sama
+                                    // pola-nya kayak kualitas terkunci di atas.
+                                    DownloadIconButton(
+                                        entry = downloadEntry,
+                                        onDownloadClick = {
+                                            if (isDownloadAllowed(isPremium)) {
+                                                viewModel.downloadEpisode(
+                                                    epDetail?.title,
+                                                    epDetail?.index
+                                                )
+                                            } else {
+                                                onUpgradeClick()
+                                            }
+                                        },
+                                        onCompletedClick = { showDeleteDownloadConfirm = true },
+                                        onFailedClick = {
+                                            if (isDownloadAllowed(isPremium)) {
+                                                viewModel.downloadEpisode(
+                                                    epDetail?.title,
+                                                    epDetail?.index
+                                                )
+                                            } else {
+                                                onUpgradeClick()
+                                            }
+                                        }
+                                    )
                                 }
 
                                 // Center Play / Rewind / Forward Controls
@@ -968,6 +1025,42 @@ fun PlayerScreen(
             }
         }
     }
+
+    // Konfirmasi hapus file offline -- dipisah dari galeri (bukan
+    // file:// biasa) jadi hapus manual dari sini emang satu-satunya cara.
+    if (showDeleteDownloadConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDownloadConfirm = false },
+            title = { Text("Hapus download?") },
+            text = {
+                Text("Episode ini bakal dihapus dari penyimpanan offline. Kamu bisa download ulang kapan saja.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDeleteDownloadConfirm = false
+                    viewModel.deleteDownload()
+                }) {
+                    Text("Hapus", color = Color(0xFFE57373))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDownloadConfirm = false }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
+
+    // Pesan error download (mis. gagal ambil link server) -- toast sekali
+    // tampil lalu di-clear, biar gak nyangkut nampil ulang kalau layar
+    // di-recompose.
+    LaunchedEffect(downloadErrorMessage) {
+        val message = downloadErrorMessage
+        if (message != null) {
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            viewModel.clearDownloadError()
+        }
+    }
 }
 
 /** Pilih ikon brightness yang paling nyambung sama level saat ini. */
@@ -1078,6 +1171,81 @@ private fun PlayerIconButton(
                 tint = Color.White,
                 modifier = Modifier.size(iconSize)
             )
+        }
+    }
+}
+
+/**
+ * Ikon tombol download offline, state-nya ngikutin [DownloadedEpisodeEntity]
+ * punya episode ini: belum ada -> ikon download polos; QUEUED/DOWNLOADING ->
+ * ring progress + persen; COMPLETED -> ikon centang ijo (tap buat hapus);
+ * FAILED -> ikon error merah (tap buat coba lagi).
+ */
+@Composable
+private fun DownloadIconButton(
+    entry: DownloadedEpisodeEntity?,
+    onDownloadClick: () -> Unit,
+    onCompletedClick: () -> Unit,
+    onFailedClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val size = 40.dp
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(Color.Black.copy(alpha = 0.35f))
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = {
+                    when (entry?.status) {
+                        DownloadStatus.COMPLETED -> onCompletedClick()
+                        DownloadStatus.FAILED -> onFailedClick()
+                        DownloadStatus.QUEUED, DownloadStatus.DOWNLOADING -> Unit // lagi jalan, gak ada aksi
+                        null -> onDownloadClick()
+                    }
+                }
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        when (entry?.status) {
+            DownloadStatus.QUEUED, DownloadStatus.DOWNLOADING -> {
+                val progress = if (entry.totalBytes > 0) {
+                    (entry.downloadedBytes.toFloat() / entry.totalBytes.toFloat()).coerceIn(0f, 1f)
+                } else 0f
+                CircularProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.size(24.dp),
+                    color = PlayerAccent,
+                    trackColor = Color.White.copy(alpha = 0.2f),
+                    strokeWidth = 2.dp
+                )
+            }
+            DownloadStatus.COMPLETED -> {
+                Icon(
+                    imageVector = Icons.Default.DownloadDone,
+                    contentDescription = "Sudah didownload, ketuk buat hapus",
+                    tint = Color(0xFF4CAF50),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            DownloadStatus.FAILED -> {
+                Icon(
+                    imageVector = Icons.Default.ErrorOutline,
+                    contentDescription = "Download gagal, ketuk buat coba lagi",
+                    tint = Color(0xFFE57373),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            null -> {
+                Icon(
+                    imageVector = Icons.Default.DownloadForOffline,
+                    contentDescription = "Download buat nonton offline",
+                    tint = Color.White,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
         }
     }
 }

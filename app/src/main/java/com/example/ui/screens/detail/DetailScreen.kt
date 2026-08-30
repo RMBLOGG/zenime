@@ -1,6 +1,7 @@
 package com.example.ui.screens.detail
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -33,11 +34,16 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material.icons.filled.DownloadForOffline
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,6 +51,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -75,9 +82,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.data.common.Result
+import com.example.data.local.DownloadStatus
+import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.model.EpisodeItem
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.ShimmerEpisodeList
+import com.example.util.isDownloadAllowed
 import com.example.util.isEpisodeLocked
 import com.example.ui.components.ShimmerHorizontalSection
 import com.example.ui.components.ShimmerPosterItem
@@ -92,6 +102,7 @@ fun DetailScreen(
     viewModel: DetailViewModel,
     onBackClick: () -> Unit,
     onEpisodeClick: (episodeId: String, episodeTitle: String) -> Unit,
+    onUpgradeClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val detailState by viewModel.detailState.collectAsStateWithLifecycle()
@@ -100,8 +111,20 @@ fun DetailScreen(
     val watchHistory by viewModel.watchHistory.collectAsStateWithLifecycle()
     val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
     val previewUrl by viewModel.previewUrl.collectAsStateWithLifecycle()
+    val downloads by viewModel.downloads.collectAsStateWithLifecycle()
+    val downloadErrorMessage by viewModel.downloadErrorMessage.collectAsStateWithLifecycle()
 
     var isSynopsisExpanded by remember { mutableStateOf(false) }
+    var episodeToDeleteDownload by remember { mutableStateOf<String?>(null) }
+
+    val context = LocalContext.current
+    LaunchedEffect(downloadErrorMessage) {
+        val message = downloadErrorMessage
+        if (message != null) {
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            viewModel.clearDownloadError()
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -421,11 +444,22 @@ fun DetailScreen(
                         } else {
                             items(episodesList, key = { it.id }) { ep ->
                                 val isWatched = watchHistory?.episodeId == ep.id
+                                val downloadEntry = downloads.find { it.episodeId == ep.id }
                                 EpisodeHorizontalCard(
                                     episode = ep,
                                     posterUrl = ep.resolvedImageUrl ?: anime.image_cover ?: anime.image_poster,
                                     isWatched = isWatched,
                                     isLocked = isEpisodeLocked(ep.index, isPremium),
+                                    downloadEntry = downloadEntry,
+                                    isDownloadAllowed = isDownloadAllowed(isPremium),
+                                    onDownloadClick = {
+                                        if (isDownloadAllowed(isPremium)) {
+                                            viewModel.downloadEpisode(ep)
+                                        } else {
+                                            onUpgradeClick()
+                                        }
+                                    },
+                                    onDeleteDownloadClick = { episodeToDeleteDownload = ep.id },
                                     onClick = {
                                         onEpisodeClick(ep.id, ep.title ?: "Episode ${ep.index}")
                                     }
@@ -437,6 +471,28 @@ fun DetailScreen(
             }
         }
     }
+
+    val episodeIdPendingDelete = episodeToDeleteDownload
+    if (episodeIdPendingDelete != null) {
+        AlertDialog(
+            onDismissRequest = { episodeToDeleteDownload = null },
+            title = { Text("Hapus download?") },
+            text = { Text("Episode ini bakal dihapus dari penyimpanan offline. Kamu bisa download ulang kapan saja.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteDownload(episodeIdPendingDelete)
+                    episodeToDeleteDownload = null
+                }) {
+                    Text("Hapus", color = Color(0xFFE57373))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { episodeToDeleteDownload = null }) {
+                    Text("Batal")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -446,6 +502,10 @@ fun EpisodeHorizontalCard(
     isWatched: Boolean,
     onClick: () -> Unit,
     isLocked: Boolean = false,
+    downloadEntry: DownloadedEpisodeEntity? = null,
+    isDownloadAllowed: Boolean = false,
+    onDownloadClick: () -> Unit = {},
+    onDeleteDownloadClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -576,6 +636,87 @@ fun EpisodeHorizontalCard(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Tombol download offline -- cuma ditampilin kalau episode ini
+            // gak sedang terkunci Premium (biar gak dobel sama ikon gembok
+            // di thumbnail), dan aksinya sendiri masih dicek isDownloadAllowed
+            // (fitur download-nya sendiri exclusive Premium).
+            if (!isLocked) {
+                EpisodeDownloadButton(
+                    entry = downloadEntry,
+                    onDownloadClick = onDownloadClick,
+                    onDeleteClick = onDeleteDownloadClick,
+                    isDownloadAllowed = isDownloadAllowed
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EpisodeDownloadButton(
+    entry: DownloadedEpisodeEntity?,
+    onDownloadClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    isDownloadAllowed: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(32.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+            .clickable {
+                when (entry?.status) {
+                    DownloadStatus.COMPLETED -> onDeleteClick()
+                    DownloadStatus.QUEUED, DownloadStatus.DOWNLOADING -> Unit
+                    DownloadStatus.FAILED, null -> onDownloadClick()
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        when (entry?.status) {
+            DownloadStatus.QUEUED, DownloadStatus.DOWNLOADING -> {
+                val progress = if (entry.totalBytes > 0) {
+                    (entry.downloadedBytes.toFloat() / entry.totalBytes.toFloat()).coerceIn(0f, 1f)
+                } else 0f
+                CircularProgressIndicator(
+                    progress = { progress },
+                    modifier = Modifier.size(18.dp),
+                    color = ZenimePrimary,
+                    strokeWidth = 2.dp
+                )
+            }
+            DownloadStatus.COMPLETED -> {
+                Icon(
+                    imageVector = Icons.Default.DownloadDone,
+                    contentDescription = "Sudah didownload, ketuk buat hapus",
+                    tint = Color(0xFF4CAF50),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            DownloadStatus.FAILED -> {
+                Icon(
+                    imageVector = Icons.Default.ErrorOutline,
+                    contentDescription = "Download gagal, ketuk buat coba lagi",
+                    tint = Color(0xFFE57373),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            null -> {
+                Icon(
+                    imageVector = if (isDownloadAllowed) Icons.Default.DownloadForOffline else Icons.Default.Lock,
+                    contentDescription = if (isDownloadAllowed) {
+                        "Download buat nonton offline"
+                    } else {
+                        "Download episode khusus Premium"
+                    },
+                    tint = if (isDownloadAllowed) MaterialTheme.colorScheme.onSurfaceVariant else ZenimePrimary,
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
     }

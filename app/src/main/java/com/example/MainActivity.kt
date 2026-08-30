@@ -21,6 +21,7 @@ import com.example.ads.AdManager
 import com.example.data.api.GithubUpdateChecker
 import com.example.data.api.NetworkModule
 import com.example.data.api.RemoteConfigManager
+import com.example.data.download.EpisodeDownloadManager
 import com.example.data.local.UserPreferencesRepository
 import com.example.data.local.ZenimeDatabase
 import com.example.data.repository.AnimeRepository
@@ -66,11 +67,21 @@ class MainActivity : ComponentActivity() {
 
         val database = ZenimeDatabase.getInstance(this)
         val userPrefs = UserPreferencesRepository(this)
+        val downloadManager = EpisodeDownloadManager(
+            appContext = applicationContext,
+            dao = database.zenimeDao()
+        )
         val repository = AnimeRepository(
             api = NetworkModule.api,
             dao = database.zenimeDao(),
-            userPrefs = userPrefs
+            userPrefs = userPrefs,
+            downloadManager = downloadManager
         )
+
+        // Nyambungin lagi polling progress buat download yang masih
+        // QUEUED/DOWNLOADING dari sesi sebelumnya (system DownloadManager-nya
+        // sendiri tetep jalan terus di background walau app kemarin di-kill).
+        repository.reconcileActiveDownloads()
 
         // Mulai narik data homepage (buat poster backdrop LoginScreen dan
         // konten HomeScreen) sesegera mungkin, sebelum compose pertama kali

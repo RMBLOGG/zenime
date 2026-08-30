@@ -3,6 +3,7 @@ package com.example.ui.screens.player
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.common.Result
+import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.model.EpisodeItem
 import com.example.data.model.StreamResponse
 import com.example.data.model.StreamServer
@@ -64,11 +65,53 @@ class PlayerViewModel(
     private val _episodeListState = MutableStateFlow<Result<List<EpisodeItem>>>(Result.Loading)
     val episodeListState: StateFlow<Result<List<EpisodeItem>>> = _episodeListState.asStateFlow()
 
+    // Status download offline episode INI -- null berarti belum pernah
+    // di-download sama sekali. Dipakai PlayerScreen buat nentuin ikon
+    // tombol download (belum ada / lagi jalan berapa persen / selesai / gagal).
+    val downloadEntry: StateFlow<DownloadedEpisodeEntity?> = repository.downloadForEpisode(episodeId)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    // Pesan error transient buat download (mis. gagal fetch link stream)
+    // -- ditampilin sekali sebagai snackbar/toast lalu di-clear.
+    private val _downloadErrorMessage = MutableStateFlow<String?>(null)
+    val downloadErrorMessage: StateFlow<String?> = _downloadErrorMessage.asStateFlow()
+
     init {
         loadStream()
         loadAnimeInfo()
         loadResumePosition()
         loadEpisodeList()
+    }
+
+    /** Mulai download episode ini buat offline. Gating premium dicek di PlayerScreen. */
+    fun downloadEpisode(episodeTitle: String?, episodeIndex: String?) {
+        viewModelScope.launch {
+            val result = repository.enqueueEpisodeDownload(
+                episodeId = episodeId,
+                animeId = animeId,
+                animeTitle = currentAnimeTitle,
+                posterUrl = currentPosterUrl,
+                episodeTitle = episodeTitle,
+                episodeIndex = episodeIndex
+            )
+            if (result is Result.Error) {
+                _downloadErrorMessage.value = result.message
+            }
+        }
+    }
+
+    fun deleteDownload() {
+        viewModelScope.launch {
+            repository.deleteEpisodeDownload(episodeId)
+        }
+    }
+
+    fun clearDownloadError() {
+        _downloadErrorMessage.value = null
     }
 
     private fun loadEpisodeList() {

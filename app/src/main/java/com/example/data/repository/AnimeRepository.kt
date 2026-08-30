@@ -2,6 +2,8 @@ package com.example.data.repository
 
 import com.example.data.api.DayynimeV5Api
 import com.example.data.common.Result
+import com.example.data.download.EpisodeDownloadManager
+import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.local.FavoriteEntity
 import com.example.data.local.UserPreferencesRepository
 import com.example.data.local.WatchHistoryEntity
@@ -12,6 +14,7 @@ import com.example.data.model.GenreItem
 import com.example.data.model.HomeResponse
 import com.example.data.model.SearchResponse
 import com.example.data.model.StreamResponse
+import com.example.util.qualityValueP
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -24,7 +27,8 @@ import java.util.concurrent.ConcurrentHashMap
 class AnimeRepository(
     private val api: DayynimeV5Api,
     private val dao: ZenimeDao,
-    val userPrefs: UserPreferencesRepository
+    val userPrefs: UserPreferencesRepository,
+    private val downloadManager: EpisodeDownloadManager
 ) {
 
     // ---- Cache infrastructure ----------------------------------------
@@ -354,4 +358,70 @@ class AnimeRepository(
 
     suspend fun deleteHistory(animeId: String) = dao.deleteHistory(animeId)
     suspend fun clearHistory() = dao.clearHistory()
+
+    // ---- Downloads (nonton offline, premium only) -------------------------
+    val allDownloads: Flow<List<DownloadedEpisodeEntity>> = downloadManager.allDownloads
+
+    fun downloadsForAnime(animeId: String): Flow<List<DownloadedEpisodeEntity>> =
+        downloadManager.downloadsForAnime(animeId)
+
+    fun downloadForEpisode(episodeId: String): Flow<DownloadedEpisodeEntity?> =
+        downloadManager.downloadForEpisode(episodeId)
+
+    suspend fun localDownloadedFile(episodeId: String) = downloadManager.localFileFor(episodeId)
+
+    fun reconcileActiveDownloads() = downloadManager.reconcileActiveDownloads()
+
+    suspend fun deleteEpisodeDownload(episodeId: String) = downloadManager.deleteDownload(episodeId)
+
+    /**
+     * Enqueue download episode buat offline. SENGAJA fetch stream link yang
+     * BARU di sini (bukan pakai StreamResponse yang mungkin udah dipegang
+     * ViewModel dari sebelumnya) -- link dari upstream itu signed URL yang
+     * cepet expired, jadi selalu diambil pas-pasan sama waktu download-nya
+     * dimulai, gak peduli caller-nya PlayerScreen atau episode list di
+     * DetailScreen.
+     *
+     * Kualitas yang diambil otomatis yang PALING TINGGI dari server yang
+     * tersedia -- gating premium buat fitur download ini sendiri (siapa
+     * yang boleh mijit tombolnya) dicek di UI pakai isPremium, BUKAN di sini.
+     */
+    suspend fun enqueueEpisodeDownload(
+        episodeId: String,
+        animeId: String,
+        animeTitle: String,
+        posterUrl: String?,
+        episodeTitle: String?,
+        episodeIndex: String?
+    ): Result<Unit> {
+        return try {
+            val stream = api.getEpisodeStream(episodeId)
+            val servers = stream.servers.orEmpty()
+            val bestServer = servers
+                .filter { !it.link.isNullOrBlank() }
+                .maxByOrNull { qualityValueP(it.quality) ?: -1 }
+                ?: return Result.Error(
+                    IllegalStateException("Tidak ada server yang tersedia"),
+                    "Link download tidak ditemukan untuk episode ini"
+                )
+
+            val outcome = downloadManager.startDownload(
+                episodeId = episodeId,
+                animeId = animeId,
+                animeTitle = animeTitle,
+                posterUrl = posterUrl,
+                episodeTitle = episodeTitle,
+                episodeIndex = episodeIndex,
+                quality = bestServer.quality,
+                videoUrl = bestServer.link!!
+            )
+
+            outcome.fold(
+                onSuccess = { Result.Success(Unit) },
+                onFailure = { e -> Result.Error(e, e.localizedMessage ?: "Gagal memulai download") }
+            )
+        } catch (e: Exception) {
+            Result.Error(e, e.localizedMessage ?: "Gagal memulai download")
+        }
+    }
 }

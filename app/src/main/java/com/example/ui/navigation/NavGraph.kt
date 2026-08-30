@@ -387,6 +387,9 @@ fun ZenimeAppNavHost(
                     onBackClick = { navController.popBackStack() },
                     onEpisodeClick = { episodeId, _ ->
                         navController.navigate(Screen.Player.createRoute(episodeId, animeId))
+                    },
+                    onUpgradeClick = {
+                        navController.navigate(Screen.Premium.route)
                     }
                 )
             }

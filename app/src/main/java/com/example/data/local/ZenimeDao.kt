@@ -37,4 +37,29 @@ interface ZenimeDao {
 
     @Query("DELETE FROM watch_history")
     suspend fun clearHistory()
+
+    // Downloads
+    @Query("SELECT * FROM downloaded_episodes ORDER BY createdAt DESC")
+    fun getAllDownloads(): Flow<List<DownloadedEpisodeEntity>>
+
+    @Query("SELECT * FROM downloaded_episodes WHERE animeId = :animeId")
+    fun getDownloadsForAnime(animeId: String): Flow<List<DownloadedEpisodeEntity>>
+
+    @Query("SELECT * FROM downloaded_episodes WHERE episodeId = :episodeId LIMIT 1")
+    fun getDownloadForEpisode(episodeId: String): Flow<DownloadedEpisodeEntity?>
+
+    @Query("SELECT * FROM downloaded_episodes WHERE episodeId = :episodeId LIMIT 1")
+    suspend fun getDownloadForEpisodeOnce(episodeId: String): DownloadedEpisodeEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertDownload(download: DownloadedEpisodeEntity)
+
+    @Query("DELETE FROM downloaded_episodes WHERE episodeId = :episodeId")
+    suspend fun deleteDownload(episodeId: String)
+
+    // Dipanggil sekali pas app start buat nyambungin lagi polling progress
+    // punya download yang masih QUEUED/DOWNLOADING pas app kemarin ke-kill
+    // (system DownloadManager sendiri tetep lanjut download di background).
+    @Query("SELECT * FROM downloaded_episodes WHERE status = 'QUEUED' OR status = 'DOWNLOADING'")
+    suspend fun getActiveDownloadsOnce(): List<DownloadedEpisodeEntity>
 }

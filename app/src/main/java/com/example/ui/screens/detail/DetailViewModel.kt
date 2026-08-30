@@ -3,6 +3,7 @@ package com.example.ui.screens.detail
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.common.Result
+import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.local.WatchHistoryEntity
 import com.example.data.model.AnimeItem
 import com.example.data.model.EpisodeItem
@@ -54,11 +55,53 @@ class DetailViewModel(
             initialValue = null
         )
 
+    // Semua episode anime ini yang lagi/udah didownload, dipakai
+    // EpisodeHorizontalCard buat nampilin status per-episode (belum ada,
+    // progress, selesai, gagal) tanpa perlu masuk ke PlayerScreen dulu.
+    val downloads: StateFlow<List<DownloadedEpisodeEntity>> = repository.downloadsForAnime(animeId)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
+    private val _downloadErrorMessage = MutableStateFlow<String?>(null)
+    val downloadErrorMessage: StateFlow<String?> = _downloadErrorMessage.asStateFlow()
+
     init {
         loadDetail()
         loadEpisodes()
         loadPremiumStatus()
         loadPreview()
+    }
+
+    /** Download satu episode dari daftar episode. Gating premium dicek di DetailScreen. */
+    fun downloadEpisode(episode: EpisodeItem) {
+        val animeTitle = (_detailState.value as? Result.Success)?.data?.title ?: "Anime"
+        val posterUrl = (_detailState.value as? Result.Success)?.data?.image_poster
+        viewModelScope.launch {
+            val result = repository.enqueueEpisodeDownload(
+                episodeId = episode.id,
+                animeId = animeId,
+                animeTitle = animeTitle,
+                posterUrl = posterUrl,
+                episodeTitle = episode.title,
+                episodeIndex = episode.index
+            )
+            if (result is Result.Error) {
+                _downloadErrorMessage.value = result.message
+            }
+        }
+    }
+
+    fun deleteDownload(episodeId: String) {
+        viewModelScope.launch {
+            repository.deleteEpisodeDownload(episodeId)
+        }
+    }
+
+    fun clearDownloadError() {
+        _downloadErrorMessage.value = null
     }
 
     private fun loadPreview() {

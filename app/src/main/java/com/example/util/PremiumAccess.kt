@@ -30,3 +30,10 @@ fun isQualityLocked(quality: String?, isPremium: Boolean): Boolean {
     val value = qualityValueP(quality) ?: return false
     return value > NON_PREMIUM_MAX_QUALITY_P
 }
+
+/**
+ * Fitur download buat nonton offline khusus premium -- non-premium sama
+ * sekali gak boleh download episode manapun, gak peduli episode itu
+ * termasuk yang gratis (1-3) ataupun kualitasnya rendah.
+ */
+fun isDownloadAllowed(isPremium: Boolean): Boolean = isPremium
