@@ -14,6 +14,7 @@ import com.example.data.model.GenreItem
 import com.example.data.model.HomeResponse
 import com.example.data.model.SearchResponse
 import com.example.data.model.StreamResponse
+import com.example.data.model.StreamServer
 import com.example.util.qualityValueP
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -386,42 +387,74 @@ class AnimeRepository(
      * tersedia -- gating premium buat fitur download ini sendiri (siapa
      * yang boleh mijit tombolnya) dicek di UI pakai isPremium, BUKAN di sini.
      */
+    /**
+     * Ambil daftar pilihan kualitas download yang tersedia buat satu episode.
+     * Fetch fresh dari server (bukan cache) -- link masing-masing opsi cuma
+     * valid sebentar, jadi dipanggil pas dialog pilih kualitas dibuka, dan
+     * link yang dipilih user harus langsung dipakai buat enqueueEpisodeDownload
+     * tanpa fetch ulang.
+     *
+     * Di-dedupe per label kualitas (kalau ada beberapa server dengan kualitas
+     * sama, cuma yang pertama muncul yang dipakai) dan diurutkan dari
+     * tertinggi ke terendah biar enak dipilih user.
+     */
+    suspend fun getDownloadQualityOptions(episodeId: String): Result<List<StreamServer>> {
+        return try {
+            val stream = api.getEpisodeStream(episodeId)
+            val options = stream.servers.orEmpty()
+                .filter { !it.link.isNullOrBlank() }
+                .distinctBy { it.quality }
+                .sortedByDescending { qualityValueP(it.quality) ?: -1 }
+
+            if (options.isEmpty()) {
+                Result.Error(
+                    IllegalStateException("Tidak ada server yang tersedia"),
+                    "Tidak ada pilihan kualitas yang tersedia untuk episode ini"
+                )
+            } else {
+                Result.Success(options)
+            }
+        } catch (e: Exception) {
+            Result.Error(e, e.localizedMessage ?: "Gagal memuat pilihan kualitas")
+        }
+    }
+
+    /**
+     * Mulai download episode dengan server/kualitas yang SUDAH dipilih user
+     * (dari getDownloadQualityOptions). Gating premium (siapa yang boleh
+     * mijit tombolnya) dicek di UI pakai isDownloadAllowed, BUKAN di sini.
+     */
     suspend fun enqueueEpisodeDownload(
         episodeId: String,
         animeId: String,
         animeTitle: String,
         posterUrl: String?,
         episodeTitle: String?,
-        episodeIndex: String?
+        episodeIndex: String?,
+        server: StreamServer
     ): Result<Unit> {
-        return try {
-            val stream = api.getEpisodeStream(episodeId)
-            val servers = stream.servers.orEmpty()
-            val bestServer = servers
-                .filter { !it.link.isNullOrBlank() }
-                .maxByOrNull { qualityValueP(it.quality) ?: -1 }
-                ?: return Result.Error(
-                    IllegalStateException("Tidak ada server yang tersedia"),
-                    "Link download tidak ditemukan untuk episode ini"
-                )
-
-            val outcome = downloadManager.startDownload(
-                episodeId = episodeId,
-                animeId = animeId,
-                animeTitle = animeTitle,
-                posterUrl = posterUrl,
-                episodeTitle = episodeTitle,
-                episodeIndex = episodeIndex,
-                quality = bestServer.quality,
-                videoUrl = bestServer.link!!
+        val link = server.link
+        if (link.isNullOrBlank()) {
+            return Result.Error(
+                IllegalStateException("Link kosong"),
+                "Link download untuk kualitas ini tidak valid"
             )
-
-            outcome.fold(
-                onSuccess = { Result.Success(Unit) },
-                onFailure = { e -> Result.Error(e, e.localizedMessage ?: "Gagal memulai download") }
-            )
-        } catch (e: Exception) {
-            Result.Error(e, e.localizedMessage ?: "Gagal memulai download")
         }
+
+        val outcome = downloadManager.startDownload(
+            episodeId = episodeId,
+            animeId = animeId,
+            animeTitle = animeTitle,
+            posterUrl = posterUrl,
+            episodeTitle = episodeTitle,
+            episodeIndex = episodeIndex,
+            quality = server.quality,
+            videoUrl = link
+        )
+
+        return outcome.fold(
+            onSuccess = { Result.Success(Unit) },
+            onFailure = { e -> Result.Error(e, e.localizedMessage ?: "Gagal memulai download") }
+        )
     }
 }

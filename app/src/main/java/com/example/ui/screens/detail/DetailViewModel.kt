@@ -7,6 +7,7 @@ import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.local.WatchHistoryEntity
 import com.example.data.model.AnimeItem
 import com.example.data.model.EpisodeItem
+import com.example.data.model.StreamServer
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.PremiumRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -68,6 +69,12 @@ class DetailViewModel(
     private val _downloadErrorMessage = MutableStateFlow<String?>(null)
     val downloadErrorMessage: StateFlow<String?> = _downloadErrorMessage.asStateFlow()
 
+    // Dialog pilih kualitas download -- null berarti tertutup. Nyimpen
+    // episode yang lagi diproses (karena list-nya banyak episode, beda
+    // sama PlayerViewModel yang cuma satu episode aktif).
+    private val _downloadQualityPicker = MutableStateFlow<DetailDownloadPickerState?>(null)
+    val downloadQualityPicker: StateFlow<DetailDownloadPickerState?> = _downloadQualityPicker.asStateFlow()
+
     init {
         loadDetail()
         loadEpisodes()
@@ -75,8 +82,28 @@ class DetailViewModel(
         loadPreview()
     }
 
-    /** Download satu episode dari daftar episode. Gating premium dicek di DetailScreen. */
-    fun downloadEpisode(episode: EpisodeItem) {
+    /** Buka dialog pilih kualitas buat satu episode, fetch server list FRESH. */
+    fun openDownloadQualityPicker(episode: EpisodeItem) {
+        _downloadQualityPicker.value = DetailDownloadPickerState(episode = episode)
+        viewModelScope.launch {
+            when (val result = repository.getDownloadQualityOptions(episode.id)) {
+                is Result.Success -> _downloadQualityPicker.value =
+                    DetailDownloadPickerState(episode = episode, options = result.data)
+                is Result.Error -> _downloadQualityPicker.value =
+                    DetailDownloadPickerState(episode = episode, errorMessage = result.message)
+                else -> Unit
+            }
+        }
+    }
+
+    fun dismissDownloadQualityPicker() {
+        _downloadQualityPicker.value = null
+    }
+
+    /** User udah milih kualitas -- mulai download episode yang lagi dipilih. */
+    fun confirmDownloadQuality(server: StreamServer) {
+        val episode = _downloadQualityPicker.value?.episode ?: return
+        _downloadQualityPicker.value = null
         val animeTitle = (_detailState.value as? Result.Success)?.data?.title ?: "Anime"
         val posterUrl = (_detailState.value as? Result.Success)?.data?.image_poster
         viewModelScope.launch {
@@ -86,7 +113,8 @@ class DetailViewModel(
                 animeTitle = animeTitle,
                 posterUrl = posterUrl,
                 episodeTitle = episode.title,
-                episodeIndex = episode.index
+                episodeIndex = episode.index,
+                server = server
             )
             if (result is Result.Error) {
                 _downloadErrorMessage.value = result.message
@@ -154,3 +182,15 @@ class DetailViewModel(
         }
     }
 }
+
+/**
+ * State dialog pilih kualitas download di DetailScreen. [episode] nunjukin
+ * lagi milihin kualitas buat episode yang mana (karena satu layar ini
+ * nampilin banyak episode sekaligus). options == null && errorMessage ==
+ * null berarti masih loading.
+ */
+data class DetailDownloadPickerState(
+    val episode: EpisodeItem,
+    val options: List<StreamServer>? = null,
+    val errorMessage: String? = null
+)

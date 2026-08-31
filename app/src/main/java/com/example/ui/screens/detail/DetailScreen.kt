@@ -85,6 +85,7 @@ import com.example.data.common.Result
 import com.example.data.local.DownloadStatus
 import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.model.EpisodeItem
+import com.example.ui.components.DownloadQualityPickerDialog
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.ShimmerEpisodeList
 import com.example.util.isDownloadAllowed
@@ -113,6 +114,8 @@ fun DetailScreen(
     val previewUrl by viewModel.previewUrl.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val downloadErrorMessage by viewModel.downloadErrorMessage.collectAsStateWithLifecycle()
+
+    val downloadQualityPicker by viewModel.downloadQualityPicker.collectAsStateWithLifecycle()
 
     var isSynopsisExpanded by remember { mutableStateOf(false) }
     var episodeToDeleteDownload by remember { mutableStateOf<String?>(null) }
@@ -454,7 +457,7 @@ fun DetailScreen(
                                     isDownloadAllowed = isDownloadAllowed(isPremium),
                                     onDownloadClick = {
                                         if (isDownloadAllowed(isPremium)) {
-                                            viewModel.downloadEpisode(ep)
+                                            viewModel.openDownloadQualityPicker(ep)
                                         } else {
                                             onUpgradeClick()
                                         }
@@ -470,6 +473,17 @@ fun DetailScreen(
                 }
             }
         }
+    }
+
+    // Dialog pilih kualitas sebelum download mulai.
+    val pickerState = downloadQualityPicker
+    if (pickerState != null) {
+        DownloadQualityPickerDialog(
+            options = pickerState.options,
+            errorMessage = pickerState.errorMessage,
+            onDismiss = { viewModel.dismissDownloadQualityPicker() },
+            onQualitySelected = { server -> viewModel.confirmDownloadQuality(server) }
+        )
     }
 
     val episodeIdPendingDelete = episodeToDeleteDownload

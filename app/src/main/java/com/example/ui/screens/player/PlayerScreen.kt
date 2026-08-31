@@ -134,6 +134,7 @@ import com.example.data.common.Result
 import com.example.data.local.DownloadStatus
 import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.model.EpisodeItem
+import com.example.ui.components.DownloadQualityPickerDialog
 import com.example.ui.components.ErrorStateView
 import com.example.util.PipController
 import com.example.util.findActivity
@@ -219,6 +220,12 @@ fun PlayerScreen(
     val episodeListState by viewModel.episodeListState.collectAsStateWithLifecycle()
     val downloadEntry by viewModel.downloadEntry.collectAsStateWithLifecycle()
     val downloadErrorMessage by viewModel.downloadErrorMessage.collectAsStateWithLifecycle()
+    val downloadQualityPicker by viewModel.downloadQualityPicker.collectAsStateWithLifecycle()
+    // Duplikat kecil dari epDetail yang di-derive ulang di beberapa scope
+    // nested di bawah -- disediakan juga di scope terluar biar dialog pilih
+    // kualitas (yang dirender di akhir fun, di luar scope nested itu) tetap
+    // bisa akses judul/index episode buat metadata download.
+    val currentEpisodeDetail = (streamState as? Result.Success)?.data?.episode
 
     var showEpisodeList by remember { mutableStateOf(false) }
     var showDeleteDownloadConfirm by remember { mutableStateOf(false) }
@@ -836,10 +843,7 @@ fun PlayerScreen(
                                         entry = downloadEntry,
                                         onDownloadClick = {
                                             if (isDownloadAllowed(isPremium)) {
-                                                viewModel.downloadEpisode(
-                                                    epDetail?.title,
-                                                    epDetail?.index
-                                                )
+                                                viewModel.openDownloadQualityPicker()
                                             } else {
                                                 onUpgradeClick()
                                             }
@@ -847,10 +851,7 @@ fun PlayerScreen(
                                         onCompletedClick = { showDeleteDownloadConfirm = true },
                                         onFailedClick = {
                                             if (isDownloadAllowed(isPremium)) {
-                                                viewModel.downloadEpisode(
-                                                    epDetail?.title,
-                                                    epDetail?.index
-                                                )
+                                                viewModel.openDownloadQualityPicker()
                                             } else {
                                                 onUpgradeClick()
                                             }
@@ -1024,6 +1025,19 @@ fun PlayerScreen(
                 }
             }
         }
+    }
+
+    // Dialog pilih kualitas sebelum download mulai.
+    val pickerState = downloadQualityPicker
+    if (pickerState != null) {
+        DownloadQualityPickerDialog(
+            options = pickerState.options,
+            errorMessage = pickerState.errorMessage,
+            onDismiss = { viewModel.dismissDownloadQualityPicker() },
+            onQualitySelected = { server ->
+                viewModel.confirmDownloadQuality(server, currentEpisodeDetail?.title, currentEpisodeDetail?.index)
+            }
+        )
     }
 
     // Konfirmasi hapus file offline -- dipisah dari galeri (bukan

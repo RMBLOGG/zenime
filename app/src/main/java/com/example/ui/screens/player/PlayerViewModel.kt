@@ -80,6 +80,12 @@ class PlayerViewModel(
     private val _downloadErrorMessage = MutableStateFlow<String?>(null)
     val downloadErrorMessage: StateFlow<String?> = _downloadErrorMessage.asStateFlow()
 
+    // Dialog pilih kualitas download -- null berarti dialog tertutup.
+    // options == null (tapi state non-null) berarti masih loading fetch
+    // server list-nya.
+    private val _downloadQualityPicker = MutableStateFlow<DownloadQualityPickerState?>(null)
+    val downloadQualityPicker: StateFlow<DownloadQualityPickerState?> = _downloadQualityPicker.asStateFlow()
+
     init {
         loadStream()
         loadAnimeInfo()
@@ -87,8 +93,25 @@ class PlayerViewModel(
         loadEpisodeList()
     }
 
-    /** Mulai download episode ini buat offline. Gating premium dicek di PlayerScreen. */
-    fun downloadEpisode(episodeTitle: String?, episodeIndex: String?) {
+    /** Buka dialog pilih kualitas, fetch daftar server FRESH (bukan cache). */
+    fun openDownloadQualityPicker() {
+        _downloadQualityPicker.value = DownloadQualityPickerState()
+        viewModelScope.launch {
+            when (val result = repository.getDownloadQualityOptions(episodeId)) {
+                is Result.Success -> _downloadQualityPicker.value = DownloadQualityPickerState(options = result.data)
+                is Result.Error -> _downloadQualityPicker.value = DownloadQualityPickerState(errorMessage = result.message)
+                else -> Unit
+            }
+        }
+    }
+
+    fun dismissDownloadQualityPicker() {
+        _downloadQualityPicker.value = null
+    }
+
+    /** User udah milih kualitas di dialog -- mulai download-nya. */
+    fun confirmDownloadQuality(server: StreamServer, episodeTitle: String?, episodeIndex: String?) {
+        _downloadQualityPicker.value = null
         viewModelScope.launch {
             val result = repository.enqueueEpisodeDownload(
                 episodeId = episodeId,
@@ -96,7 +119,8 @@ class PlayerViewModel(
                 animeTitle = currentAnimeTitle,
                 posterUrl = currentPosterUrl,
                 episodeTitle = episodeTitle,
-                episodeIndex = episodeIndex
+                episodeIndex = episodeIndex,
+                server = server
             )
             if (result is Result.Error) {
                 _downloadErrorMessage.value = result.message
@@ -186,3 +210,12 @@ class PlayerViewModel(
         }
     }
 }
+
+/**
+ * State dialog pilih kualitas download. options == null && errorMessage == null
+ * berarti masih loading; options non-null berarti siap dipilih user.
+ */
+data class DownloadQualityPickerState(
+    val options: List<StreamServer>? = null,
+    val errorMessage: String? = null
+)
