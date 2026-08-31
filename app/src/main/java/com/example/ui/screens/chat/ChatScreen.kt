@@ -299,7 +299,7 @@ private fun ChatBubble(
                             contentDescription = "Premium",
                             modifier = Modifier
                                 .padding(start = 3.dp)
-                                .size(14.dp)
+                                .size(20.dp)
                         )
                     }
                 }
