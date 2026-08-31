@@ -549,14 +549,19 @@ fun DownloadedEpisodeCard(
         ) {
             Box(
                 modifier = Modifier
-                    .width(76.dp)
-                    .aspectRatio(2f / 3f)
+                    .width(96.dp)
+                    .aspectRatio(16f / 9f)
                     .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data(item.posterUrl)
+                        // Thumbnail episode itu sendiri (lebih relevan buat
+                        // kartu per-episode, sama kayak yang tampil di daftar
+                        // episode DetailScreen), fallback ke poster anime
+                        // kalau upstream gak nyediain gambar buat episode ini
+                        // (mis. download lama sebelum kolom ini ditambahin).
+                        .data(item.episodeThumbnailUrl ?: item.posterUrl)
                         .crossfade(true)
                         .build(),
                     contentDescription = item.animeTitle,

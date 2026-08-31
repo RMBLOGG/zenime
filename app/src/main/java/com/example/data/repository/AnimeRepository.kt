@@ -431,7 +431,8 @@ class AnimeRepository(
         posterUrl: String?,
         episodeTitle: String?,
         episodeIndex: String?,
-        server: StreamServer
+        server: StreamServer,
+        episodeThumbnailUrl: String? = null
     ): Result<Unit> {
         val link = server.link
         if (link.isNullOrBlank()) {
@@ -449,7 +450,8 @@ class AnimeRepository(
             episodeTitle = episodeTitle,
             episodeIndex = episodeIndex,
             quality = server.quality,
-            videoUrl = link
+            videoUrl = link,
+            episodeThumbnailUrl = episodeThumbnailUrl
         )
 
         return outcome.fold(

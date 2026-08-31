@@ -112,6 +112,13 @@ class PlayerViewModel(
     /** User udah milih kualitas di dialog -- mulai download-nya. */
     fun confirmDownloadQuality(server: StreamServer, episodeTitle: String?, episodeIndex: String?) {
         _downloadQualityPicker.value = null
+        // Thumbnail episode ITU SENDIRI (bukan poster anime) -- diambil dari
+        // daftar episode yang udah ke-load buat sidebar "Daftar Episode",
+        // dicari yang episodeId-nya cocok sama episode yang lagi diputer ini.
+        val episodeThumbnail = (_episodeListState.value as? Result.Success)
+            ?.data
+            ?.find { it.id == episodeId }
+            ?.resolvedImageUrl
         viewModelScope.launch {
             val result = repository.enqueueEpisodeDownload(
                 episodeId = episodeId,
@@ -120,7 +127,8 @@ class PlayerViewModel(
                 posterUrl = currentPosterUrl,
                 episodeTitle = episodeTitle,
                 episodeIndex = episodeIndex,
-                server = server
+                server = server,
+                episodeThumbnailUrl = episodeThumbnail
             )
             if (result is Result.Error) {
                 _downloadErrorMessage.value = result.message

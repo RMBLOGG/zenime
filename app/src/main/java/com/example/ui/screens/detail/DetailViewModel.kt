@@ -114,7 +114,8 @@ class DetailViewModel(
                 posterUrl = posterUrl,
                 episodeTitle = episode.title,
                 episodeIndex = episode.index,
-                server = server
+                server = server,
+                episodeThumbnailUrl = episode.resolvedImageUrl
             )
             if (result is Result.Error) {
                 _downloadErrorMessage.value = result.message

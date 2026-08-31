@@ -88,7 +88,8 @@ class EpisodeDownloadManager(
         episodeTitle: String?,
         episodeIndex: String?,
         quality: String?,
-        videoUrl: String
+        videoUrl: String,
+        episodeThumbnailUrl: String? = null
     ): Result<Unit> {
         val existing = dao.getDownloadForEpisodeOnce(episodeId)
         if (existing?.status == DownloadStatus.COMPLETED ||
@@ -148,7 +149,8 @@ class EpisodeDownloadManager(
                 quality = quality,
                 localFilePath = file.absolutePath,
                 status = DownloadStatus.QUEUED,
-                workRequestId = downloadId.toString()
+                workRequestId = downloadId.toString(),
+                episodeThumbnailUrl = episodeThumbnailUrl
             )
         )
 

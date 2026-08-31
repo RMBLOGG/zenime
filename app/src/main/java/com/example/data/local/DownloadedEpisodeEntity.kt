@@ -36,5 +36,11 @@ data class DownloadedEpisodeEntity(
     val status: DownloadStatus = DownloadStatus.QUEUED,
     val workRequestId: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    // Thumbnail episode ITU SENDIRI (beda sama posterUrl yang gambar anime
+    // generik) -- ini yang dipakai di kartu tab "Download", biar konsisten
+    // sama thumbnail yang udah tampil di daftar episode DetailScreen.
+    // Nullable & fallback ke posterUrl kalau upstream gak nyediain gambar
+    // buat episode ini.
+    val episodeThumbnailUrl: String? = null
 )
