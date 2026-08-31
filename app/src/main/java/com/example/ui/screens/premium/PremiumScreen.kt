@@ -25,7 +25,9 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.WorkspacePremium
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.example.R
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.material3.Button
@@ -173,17 +175,13 @@ private fun PremiumBenefitsHeroCard() {
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(ZenimePrimary.copy(alpha = 0.16f)),
+                    modifier = Modifier.size(64.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        Icons.Filled.WorkspacePremium,
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_premium_badge),
                         contentDescription = null,
-                        tint = ZenimePrimary,
-                        modifier = Modifier.size(30.dp)
+                        modifier = Modifier.size(64.dp)
                     )
                 }
 

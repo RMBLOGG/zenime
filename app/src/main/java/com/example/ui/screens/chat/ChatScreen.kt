@@ -33,7 +33,9 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.WorkspacePremium
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.example.R
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -292,13 +294,12 @@ private fun ChatBubble(
                         modifier = Modifier.weight(weight = 1f, fill = false)
                     )
                     if (isSenderPremium) {
-                        Icon(
-                            imageVector = Icons.Default.WorkspacePremium,
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_premium_badge),
                             contentDescription = "Premium",
-                            tint = ZenimePrimary,
                             modifier = Modifier
                                 .padding(start = 3.dp)
-                                .size(12.dp)
+                                .size(14.dp)
                         )
                     }
                 }
