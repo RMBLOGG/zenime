@@ -1,17 +1,13 @@
 package com.example.util
 
 /**
- * Episode 1-3 GRATIS buat non-premium (trial), episode 4 ke atas
- * (termasuk yang paling baru) yang dikunci -- premium wajib buat lanjut
- * nonton lebih jauh dari situ.
+ * Semua episode BEBAS ditonton non-premium (gak ada batas trial 1-3
+ * lagi) -- akses nonton bukan lagi benefit Premium. Benefit Premium yang
+ * masih berlaku: bebas iklan ([PlayerScreen] cek isPremium langsung),
+ * resolusi di atas [NON_PREMIUM_MAX_QUALITY_P] (lihat isQualityLocked),
+ * dan download offline (lihat isDownloadAllowed).
  */
-private val FREE_EPISODE_NUMBERS = 1..3
-
-fun isEpisodeLocked(episodeIndex: String?, isPremium: Boolean): Boolean {
-    if (isPremium) return false
-    val number = episodeIndex?.trim()?.toIntOrNull() ?: return false
-    return number !in FREE_EPISODE_NUMBERS
-}
+fun isEpisodeLocked(episodeIndex: String?, isPremium: Boolean): Boolean = false
 
 /** Kualitas maksimal (dalam "p", misal 480 = 480p) yang boleh diputer non-premium. */
 const val NON_PREMIUM_MAX_QUALITY_P = 480

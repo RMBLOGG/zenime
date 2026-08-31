@@ -1,29 +1,10 @@
 package com.example.ui.screens.player
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -32,41 +13,33 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import com.example.data.common.Result
 import com.example.data.local.PremiumStatusCache
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.PremiumRepository
 import com.example.ui.theme.ZenimePrimary
-import com.example.util.isEpisodeLocked
 
 private sealed interface GateState {
     data object Checking : GateState
-    data class Allowed(val isPremium: Boolean) : GateState
-    data object Blocked : GateState
-    data class CheckFailed(val message: String) : GateState
+    data class Resolved(val isPremium: Boolean) : GateState
 }
 
 /**
- * Bungkus konten player di balik pengecekan akses. Episode 1-3 gratis buat
- * siapa aja (lihat util.isEpisodeLocked), episode 4 ke atas -- termasuk
- * yang paling baru -- ekslusif Premium. Selama proses cek, tampilin
- * loading.
+ * Resolve status premium user SEBELUM render player, buat dipassing ke
+ * [content] (dipakai konsumen buat nentuin tampilin iklan/cap kualitas/dll
+ * -- lihat util.PremiumAccess). Nonton video itu sendiri TERBUKA buat
+ * semua orang, premium atau bukan -- gate ini bukan lagi pintu terkunci,
+ * cuma nunggu tau isPremium-nya apa dulu sebelum lanjut.
  *
- * Kalau cek premium LIVE gagal (misal lagi offline -- kasus umum pas mau
- * nonton episode yang udah didownload), fallback ke [PremiumStatusCache]:
- * dipakai HANYA kalau cache masih dalam TTL-nya dan expiresAt user belum
- * lewat (lihat PremiumStatusCache buat detail), biar user yang beneran
- * masih premium tetap bisa nonton file yang udah didownload walau offline,
- * TAPI user yang premiumnya udah abis tetap keblokir walau offline.
- * Kalau gak ada cache valid sama sekali (gak pernah cek sukses
- * sebelumnya), tetap dianggap Blocked -- jangan biarin nonton kalau
- * statusnya gak bisa dipastikan sama sekali.
+ * Kalau cek live ke server gagal (misal lagi offline -- kasus umum pas
+ * mau nonton episode yang udah didownload), fallback ke
+ * [PremiumStatusCache]: dipakai HANYA kalau cache masih dalam TTL-nya dan
+ * expiresAt user belum lewat (lihat PremiumStatusCache buat detail).
+ * Kalau gak ada sinyal sama sekali (gak pernah cek sukses sebelumnya
+ * ATAU belum login), default ke non-premium -- BUKAN diblokir, cuma gak
+ * dapet benefit premium (kena iklan, kualitas dibatasin), video-nya
+ * sendiri tetap bisa diputer.
  */
 @Composable
 fun PremiumGate(
@@ -91,46 +64,17 @@ fun PremiumGate(
             PremiumRepository(statusCache).checkPremiumStatus(firebaseUid)
         }
 
-        // Cek live SUKSES -- pakai hasilnya apa adanya, ini sumber paling
-        // akurat (dan checkPremiumStatus udah nulis ke statusCache buat
-        // dipakai fallback nanti).
         val isPremium = if (premiumResult != null && premiumResult.isSuccess) {
             premiumResult.getOrNull()?.isPremium ?: false
         } else {
-            // Cek live GAGAL (kemungkinan besar lagi offline) -- sebelum
-            // nyerah, coba fallback ke status premium yang di-cache dari
-            // sukses cek terakhir. getValidOfflineStatus() SENGAJA sudah
-            // ngurus expiresAt & TTL cache sendiri (lihat PremiumStatusCache),
-            // jadi kalau premium user beneran udah abis, ini balikin false
-            // walau offline -- BUKAN dianggap Allowed begitu aja.
+            // Cek live gagal -- fallback ke cache (ngurus sendiri TTL &
+            // expiresAt-nya, lihat PremiumStatusCache), kalau gak ada
+            // default ke false. Baik cache maupun default di sini CUMA
+            // ngaruh ke benefit (iklan/kualitas), BUKAN akses nonton.
             statusCache.getValidOfflineStatus() ?: false
         }
 
-        if (isPremium) {
-            state = GateState.Allowed(true)
-            return@LaunchedEffect
-        }
-
-        // Non-premium (atau belum login) -- cek dulu apakah episode ini
-        // termasuk yang dikunci (episode 1-3) sebelum mutusin Allowed/Blocked.
-        // AnimeRepository nge-cache daftar episode, jadi ini murah kalau
-        // DetailScreen/PlayerViewModel udah pernah nge-load duluan.
-        repository.getAllEpisodes(animeId).collect { result ->
-            when (result) {
-                is Result.Success -> {
-                    val episode = result.data.find { it.id == episodeId }
-                    state = if (isEpisodeLocked(episode?.index, isPremium = false)) {
-                        GateState.Blocked
-                    } else {
-                        GateState.Allowed(false)
-                    }
-                }
-                is Result.Error -> {
-                    state = GateState.CheckFailed(result.message)
-                }
-                Result.Loading -> {}
-            }
-        }
+        state = GateState.Resolved(isPremium)
     }
 
     when (val s = state) {
@@ -145,95 +89,6 @@ fun PremiumGate(
             }
         }
 
-        is GateState.Allowed -> content(s.isPremium)
-
-        is GateState.Blocked -> {
-            PremiumRequiredScreen(
-                message = "Episode ini khusus buat member Premium. Aktifkan Premium dulu buat lanjut nonton.",
-                onBackClick = onBackClick,
-                onUpgradeClick = onUpgradeClick
-            )
-        }
-
-        is GateState.CheckFailed -> {
-            PremiumRequiredScreen(
-                message = "Gagal memeriksa status akses kamu (${s.message}). Coba lagi sebentar.",
-                onBackClick = onBackClick,
-                onUpgradeClick = onUpgradeClick
-            )
-        }
-    }
-}
-
-@Composable
-private fun PremiumRequiredScreen(
-    message: String,
-    onBackClick: () -> Unit,
-    onUpgradeClick: () -> Unit
-) {
-    Scaffold(containerColor = Color.Black) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .background(ZenimePrimary.copy(alpha = 0.16f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Filled.Lock,
-                    contentDescription = null,
-                    tint = ZenimePrimary,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Text(
-                "Konten Premium",
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                color = Color.White
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.7f),
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            Button(
-                onClick = onUpgradeClick,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = ZenimePrimary)
-            ) {
-                Icon(Icons.Filled.Star, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Lihat Paket Premium", fontWeight = FontWeight.Bold)
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            OutlinedButton(
-                onClick = onBackClick,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Kembali")
-            }
-        }
+        is GateState.Resolved -> content(s.isPremium)
     }
 }
