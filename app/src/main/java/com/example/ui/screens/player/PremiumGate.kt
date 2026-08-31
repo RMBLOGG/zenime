@@ -34,10 +34,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.data.common.Result
+import com.example.data.local.PremiumStatusCache
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.PremiumRepository
 import com.example.ui.theme.ZenimePrimary
@@ -54,8 +56,17 @@ private sealed interface GateState {
  * Bungkus konten player di balik pengecekan akses. Episode 1-3 gratis buat
  * siapa aja (lihat util.isEpisodeLocked), episode 4 ke atas -- termasuk
  * yang paling baru -- ekslusif Premium. Selama proses cek, tampilin
- * loading. Kalau gagal cek (misal gak ada internet), tetap dianggap
- * Blocked -- jangan biarin nonton kalau statusnya gak bisa dipastikan.
+ * loading.
+ *
+ * Kalau cek premium LIVE gagal (misal lagi offline -- kasus umum pas mau
+ * nonton episode yang udah didownload), fallback ke [PremiumStatusCache]:
+ * dipakai HANYA kalau cache masih dalam TTL-nya dan expiresAt user belum
+ * lewat (lihat PremiumStatusCache buat detail), biar user yang beneran
+ * masih premium tetap bisa nonton file yang udah didownload walau offline,
+ * TAPI user yang premiumnya udah abis tetap keblokir walau offline.
+ * Kalau gak ada cache valid sama sekali (gak pernah cek sukses
+ * sebelumnya), tetap dianggap Blocked -- jangan biarin nonton kalau
+ * statusnya gak bisa dipastikan sama sekali.
  */
 @Composable
 fun PremiumGate(
@@ -68,14 +79,31 @@ fun PremiumGate(
     content: @Composable (isPremium: Boolean) -> Unit
 ) {
     var state by remember(firebaseUid, episodeId) { mutableStateOf<GateState>(GateState.Checking) }
+    val context = LocalContext.current
+    val statusCache = remember(context) { PremiumStatusCache(context) }
 
     LaunchedEffect(firebaseUid, episodeId) {
         state = GateState.Checking
 
-        val isPremium = if (firebaseUid.isNullOrBlank()) {
-            false
+        val premiumResult = if (firebaseUid.isNullOrBlank()) {
+            null
         } else {
-            PremiumRepository().checkPremiumStatus(firebaseUid).getOrNull()?.isPremium ?: false
+            PremiumRepository(statusCache).checkPremiumStatus(firebaseUid)
+        }
+
+        // Cek live SUKSES -- pakai hasilnya apa adanya, ini sumber paling
+        // akurat (dan checkPremiumStatus udah nulis ke statusCache buat
+        // dipakai fallback nanti).
+        val isPremium = if (premiumResult != null && premiumResult.isSuccess) {
+            premiumResult.getOrNull()?.isPremium ?: false
+        } else {
+            // Cek live GAGAL (kemungkinan besar lagi offline) -- sebelum
+            // nyerah, coba fallback ke status premium yang di-cache dari
+            // sukses cek terakhir. getValidOfflineStatus() SENGAJA sudah
+            // ngurus expiresAt & TTL cache sendiri (lihat PremiumStatusCache),
+            // jadi kalau premium user beneran udah abis, ini balikin false
+            // walau offline -- BUKAN dianggap Allowed begitu aja.
+            statusCache.getValidOfflineStatus() ?: false
         }
 
         if (isPremium) {

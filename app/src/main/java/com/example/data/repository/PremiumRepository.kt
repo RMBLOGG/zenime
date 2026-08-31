@@ -1,9 +1,16 @@
 package com.example.data.repository
 
 import com.example.data.api.SupabaseNetworkModule
+import com.example.data.local.PremiumStatusCache
 import com.example.data.model.PremiumPackage
 
-class PremiumRepository {
+class PremiumRepository(
+    // Nullable & default null biar caller lama (yang belum punya Context
+    // gampang diakses, misal dari tempat yang cuma pegang Application-less
+    // scope) tetap kompilasi -- tanpa cache, checkPremiumStatus tetap jalan
+    // seperti biasa, cuma gak ada fallback offline.
+    private val statusCache: PremiumStatusCache? = null
+) {
 
     private val api = SupabaseNetworkModule.api
 
@@ -31,10 +38,16 @@ class PremiumRepository {
         }
     }
 
-    /** Cek status premium user; dipanggil sebelum nonton buat gating. */
+    /**
+     * Cek status premium user; dipanggil sebelum nonton buat gating.
+     * Setiap sukses, hasilnya ditulis ke [statusCache] (kalau ada) buat
+     * jadi fallback pas nanti gagal cek karena offline -- lihat
+     * [PremiumStatusCache] buat aturan masa berlaku & expiresAt-nya.
+     */
     suspend fun checkPremiumStatus(firebaseUid: String): Result<PremiumStatus> {
         return try {
             val response = api.checkPremiumStatus(mapOf("firebase_uid" to firebaseUid))
+            statusCache?.save(response.isPremium, response.expiresAt)
             Result.success(PremiumStatus(response.isPremium, response.expiresAt))
         } catch (e: Exception) {
             Result.failure(e)
