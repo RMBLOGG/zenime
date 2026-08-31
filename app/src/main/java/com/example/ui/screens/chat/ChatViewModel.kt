@@ -41,7 +41,11 @@ data class ChatUiState(
     // Pesan yang lagi mau di-reply (null = gak lagi reply apa-apa).
     val replyTarget: ChatMessage? = null,
     // id pesan yang lagi diproses hapus, buat nampilin loading kecil di bubble-nya.
-    val deletingMessageId: Long? = null
+    val deletingMessageId: Long? = null,
+
+    // Kumpulan firebase_uid pengirim yang statusnya premium -- dipakai buat
+    // nampilin badge Premium di samping username di bubble chat.
+    val premiumUids: Set<String> = emptySet()
 )
 
 /**
@@ -78,6 +82,12 @@ class ChatViewModel(
     private var pollingJob: Job? = null
     private var cooldownJob: Job? = null
 
+    // Cache status premium per firebase_uid biar gak nge-hit zenime-check-premium
+    // berkali-kali buat pengirim yang sama tiap polling (3 detik sekali). Sekali
+    // dicek, hasilnya dipakai terus selama sesi chat ini kebuka.
+    private val premiumStatusCache = mutableMapOf<String, Boolean>()
+    private val checkedUids = mutableSetOf<String>()
+
     init {
         loadProfileAndPremiumStatus(fallbackUsername)
         startPolling()
@@ -99,11 +109,45 @@ class ChatViewModel(
             // expired), avatar dibiarkan null -> tampil avatar generate.
             val resolvedAvatarUrl = if (isPremium) profile?.avatarUrl else null
 
+            // Simpan status premium diri sendiri ke cache juga, biar bubble
+            // pesan sendiri (kalau suatu saat ditampilin ke user lain) konsisten
+            // dan gak perlu ngecek ulang lewat checkPremiumForNewSenders().
+            checkedUids += firebaseUid
+            premiumStatusCache[firebaseUid] = isPremium
+
             _uiState.value = _uiState.value.copy(
                 displayUsername = profile?.username?.ifBlank { fallbackUsername } ?: fallbackUsername,
                 displayAvatarUrl = resolvedAvatarUrl,
-                isPremium = isPremium
+                isPremium = isPremium,
+                premiumUids = premiumUidsSnapshot()
             )
+        }
+    }
+
+    private fun premiumUidsSnapshot(): Set<String> =
+        premiumStatusCache.filterValues { it }.keys.toSet()
+
+    /**
+     * Cek status premium buat pengirim-pengirim baru yang muncul di daftar
+     * pesan (belum pernah dicek sebelumnya di sesi ini), lalu update
+     * `premiumUids` di uiState biar badge Premium muncul di samping
+     * username mereka. Dijalankan tiap habis refreshMessages().
+     */
+    private fun checkPremiumForNewSenders(messages: List<ChatMessage>) {
+        val newUids = messages
+            .map { it.firebaseUid }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .filterNot { checkedUids.contains(it) }
+        if (newUids.isEmpty()) return
+
+        checkedUids += newUids
+        viewModelScope.launch {
+            newUids.forEach { uid ->
+                val result = premiumRepository.checkPremiumStatus(uid)
+                premiumStatusCache[uid] = result.getOrNull()?.isPremium ?: false
+            }
+            _uiState.value = _uiState.value.copy(premiumUids = premiumUidsSnapshot())
         }
     }
 
@@ -125,6 +169,7 @@ class ChatViewModel(
                 isLoading = false,
                 errorMessage = null
             )
+            checkPremiumForNewSenders(messages)
         } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(
                 isLoading = false,

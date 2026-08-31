@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -166,6 +167,7 @@ fun ChatScreen(
                                 ChatBubble(
                                     message = message,
                                     isOwnMessage = message.firebaseUid == currentFirebaseUid,
+                                    isSenderPremium = uiState.premiumUids.contains(message.firebaseUid),
                                     isDeleting = uiState.deletingMessageId == message.id,
                                     onReply = { viewModel.setReplyTarget(message) },
                                     onDeleteRequest = { pendingDelete = message }
@@ -257,6 +259,7 @@ fun ChatScreen(
 private fun ChatBubble(
     message: ChatMessage,
     isOwnMessage: Boolean,
+    isSenderPremium: Boolean,
     isDeleting: Boolean,
     onReply: () -> Unit,
     onDeleteRequest: () -> Unit,
@@ -276,14 +279,29 @@ private fun ChatBubble(
             modifier = Modifier.widthIn(max = 260.dp)
         ) {
             if (!isOwnMessage) {
-                Text(
-                    text = message.username,
-                    color = ZenimePrimary,
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(bottom = 2.dp, start = 4.dp)
-                )
+                ) {
+                    Text(
+                        text = message.username,
+                        color = ZenimePrimary,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(weight = 1f, fill = false)
+                    )
+                    if (isSenderPremium) {
+                        Icon(
+                            imageVector = Icons.Default.WorkspacePremium,
+                            contentDescription = "Premium",
+                            tint = ZenimePrimary,
+                            modifier = Modifier
+                                .padding(start = 3.dp)
+                                .size(12.dp)
+                        )
+                    }
+                }
             }
 
             Box(
