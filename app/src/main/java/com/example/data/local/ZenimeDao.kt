@@ -62,4 +62,9 @@ interface ZenimeDao {
     // (system DownloadManager sendiri tetep lanjut download di background).
     @Query("SELECT * FROM downloaded_episodes WHERE status = 'QUEUED' OR status = 'DOWNLOADING'")
     suspend fun getActiveDownloadsOnce(): List<DownloadedEpisodeEntity>
+
+    // Dipakai buat cek kuota maksimal download offline -- FAILED gak
+    // dihitung karena gak makan slot/storage beneran (file udah gagal/dihapus).
+    @Query("SELECT COUNT(*) FROM downloaded_episodes WHERE status != 'FAILED'")
+    suspend fun getActiveDownloadCountOnce(): Int
 }

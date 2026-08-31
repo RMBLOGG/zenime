@@ -44,6 +44,15 @@ class EpisodeDownloadManager(
     private val appContext: Context,
     private val dao: ZenimeDao
 ) {
+    companion object {
+        // Batas jumlah episode yang boleh disimpan offline BARENGAN (selesai +
+        // lagi jalan). Sengaja dibatasi -- video full episode gampang beberapa
+        // ratus MB, jadi tanpa batas storage user bisa penuh gak sadar.
+        // Angka ini murni proteksi storage, BUKAN benefit tier premium --
+        // semua user premium dapet limit yang sama.
+        const val MAX_ACTIVE_DOWNLOADS = 15
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val systemDownloadManager: DownloadManager
@@ -87,6 +96,17 @@ class EpisodeDownloadManager(
             existing?.status == DownloadStatus.QUEUED
         ) {
             return Result.success(Unit) // udah ada / lagi jalan, gak usah dobel-download
+        }
+
+        // Kuota: FAILED gak ikut dihitung (lihat getActiveDownloadCountOnce),
+        // jadi retry setelah gagal gak kejegal limit ini.
+        val activeCount = dao.getActiveDownloadCountOnce()
+        if (activeCount >= MAX_ACTIVE_DOWNLOADS) {
+            return Result.failure(
+                IllegalStateException(
+                    "Batas maksimal $MAX_ACTIVE_DOWNLOADS episode offline udah tercapai. Hapus beberapa episode yang udah didownload dulu."
+                )
+            )
         }
 
         val file = destinationFile(animeId, episodeId)

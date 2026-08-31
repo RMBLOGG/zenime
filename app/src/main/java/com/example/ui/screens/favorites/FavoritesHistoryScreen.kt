@@ -27,8 +27,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DownloadDone
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -60,6 +63,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.data.local.DownloadStatus
+import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.local.WatchHistoryEntity
 import com.example.data.model.AnimeItem
 import com.example.ui.components.AnimePosterCard
@@ -80,6 +85,7 @@ fun FavoritesHistoryScreen(
 ) {
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val watchHistory by viewModel.watchHistory.collectAsStateWithLifecycle()
+    val downloads by viewModel.downloads.collectAsStateWithLifecycle()
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
 
@@ -124,11 +130,18 @@ fun FavoritesHistoryScreen(
                     onClick = { selectedTabIndex = 1 },
                     modifier = Modifier.weight(1f)
                 )
+                CollectionTab(
+                    label = "Download",
+                    count = downloads.size,
+                    icon = Icons.Default.DownloadDone,
+                    selected = selectedTabIndex == 2,
+                    onClick = { selectedTabIndex = 2 },
+                    modifier = Modifier.weight(1f)
+                )
             }
 
             Box(modifier = Modifier.fillMaxSize()) {
                 if (selectedTabIndex == 0) {
-                    // Favorites Grid
                     if (favorites.isEmpty()) {
                         EmptyStateView(
                             title = "Belum Ada Favorit",
@@ -186,7 +199,7 @@ fun FavoritesHistoryScreen(
                             }
                         }
                     }
-                } else {
+                } else if (selectedTabIndex == 1) {
                     // Watch History List
                     if (watchHistory.isEmpty()) {
                         EmptyStateView(
@@ -216,13 +229,42 @@ fun FavoritesHistoryScreen(
                             }
                         }
                     }
+                } else {
+                    // Downloads List -- gabungan LINTAS anime (beda sama versi
+                    // per-anime di DetailScreen). Tap kartu buat lanjut nonton
+                    // kalau statusnya COMPLETED, tombol trash buat hapus file.
+                    if (downloads.isEmpty()) {
+                        EmptyStateView(
+                            title = "Belum Ada Download",
+                            description = "Episode yang kamu download buat ditonton offline bakal muncul di sini.",
+                            icon = Icons.Default.DownloadDone
+                        )
+                    } else {
+                        LazyColumn(
+                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 110.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            items(downloads, key = { it.episodeId }) { download ->
+                                DownloadedEpisodeCard(
+                                    item = download,
+                                    onCardClick = {
+                                        if (download.status == DownloadStatus.COMPLETED) {
+                                            onPlayEpisodeClick(download.episodeId, download.animeId)
+                                        }
+                                    },
+                                    onDeleteClick = { viewModel.deleteDownload(download.episodeId) }
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 }
 
-/** Satu tab di segmented control "Favorit / Riwayat". */
+/** Satu tab di segmented control "Favorit / Riwayat / Download". */
 @Composable
 private fun CollectionTab(
     label: String,
@@ -470,7 +512,210 @@ fun WatchHistoryCard(
     } // tutup content lambda SwipeToDismissBox
 }
 
-/** Format selisih waktu jadi teks relatif kayak "2 jam lalu", "Baru saja". */
+/** Format ukuran file dari bytes jadi teks kayak "320 MB" / "1.2 GB". */
+private fun formatFileSize(bytes: Long): String {
+    if (bytes <= 0) return "0 MB"
+    val mb = bytes / (1024.0 * 1024.0)
+    return if (mb >= 1024) {
+        "%.1f GB".format(mb / 1024.0)
+    } else {
+        "%.0f MB".format(mb)
+    }
+}
+
+/** Satu kartu episode yang lagi/udah didownload, tampil di tab "Download". */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DownloadedEpisodeCard(
+    item: DownloadedEpisodeEntity,
+    onCardClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(elevation = 4.dp, shape = RoundedCornerShape(16.dp), clip = false)
+            .clip(RoundedCornerShape(16.dp))
+            .clickable { onCardClick() }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(76.dp)
+                    .aspectRatio(2f / 3f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(item.posterUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = item.animeTitle,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(28.dp)
+                        .align(Alignment.BottomCenter)
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))
+                            )
+                        )
+                )
+                if (!item.episodeIndex.isNullOrEmpty()) {
+                    Text(
+                        text = "EP ${item.episodeIndex}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 6.dp, bottom = 4.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(14.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = item.animeTitle,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(2.dp))
+
+                val epLabel = "Episode ${item.episodeIndex ?: ""}${if (!item.episodeTitle.isNullOrEmpty()) " - ${item.episodeTitle}" else ""}"
+                Text(
+                    text = epLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                when (item.status) {
+                    DownloadStatus.QUEUED, DownloadStatus.DOWNLOADING -> {
+                        val progress = if (item.totalBytes > 0) {
+                            (item.downloadedBytes.toFloat() / item.totalBytes.toFloat()).coerceIn(0f, 1f)
+                        } else 0f
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            LinearProgressIndicator(
+                                progress = { progress },
+                                color = ZenimePrimary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(5.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                            )
+                            Text(
+                                text = "${(progress * 100).toInt()}%",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = ZenimePrimary,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                    DownloadStatus.COMPLETED -> {
+                        Text(
+                            text = "Siap ditonton offline • ${formatFileSize(item.totalBytes)}",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = Color(0xFF4CAF50)
+                        )
+                    }
+                    DownloadStatus.FAILED -> {
+                        Text(
+                            text = "Download gagal",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = Color(0xFFE57373)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.width(6.dp))
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                when (item.status) {
+                    DownloadStatus.QUEUED, DownloadStatus.DOWNLOADING -> {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(22.dp),
+                            color = ZenimePrimary,
+                            strokeWidth = 2.dp
+                        )
+                    }
+                    DownloadStatus.COMPLETED -> {
+                        Surface(
+                            shape = CircleShape,
+                            color = ZenimePrimary,
+                            modifier = Modifier
+                                .size(38.dp)
+                                .shadow(elevation = 6.dp, shape = CircleShape, clip = false)
+                                .clickable { onCardClick() }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = "Putar",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                    DownloadStatus.FAILED -> {
+                        Icon(
+                            imageVector = Icons.Default.ErrorOutline,
+                            contentDescription = "Download gagal",
+                            tint = Color(0xFFE57373),
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = onDeleteClick,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Hapus",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+    }
+}
 private fun formatRelativeTime(timestampMs: Long): String {
     val diffMs = (System.currentTimeMillis() - timestampMs).coerceAtLeast(0)
     val minutes = diffMs / 60_000
