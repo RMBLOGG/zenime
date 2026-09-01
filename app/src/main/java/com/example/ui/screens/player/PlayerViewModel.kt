@@ -3,7 +3,9 @@ package com.example.ui.screens.player
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.common.Result
+import com.example.data.local.DownloadStatus
 import com.example.data.local.DownloadedEpisodeEntity
+import com.example.data.model.EpisodeDetail
 import com.example.data.model.EpisodeItem
 import com.example.data.model.StreamResponse
 import com.example.data.model.StreamServer
@@ -15,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.File
 
 class PlayerViewModel(
     private val repository: AnimeRepository,
@@ -182,9 +185,41 @@ class PlayerViewModel(
         viewModelScope.launch {
             _streamState.value = Result.Loading
             repository.getEpisodeStream(episodeId).collect { result ->
-                _streamState.value = result
-                if (result is Result.Success) {
-                    val servers = result.data.servers ?: emptyList()
+                // getEpisodeStream SENGAJA gak di-cache (link server = signed
+                // URL, lihat AnimeRepository), jadi selalu butuh internet --
+                // bahkan buat episode yang udah didownload. Kalau ini gagal
+                // (kemungkinan besar offline) TAPI file offline-nya ada &
+                // lengkap, sintesis StreamResponse dari data lokal biar UI
+                // player tetap tampil (servers kosong & episodeNext null itu
+                // fine, PlayerScreen udah nangatasin keduanya dengan graceful
+                // -- next-episode/server-switch cuma disembunyiin, bukan
+                // nge-block seluruh layar). Ini BUKAN nyembunyiin error kalau
+                // memang gak ada file lokal -- di kasus itu tetap Result.Error
+                // seperti biasa.
+                val offlineFallback = (result as? Result.Error)?.let {
+                    val downloaded = repository.downloadForEpisode(episodeId).first()
+                    val localPath = downloaded?.takeIf { d -> d.status == DownloadStatus.COMPLETED }?.localFilePath
+                    if (downloaded != null && localPath != null && File(localPath).exists()) {
+                        Result.Success(
+                            StreamResponse(
+                                episode = EpisodeDetail(
+                                    id = downloaded.episodeId,
+                                    title = downloaded.episodeTitle,
+                                    index = downloaded.episodeIndex
+                                ),
+                                episodeNext = null,
+                                servers = emptyList()
+                            )
+                        )
+                    } else {
+                        null
+                    }
+                }
+
+                val resolved = offlineFallback ?: result
+                _streamState.value = resolved
+                if (resolved is Result.Success) {
+                    val servers = resolved.data.servers ?: emptyList()
                     // Baca langsung dari DataStore, jangan lewat StateFlow defaultQuality
                     // (yang WhileSubscribed & belum tentu ke-collect duluan sebelum ini jalan)
                     val prefQuality = repository.userPrefs.defaultQualityFlow.first()
