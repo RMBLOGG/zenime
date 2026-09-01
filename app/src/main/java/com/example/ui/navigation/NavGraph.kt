@@ -37,7 +37,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
@@ -69,6 +71,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.example.data.model.PremiumPackage
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.ChatRepository
@@ -86,6 +89,7 @@ import com.example.ui.screens.login.LoginViewModel
 import com.example.ui.screens.player.PlayerScreen
 import com.example.ui.screens.player.PlayerViewModel
 import com.example.ui.screens.player.PremiumGate
+import com.example.ui.screens.premium.PremiumPromoDialog
 import com.example.ui.screens.premium.PremiumScreen
 import com.example.ui.screens.premium.PremiumViewModel
 import com.example.ui.screens.schedule.ScheduleScreen
@@ -154,6 +158,37 @@ fun ZenimeAppNavHost(
     // atau Home) sama persis sama yang di-observe screen lain.
     val authRepository = remember { AuthRepository() }
     val currentUser by authRepository.currentUser.collectAsStateWithLifecycle()
+
+    // Promo Premium full-screen -- muncul OTOMATIS sekali tiap app baru
+    // dibuka, TAPI cuma kalau user udah login dan ternyata belum premium.
+    // `remember` di sini di-scope ke lifetime ZenimeAppNavHost, yang cuma
+    // dibikin ulang kalau Activity-nya dibikin ulang (app beneran dibuka
+    // dari awal) -- BUKAN tiap kali pindah tab/layar dalam satu sesi, jadi
+    // gak nyepam promo tiap balik ke Beranda.
+    var showPremiumPromo by remember { mutableStateOf(false) }
+    var promoPackages by remember { mutableStateOf<List<PremiumPackage>>(emptyList()) }
+    var promoLoading by remember { mutableStateOf(true) }
+    var promoCheckedForUid by remember { mutableStateOf<String?>(null) }
+    val premiumRepositoryForPromo = remember { PremiumRepository() }
+
+    LaunchedEffect(currentUser) {
+        val uid = currentUser?.uid
+        if (uid != null && promoCheckedForUid != uid) {
+            promoCheckedForUid = uid
+            promoLoading = true
+            val isPremium = premiumRepositoryForPromo.checkPremiumStatus(uid).getOrNull()?.isPremium ?: false
+            if (!isPremium) {
+                val packages = premiumRepositoryForPromo.getPackages().getOrNull().orEmpty()
+                promoPackages = packages
+                promoLoading = false
+                // Kalau ternyata gak ada paket sama sekali, gak usah paksain
+                // nongolin promo kosong.
+                showPremiumPromo = packages.isNotEmpty()
+            } else {
+                promoLoading = false
+            }
+        }
+    }
 
     // Kalau user logout (misal dari tombol Logout di Settings) pas lagi
     // gak di Login, lempar balik ke Login dan bersihin backstack --
@@ -461,6 +496,18 @@ fun ZenimeAppNavHost(
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(bottom = 24.dp)
+            )
+        }
+
+        if (showPremiumPromo) {
+            PremiumPromoDialog(
+                isLoading = promoLoading,
+                packages = promoPackages,
+                onDismiss = { showPremiumPromo = false },
+                onSubscribeClick = {
+                    showPremiumPromo = false
+                    navController.navigate(Screen.Premium.route)
+                }
             )
         }
     }

@@ -148,9 +148,10 @@ fun PremiumScreen(
 private fun PremiumBenefitsHeroCard() {
     val benefits = listOf(
         "Custom foto profile",
-        "Nonton anime tanpa batas",
+        "Download anime buat ditonton offline",
         "Bebas iklan sepenuhnya",
-        "Resolusi unlock, dari terendah sampai 1080p"
+        "Resolusi unlock, dari terendah sampai 1080p",
+        "Badge khusus Premium"
     )
 
     Card(
