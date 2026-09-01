@@ -1,9 +1,6 @@
 package com.example.ui.screens.home
 
-import android.content.ActivityNotFoundException
-import android.content.Intent
-import android.net.Uri
-import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -20,26 +17,29 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.R
 import com.example.ui.theme.ZenimePrimary
-
-// Username SociaBuzz dari script "Button on Website" (sbBoW.draw("dayynime", ...)).
-// Kalau username/slug donasinya beda, tinggal ganti di sini.
-private const val SOCIABUZZ_USERNAME = "dayynime"
-private const val SOCIABUZZ_URL = "https://sociabuzz.com/$SOCIABUZZ_USERNAME/tribe"
 
 /**
  * Versi native dari widget donasi SociaBuzz "Button on Website", ditaruh
@@ -48,21 +48,18 @@ private const val SOCIABUZZ_URL = "https://sociabuzz.com/$SOCIABUZZ_USERNAME/tri
  */
 @Composable
 fun DonationSection(modifier: Modifier = Modifier) {
-    val context = LocalContext.current
+    var showQrisDialog by remember { mutableStateOf(false) }
+
+    if (showQrisDialog) {
+        QrisDonationDialog(onDismiss = { showQrisDialog = false })
+    }
 
     Card(
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         modifier = modifier
             .fillMaxWidth()
-            .clickable {
-                try {
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(SOCIABUZZ_URL))
-                    context.startActivity(intent)
-                } catch (e: ActivityNotFoundException) {
-                    Toast.makeText(context, "Tidak ada browser untuk membuka link donasi", Toast.LENGTH_SHORT).show()
-                }
-            }
+            .clickable { showQrisDialog = true }
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -101,7 +98,7 @@ fun DonationSection(modifier: Modifier = Modifier) {
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                 )
                 Text(
-                    "Bantu jaga server tetap nyala lewat SociaBuzz",
+                    "Bantu jaga server tetap nyala lewat QRIS",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -111,10 +108,55 @@ fun DonationSection(modifier: Modifier = Modifier) {
 
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = "Buka halaman donasi",
+                contentDescription = "Tampilkan QRIS donasi",
                 tint = ZenimePrimary,
                 modifier = Modifier.size(20.dp)
             )
         }
     }
+}
+
+/** Popup yang nampilin gambar QRIS donasi -- muncul pas [DonationSection] di-klik. */
+@Composable
+private fun QrisDonationDialog(onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                "Dukung Dayynime",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        text = {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.qris_donasi),
+                    contentDescription = "QRIS donasi Dayynime",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                )
+                Spacer(modifier = Modifier.width(0.dp))
+                Text(
+                    "Scan pakai aplikasi e-wallet atau m-banking apa saja",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp)
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Tutup")
+            }
+        }
+    )
 }
