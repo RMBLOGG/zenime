@@ -35,10 +35,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +61,9 @@ import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -72,6 +77,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.data.model.PremiumPackage
+import kotlinx.coroutines.launch
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.ChatRepository
@@ -159,35 +165,57 @@ fun ZenimeAppNavHost(
     val authRepository = remember { AuthRepository() }
     val currentUser by authRepository.currentUser.collectAsStateWithLifecycle()
 
-    // Promo Premium full-screen -- muncul OTOMATIS sekali tiap app baru
-    // dibuka, TAPI cuma kalau user udah login dan ternyata belum premium.
-    // `remember` di sini di-scope ke lifetime ZenimeAppNavHost, yang cuma
-    // dibikin ulang kalau Activity-nya dibikin ulang (app beneran dibuka
-    // dari awal) -- BUKAN tiap kali pindah tab/layar dalam satu sesi, jadi
-    // gak nyepam promo tiap balik ke Beranda.
+    // Promo Premium full-screen -- muncul TIAP kali app dibuka (cold start
+    // ATAUPUN balik dari background, keduanya kehitung "buka app" versi
+    // Android lewat ON_START), TAPI cuma kalau user udah login dan
+    // ternyata belum premium. Sengaja BUKAN gated "sekali doang seumur
+    // proses" -- makanya triggernya pakai Lifecycle observer di ON_START,
+    // bukan cuma LaunchedEffect(currentUser) yang cuma nyala sekali pas
+    // status login berubah.
     var showPremiumPromo by remember { mutableStateOf(false) }
     var promoPackages by remember { mutableStateOf<List<PremiumPackage>>(emptyList()) }
     var promoLoading by remember { mutableStateOf(true) }
-    var promoCheckedForUid by remember { mutableStateOf<String?>(null) }
     val premiumRepositoryForPromo = remember { PremiumRepository() }
+    val promoCoroutineScope = rememberCoroutineScope()
 
+    suspend fun checkAndShowPremiumPromo(uid: String) {
+        promoLoading = true
+        showPremiumPromo = true
+        val isPremium = premiumRepositoryForPromo.checkPremiumStatus(uid).getOrNull()?.isPremium ?: false
+        if (isPremium) {
+            // Udah premium -- gak usah nawarin apa-apa.
+            showPremiumPromo = false
+            return
+        }
+        val packages = premiumRepositoryForPromo.getPackages().getOrNull().orEmpty()
+        promoPackages = packages
+        promoLoading = false
+        // Kalau ternyata gak ada paket sama sekali, gak usah paksain
+        // nongolin promo kosong.
+        showPremiumPromo = packages.isNotEmpty()
+    }
+
+    // Trigger #1: begitu status login berubah dari belum login -> login
+    // (misal abis LoginScreen sukses) SELAMA app udah kebuka.
     LaunchedEffect(currentUser) {
-        val uid = currentUser?.uid
-        if (uid != null && promoCheckedForUid != uid) {
-            promoCheckedForUid = uid
-            promoLoading = true
-            val isPremium = premiumRepositoryForPromo.checkPremiumStatus(uid).getOrNull()?.isPremium ?: false
-            if (!isPremium) {
-                val packages = premiumRepositoryForPromo.getPackages().getOrNull().orEmpty()
-                promoPackages = packages
-                promoLoading = false
-                // Kalau ternyata gak ada paket sama sekali, gak usah paksain
-                // nongolin promo kosong.
-                showPremiumPromo = packages.isNotEmpty()
-            } else {
-                promoLoading = false
+        currentUser?.uid?.let { uid -> checkAndShowPremiumPromo(uid) }
+    }
+
+    // Trigger #2: tiap Activity-nya ON_START -- ini yang nangkep skenario
+    // "user minimize app terus buka lagi" atau "cold start pas sesi login
+    // lama masih kesimpen", yang gak selalu bikin currentUser BERUBAH
+    // (dari awal udah non-null), jadi Trigger #1 doang gak bakal nyala lagi.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) {
+                authRepository.currentUser.value?.uid?.let { uid ->
+                    promoCoroutineScope.launch { checkAndShowPremiumPromo(uid) }
+                }
             }
         }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // Kalau user logout (misal dari tombol Logout di Settings) pas lagi
