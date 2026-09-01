@@ -65,11 +65,12 @@ fun PremiumPromoDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+        androidx.compose.material3.Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background,
+            contentColor = MaterialTheme.colorScheme.onBackground
         ) {
+        Box(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -207,6 +208,7 @@ fun PremiumPromoDialog(
                 )
             }
         }
+        }
     }
 }
 
@@ -221,11 +223,17 @@ private fun PremiumPromoPackageCard(pkg: PremiumPackage) {
         "Badge khusus Premium"
     )
 
+    androidx.compose.material3.Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.6.dp, ZenimePrimary, RoundedCornerShape(20.dp)),
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface
+    ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .border(1.6.dp, ZenimePrimary, RoundedCornerShape(20.dp))
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -298,6 +306,7 @@ private fun PremiumPromoPackageCard(pkg: PremiumPackage) {
                 }
             }
         }
+    }
     }
 }
 
