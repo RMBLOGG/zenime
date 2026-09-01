@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.api.RemoteConfigManager
 import com.example.data.common.Result
+import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.model.HomeResponse
 import com.example.data.repository.AnimeRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,8 +38,21 @@ class HomeViewModel(private val repository: AnimeRepository) : ViewModel() {
     val heroSource: StateFlow<String> = repository.userPrefs.heroSourceFlow
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = "AUTO")
 
+    // Dipakai buat nampilin video hasil download di Beranda pas homeState
+    // gagal (biasanya lagi offline) -- daftar ini dari Room lokal, gak
+    // butuh internet sama sekali buat kebaca.
+    val downloads: StateFlow<List<DownloadedEpisodeEntity>> = repository.allDownloads
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
+
     init {
         loadHome()
+    }
+
+    /** Dipakai dari kartu download di Beranda (fallback pas offline). */
+    fun deleteDownload(episodeId: String) {
+        viewModelScope.launch {
+            repository.deleteEpisodeDownload(episodeId)
+        }
     }
 
     /**

@@ -270,6 +270,9 @@ fun ZenimeAppNavHost(
                     },
                     onChatClick = {
                         navController.navigate(Screen.Chat.route)
+                    },
+                    onPlayEpisodeClick = { episodeId, animeId ->
+                        navController.navigate(Screen.Player.createRoute(episodeId, animeId))
                     }
                 )
             }

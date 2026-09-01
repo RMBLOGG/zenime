@@ -8,6 +8,7 @@ import com.example.data.model.ChatMessage
 import com.example.data.repository.ChatRepository
 import com.example.data.repository.PremiumRepository
 import com.example.util.AvatarUploader
+import com.example.util.friendlyErrorMessage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -173,7 +174,7 @@ class ChatViewModel(
         } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
-                errorMessage = _uiState.value.errorMessage ?: (e.localizedMessage ?: "Gagal memuat chat")
+                errorMessage = _uiState.value.errorMessage ?: (friendlyErrorMessage(e, "Gagal memuat chat"))
             )
         }
     }
@@ -205,7 +206,7 @@ class ChatViewModel(
                 // Gagal kirim -- gak usah kena cooldown, biar user bisa langsung coba lagi.
                 _uiState.value = _uiState.value.copy(
                     isSending = false,
-                    errorMessage = e.localizedMessage ?: "Gagal mengirim pesan"
+                    errorMessage = friendlyErrorMessage(e, "Gagal mengirim pesan")
                 )
             }
         }
@@ -263,7 +264,7 @@ class ChatViewModel(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isSavingProfile = false,
-                    profileError = e.localizedMessage ?: "Gagal menyimpan username"
+                    profileError = friendlyErrorMessage(e, "Gagal menyimpan username")
                 )
             }
         }
@@ -298,7 +299,7 @@ class ChatViewModel(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     isUploadingAvatar = false,
-                    profileError = e.localizedMessage ?: "Gagal upload foto profil"
+                    profileError = friendlyErrorMessage(e, "Gagal upload foto profil")
                 )
             }
         }
@@ -334,7 +335,7 @@ class ChatViewModel(
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
                     deletingMessageId = null,
-                    errorMessage = e.localizedMessage ?: "Gagal menghapus pesan"
+                    errorMessage = friendlyErrorMessage(e, "Gagal menghapus pesan")
                 )
             }
         }

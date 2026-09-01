@@ -64,6 +64,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.R
 import com.example.data.common.Result
+import com.example.data.local.DownloadStatus
 import com.example.data.model.AnimeItem
 import com.example.ui.components.AnimePosterCard
 import com.example.ui.components.ErrorStateView
@@ -73,6 +74,7 @@ import com.example.ui.components.ShimmerHorizontalSection
 import com.example.ui.components.ZenimeHeader
 import com.example.ui.components.ZenimeHeaderActionButton
 import com.example.ui.components.ZenimeLogoTitle
+import com.example.ui.screens.favorites.DownloadedEpisodeCard
 import com.example.ui.theme.ZenimePrimary
 import kotlinx.coroutines.delay
 
@@ -84,9 +86,11 @@ fun HomeScreen(
     onSearchClick: () -> Unit,
     onSeeAllOngoingClick: () -> Unit,
     onChatClick: () -> Unit,
+    onPlayEpisodeClick: (episodeId: String, animeId: String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val homeState by viewModel.homeState.collectAsStateWithLifecycle()
+    val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val heroStyle by viewModel.heroStyle.collectAsStateWithLifecycle()
     val heroAutoplay by viewModel.heroAutoplay.collectAsStateWithLifecycle()
     val heroIntervalMs by viewModel.heroIntervalMs.collectAsStateWithLifecycle()
@@ -122,15 +126,66 @@ fun HomeScreen(
                     }
                 }
                 is Result.Error -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = 54.dp)
-                    ) {
-                        ErrorStateView(
-                            message = state.message,
-                            onRetry = { viewModel.loadHome(forceConfigRefresh = true) }
-                        )
+                    // Gagal narik Beranda (biasanya lagi offline). Kalau ada
+                    // video yang udah didownload, jadiin Beranda tetap
+                    // berguna -- tampilin itu di bawah pesan errornya,
+                    // bukan cuma layar kosong nyuruh coba lagi.
+                    if (downloads.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(top = 54.dp)
+                        ) {
+                            ErrorStateView(
+                                message = state.message,
+                                onRetry = { viewModel.loadHome(forceConfigRefresh = true) }
+                            )
+                        }
+                    } else {
+                        LazyColumn(
+                            contentPadding = PaddingValues(top = 54.dp, start = 16.dp, end = 16.dp, bottom = 110.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            item {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                                    Text(
+                                        text = state.message,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Coba Lagi",
+                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                        color = ZenimePrimary,
+                                        modifier = Modifier.clickable {
+                                            viewModel.loadHome(forceConfigRefresh = true)
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                }
+                            }
+                            item {
+                                Text(
+                                    text = "Video yang sudah didownload",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.padding(bottom = 4.dp)
+                                )
+                            }
+                            items(downloads, key = { it.episodeId }) { download ->
+                                DownloadedEpisodeCard(
+                                    item = download,
+                                    onCardClick = {
+                                        if (download.status == DownloadStatus.COMPLETED) {
+                                            onPlayEpisodeClick(download.episodeId, download.animeId)
+                                        }
+                                    },
+                                    onDeleteClick = { viewModel.deleteDownload(download.episodeId) }
+                                )
+                            }
+                        }
                     }
                 }
                 is Result.Success -> {

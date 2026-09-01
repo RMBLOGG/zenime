@@ -13,6 +13,7 @@ import com.example.data.model.EpisodeItem
 import com.example.data.model.GenreItem
 import com.example.data.model.HomeResponse
 import com.example.data.model.SearchResponse
+import com.example.util.friendlyErrorMessage
 import com.example.data.model.StreamResponse
 import com.example.data.model.StreamServer
 import com.example.util.qualityValueP
@@ -90,7 +91,7 @@ class AnimeRepository(
             if (cachedAfterFailure != null) {
                 emit(Result.Success(cachedAfterFailure.data))
             } else {
-                emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat beranda"))
+                emit(Result.Error(e, friendlyErrorMessage(e, "Gagal memuat beranda")))
             }
         }
     }.flowOn(Dispatchers.IO)
@@ -153,7 +154,7 @@ class AnimeRepository(
             if (cached != null) {
                 emit(Result.Success(cached.data))
             } else {
-                emit(Result.Error(e, e.localizedMessage ?: "Gagal melakukan pencarian"))
+                emit(Result.Error(e, friendlyErrorMessage(e, "Gagal melakukan pencarian")))
             }
         }
     }.flowOn(Dispatchers.IO)
@@ -174,7 +175,7 @@ class AnimeRepository(
             if (cached != null) {
                 emit(Result.Success(cached.data))
             } else {
-                emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat detail anime"))
+                emit(Result.Error(e, friendlyErrorMessage(e, "Gagal memuat detail anime")))
             }
         }
     }.flowOn(Dispatchers.IO)
@@ -200,7 +201,7 @@ class AnimeRepository(
             if (cached != null) {
                 emit(Result.Success(cached.data))
             } else {
-                emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat daftar episode"))
+                emit(Result.Error(e, friendlyErrorMessage(e, "Gagal memuat daftar episode")))
             }
         }
     }.flowOn(Dispatchers.IO)
@@ -238,7 +239,7 @@ class AnimeRepository(
             if (cached != null) {
                 emit(Result.Success(cached.data))
             } else {
-                emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat daftar episode"))
+                emit(Result.Error(e, friendlyErrorMessage(e, "Gagal memuat daftar episode")))
             }
         }
     }.flowOn(Dispatchers.IO)
@@ -253,7 +254,7 @@ class AnimeRepository(
             val response = api.getEpisodeStream(episodeId)
             emit(Result.Success(response))
         } catch (e: Exception) {
-            emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat link streaming"))
+            emit(Result.Error(e, friendlyErrorMessage(e, "Gagal memuat link streaming")))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -273,7 +274,7 @@ class AnimeRepository(
             if (cached != null) {
                 emit(Result.Success(cached.data))
             } else {
-                emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat jadwal tayang"))
+                emit(Result.Error(e, friendlyErrorMessage(e, "Gagal memuat jadwal tayang")))
             }
         }
     }.flowOn(Dispatchers.IO)
@@ -294,7 +295,7 @@ class AnimeRepository(
             if (cached != null) {
                 emit(Result.Success(cached.data))
             } else {
-                emit(Result.Error(e, e.localizedMessage ?: "Gagal memuat daftar genre"))
+                emit(Result.Error(e, friendlyErrorMessage(e, "Gagal memuat daftar genre")))
             }
         }
     }.flowOn(Dispatchers.IO)
@@ -415,7 +416,7 @@ class AnimeRepository(
                 Result.Success(options)
             }
         } catch (e: Exception) {
-            Result.Error(e, e.localizedMessage ?: "Gagal memuat pilihan kualitas")
+            Result.Error(e, friendlyErrorMessage(e, "Gagal memuat pilihan kualitas"))
         }
     }
 
@@ -456,7 +457,7 @@ class AnimeRepository(
 
         return outcome.fold(
             onSuccess = { Result.Success(Unit) },
-            onFailure = { e -> Result.Error(e, e.localizedMessage ?: "Gagal memulai download") }
+            onFailure = { e -> Result.Error(e, friendlyErrorMessage(e, "Gagal memulai download")) }
         )
     }
 }

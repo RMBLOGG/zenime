@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.common.Result
 import com.example.data.model.AnimeItem
 import com.example.data.repository.AnimeRepository
+import com.example.util.friendlyErrorMessage
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -55,7 +56,7 @@ class ScheduleViewModel(private val repository: AnimeRepository) : ViewModel() {
                     }
                 _scheduleState.value = Result.Success(sections)
             } catch (e: Exception) {
-                _scheduleState.value = Result.Error(e, e.localizedMessage ?: "Gagal memuat jadwal tayang")
+                _scheduleState.value = Result.Error(e, friendlyErrorMessage(e, "Gagal memuat jadwal tayang"))
             }
         }
     }
