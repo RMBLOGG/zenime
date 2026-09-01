@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,13 +27,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FiberManualRecord
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -65,6 +71,7 @@ import coil.request.ImageRequest
 import com.example.R
 import com.example.data.common.Result
 import com.example.data.local.DownloadStatus
+import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.model.AnimeItem
 import com.example.ui.components.AnimePosterCard
 import com.example.ui.components.ErrorStateView
@@ -74,7 +81,6 @@ import com.example.ui.components.ShimmerHorizontalSection
 import com.example.ui.components.ZenimeHeader
 import com.example.ui.components.ZenimeHeaderActionButton
 import com.example.ui.components.ZenimeLogoTitle
-import com.example.ui.screens.favorites.DownloadedEpisodeCard
 import com.example.ui.theme.ZenimePrimary
 import kotlinx.coroutines.delay
 
@@ -144,7 +150,7 @@ fun HomeScreen(
                     } else {
                         LazyColumn(
                             contentPadding = PaddingValues(top = 54.dp, start = 16.dp, end = 16.dp, bottom = 110.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(20.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
                             item {
@@ -175,7 +181,7 @@ fun HomeScreen(
                                 )
                             }
                             items(downloads, key = { it.episodeId }) { download ->
-                                DownloadedEpisodeCard(
+                                YoutubeStyleDownloadCard(
                                     item = download,
                                     onCardClick = {
                                         if (download.status == DownloadStatus.COMPLETED) {
@@ -924,5 +930,172 @@ fun AnimeHorizontalSection(
                 )
             }
         }
+    }
+}
+
+/**
+ * Kartu video download bergaya feed YouTube -- thumbnail lebar penuh di
+ * atas (bukan thumbnail kecil di samping kayak DownloadedEpisodeCard di
+ * tab Koleksi), terus "avatar channel" bulat (posternya) + judul 2 baris +
+ * baris meta di bawahnya. Dipakai khusus buat fallback download di
+ * Beranda pas offline.
+ */
+@Composable
+private fun YoutubeStyleDownloadCard(
+    item: DownloadedEpisodeEntity,
+    onCardClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onCardClick)
+    ) {
+        // Thumbnail full-width, persis proporsi thumbnail video di feed YouTube.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(item.episodeThumbnailUrl ?: item.posterUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = item.animeTitle,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            // Chip status offline, pojok kiri atas -- kayak label "LIVE"/"4K" YouTube.
+            Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = Color.Black.copy(alpha = 0.75f),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp)
+            ) {
+                Text(
+                    text = "TERSIMPAN",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                )
+            }
+
+            // Nomor episode, pojok kanan bawah -- posisi yang sama kayak
+            // durasi video di thumbnail YouTube.
+            if (!item.episodeIndex.isNullOrEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = Color.Black.copy(alpha = 0.75f),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                ) {
+                    Text(
+                        text = "EP ${item.episodeIndex}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            // "Avatar channel" bulat -- posternya sendiri, sama kayak logo
+            // channel di feed YouTube.
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(item.posterUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = item.animeTitle,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            )
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                val epLabel = if (!item.episodeTitle.isNullOrEmpty()) {
+                    "${item.animeTitle} - ${item.episodeTitle}"
+                } else {
+                    "${item.animeTitle} - Episode ${item.episodeIndex ?: ""}"
+                }
+                Text(
+                    text = epLabel,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = item.animeTitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                // Baris meta -- posisinya sama kayak "views • waktu upload"
+                // di YouTube.
+                Text(
+                    text = when (item.status) {
+                        DownloadStatus.COMPLETED -> "Siap ditonton offline • ${formatDownloadSize(item.totalBytes)}"
+                        DownloadStatus.FAILED -> "Download gagal"
+                        else -> "Mendownload..."
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (item.status == DownloadStatus.FAILED) {
+                        Color(0xFFE57373)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Box {
+                IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "Opsi lainnya",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Hapus dari download") },
+                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+                        onClick = {
+                            menuExpanded = false
+                            onDeleteClick()
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun formatDownloadSize(bytes: Long): String {
+    val mb = bytes / (1024.0 * 1024.0)
+    return if (mb >= 1024) {
+        "%.1f GB".format(mb / 1024.0)
+    } else {
+        "%.0f MB".format(mb)
     }
 }
