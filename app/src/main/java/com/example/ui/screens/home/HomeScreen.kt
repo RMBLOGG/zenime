@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
@@ -1011,20 +1012,39 @@ private fun YoutubeStyleDownloadCard(
         Spacer(modifier = Modifier.height(10.dp))
 
         Row(modifier = Modifier.fillMaxWidth()) {
-            // "Avatar channel" bulat -- posternya sendiri, sama kayak logo
-            // channel di feed YouTube.
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(item.posterUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = item.animeTitle,
-                contentScale = ContentScale.Crop,
+            // "Avatar channel" bulat, sama kayak logo channel di feed
+            // YouTube. Prioritasin episodeThumbnailUrl (BUKAN posterUrl)
+            // -- itu url yang sama dipakai buat thumbnail besar di atas,
+            // yang kebukti kepakai offline karena udah ke-cache Coil pas
+            // user nonton episode ini pertama kali. posterUrl anime belum
+            // tentu pernah ke-load/ke-cache di device ini, jadi kalau
+            // dipakai sendirian bisa nongol kosong pas offline. Icon di
+            // belakang jadi fallback terakhir kalau dua-duanya gagal
+            // dimuat (AsyncImage transparan pas gagal, jadi Icon-nya
+            // tetap kelihatan, bukan bulet kosong item-item).
+            Box(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            )
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Movie,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.size(18.dp)
+                )
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(item.episodeThumbnailUrl ?: item.posterUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = item.animeTitle,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
 
             Spacer(modifier = Modifier.width(10.dp))
 
