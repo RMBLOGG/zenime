@@ -16,4 +16,11 @@ object SupabaseConfig {
 
     /** Halaman storefront buat checkout pembayaran premium. */
     const val STOREFRONT_URL = "https://zenime.biz.id/beli-premium"
+
+    /**
+     * Halaman storefront khusus buat pembeli luar negeri (mis. Malaysia)
+     * yang QRIS Sakurupiah di [STOREFRONT_URL] tidak kebaca e-wallet/bank
+     * mereka -- pakai QRIS pribadi merchant, diverifikasi manual oleh admin.
+     */
+    const val MANUAL_STOREFRONT_URL = "https://zenime.biz.id/bayar-manual"
 }

@@ -433,6 +433,28 @@ private fun PremiumCheckoutCard(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Bayar Sekarang", fontWeight = FontWeight.Bold)
                     }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            // Sama seperti tombol "Bayar Sekarang", tapi ke halaman
+                            // /bayar-manual (QRIS pribadi + verifikasi manual admin)
+                            // -- buat pembeli luar negeri yang QRIS Sakurupiah-nya
+                            // tidak kebaca e-wallet/bank mereka.
+                            val manualUri = Uri.parse(SupabaseConfig.MANUAL_STOREFRONT_URL)
+                                .buildUpon()
+                                .appendQueryParameter("code", zenimeCode)
+                                .appendQueryParameter("package_id", pkg.id)
+                                .build()
+                            val intent = Intent(Intent.ACTION_VIEW, manualUri)
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Bayar dari Luar Negeri", fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
         }
