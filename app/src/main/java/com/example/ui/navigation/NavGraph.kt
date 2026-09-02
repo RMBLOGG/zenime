@@ -523,7 +523,7 @@ fun ZenimeAppNavHost(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(bottom = 24.dp)
+                    .padding(bottom = 12.dp)
             )
         }
 
