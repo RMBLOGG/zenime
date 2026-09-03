@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.widget.Toast
 import com.example.BuildConfig
 import com.unity3d.ads.IUnityAdsInitializationListener
 import com.unity3d.ads.IUnityAdsLoadListener
@@ -41,6 +42,21 @@ object AdManager {
     private val retryHandler = Handler(Looper.getMainLooper())
     private var isLoadInFlight = false
 
+    // DEBUG SEMENTARA: nampilin Toast tiap ada kejadian penting soal iklan
+    // (gagal load, gagal tampil, skip karena belum siap), lengkap sama pesan
+    // errornya, biar kelihatan langsung di layar HP tanpa perlu adb/logcat.
+    // Matiin lagi (set false) begitu udah selesai diagnosa.
+    private const val DEBUG_ADS_TOAST = true
+    private var appContext: Context? = null
+
+    private fun debugToast(message: String) {
+        if (!DEBUG_ADS_TOAST) return
+        val ctx = appContext ?: return
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(ctx, "[Ads] $message", Toast.LENGTH_LONG).show()
+        }
+    }
+
     fun setTestMode(enabled: Boolean) {
         testMode = enabled
     }
@@ -50,6 +66,7 @@ object AdManager {
      * placement yang di-load/ditampilin.
      */
     fun initialize(context: Context, onReady: (() -> Unit)? = null) {
+        appContext = context.applicationContext
         if (isInitialized) {
             onReady?.invoke()
             return
@@ -63,6 +80,7 @@ object AdManager {
                 override fun onInitializationComplete() {
                     Log.d(TAG, "Unity Ads initialized")
                     isInitialized = true
+                    debugToast("Unity Ads initialized (gameId=${BuildConfig.UNITY_ADS_GAME_ID}, testMode=$testMode)")
                     loadInterstitial()
                     onReady?.invoke()
                 }
@@ -72,6 +90,7 @@ object AdManager {
                     message: String?
                 ) {
                     Log.e(TAG, "Unity Ads init failed: $error - $message")
+                    debugToast("Init GAGAL: $error - $message")
                 }
             }
         )
@@ -88,6 +107,7 @@ object AdManager {
                     isLoadInFlight = false
                     isInterstitialLoaded = true
                     retryAttempt = 0
+                    debugToast("Interstitial berhasil di-load, siap ditampilin")
                 }
 
                 override fun onUnityAdsFailedToLoad(
@@ -98,6 +118,7 @@ object AdManager {
                     isLoadInFlight = false
                     isInterstitialLoaded = false
                     Log.e(TAG, "Gagal load interstitial: $error - $message")
+                    debugToast("Gagal load: $error - $message")
                     scheduleRetry()
                 }
             }
@@ -121,6 +142,7 @@ object AdManager {
     fun showInterstitial(activity: Activity, onAdFinished: () -> Unit) {
         if (!isInitialized || !isInterstitialLoaded) {
             Log.d(TAG, "Interstitial belum siap, skip nampilin iklan")
+            debugToast("Skip: iklan belum siap (initialized=$isInitialized, loaded=$isInterstitialLoaded)")
             // Jaga-jaga kalau kebetulan lagi nggak ada retry yang jalan
             // (misal masih nunggu backoff), coba siapin lagi dari sini juga.
             if (isInitialized && !isLoadInFlight) loadInterstitial()
@@ -150,6 +172,7 @@ object AdManager {
                     message: String?
                 ) {
                     Log.e(TAG, "Gagal nampilin interstitial: $error - $message")
+                    debugToast("Gagal tampil: $error - $message")
                     finishOnce()
                 }
 
