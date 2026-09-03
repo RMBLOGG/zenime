@@ -118,6 +118,7 @@ dependencies {
   implementation(libs.androidx.media3.ui)
   implementation(libs.levelplay.mediation.sdk)
   implementation(libs.levelplay.unityads.adapter)
+  implementation(libs.unity.ads.sdk)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
   // Uncomment to use Firestore:
