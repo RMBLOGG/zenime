@@ -49,7 +49,7 @@ object AdManager {
     // (gagal load, gagal tampil, skip karena belum siap), lengkap sama pesan
     // errornya, biar kelihatan langsung di layar HP tanpa perlu adb/logcat.
     // Matiin lagi (set false) begitu udah selesai diagnosa.
-    private const val DEBUG_ADS_TOAST = true
+    private const val DEBUG_ADS_TOAST = false
     private var appContext: Context? = null
 
     private fun debugToast(message: String) {
