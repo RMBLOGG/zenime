@@ -20,10 +20,9 @@ android {
     versionCode = 3
     versionName = "1.2"
 
-    // Unity LevelPlay App Key (platform.ironsrc.com > Apps > Zenime > App key).
-    buildConfigField("String", "LEVELPLAY_APP_KEY", "\"27ed6ea75\"")
-    // Ad Unit ID interstitial (LevelPlay > Setup > Ad units > Interstitial_Android).
-    buildConfigField("String", "LEVELPLAY_INTERSTITIAL_AD_UNIT_ID", "\"b09dk6m3lkijq4dj\"")
+    // Google AdMob (admob.google.com > Zenime > Unit iklan).
+    buildConfigField("String", "ADMOB_INTERSTITIAL_AD_UNIT_ID", "\"ca-app-pub-9091746313901345/5101367523\"")
+    buildConfigField("String", "ADMOB_REWARDED_AD_UNIT_ID", "\"ca-app-pub-9091746313901345/1369900874\"")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -116,9 +115,7 @@ dependencies {
   implementation(libs.coil.compose)
   implementation(libs.androidx.media3.exoplayer)
   implementation(libs.androidx.media3.ui)
-  implementation(libs.levelplay.mediation.sdk)
-  implementation(libs.levelplay.unityads.adapter)
-  implementation(libs.unity.ads.sdk)
+  implementation(libs.play.services.ads)
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
   // Uncomment to use Firestore:
