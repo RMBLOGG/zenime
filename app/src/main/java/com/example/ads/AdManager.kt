@@ -2,6 +2,8 @@ package com.example.ads
 
 import android.app.Activity
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import com.example.BuildConfig
 import com.unity3d.ads.IUnityAdsInitializationListener
@@ -29,6 +31,15 @@ object AdManager {
 
     private var isInitialized = false
     private var isInterstitialLoaded = false
+
+    // Retry load kalau gagal (no-fill, timeout, dll), backoff naik tiap
+    // gagal berturut-turut, di-cap biar nggak nunggu kelamaan. Tanpa ini,
+    // sekali load gagal, iklan SELAMANYA nggak ke-refresh lagi karena
+    // satu-satunya pemicu loadInterstitial() lain cuma abis show sukses.
+    private val retryDelaysMs = longArrayOf(10_000L, 30_000L, 60_000L, 120_000L)
+    private var retryAttempt = 0
+    private val retryHandler = Handler(Looper.getMainLooper())
+    private var isLoadInFlight = false
 
     fun setTestMode(enabled: Boolean) {
         testMode = enabled
@@ -68,12 +79,15 @@ object AdManager {
 
     /** Preload iklan interstitial supaya siap ditampilin instan pas dibutuhin. */
     fun loadInterstitial() {
-        if (!isInitialized) return
+        if (!isInitialized || isLoadInFlight) return
+        isLoadInFlight = true
         UnityAds.load(
             PLACEMENT_INTERSTITIAL,
             object : IUnityAdsLoadListener {
                 override fun onUnityAdsAdLoaded(placementId: String?) {
+                    isLoadInFlight = false
                     isInterstitialLoaded = true
+                    retryAttempt = 0
                 }
 
                 override fun onUnityAdsFailedToLoad(
@@ -81,11 +95,20 @@ object AdManager {
                     error: UnityAds.UnityAdsLoadError?,
                     message: String?
                 ) {
+                    isLoadInFlight = false
                     isInterstitialLoaded = false
                     Log.e(TAG, "Gagal load interstitial: $error - $message")
+                    scheduleRetry()
                 }
             }
         )
+    }
+
+    private fun scheduleRetry() {
+        val delay = retryDelaysMs[retryAttempt.coerceAtMost(retryDelaysMs.lastIndex)]
+        retryAttempt++
+        Log.d(TAG, "Retry load interstitial dalam ${delay / 1000}s (percobaan ke-$retryAttempt)")
+        retryHandler.postDelayed({ loadInterstitial() }, delay)
     }
 
     /**
@@ -98,6 +121,9 @@ object AdManager {
     fun showInterstitial(activity: Activity, onAdFinished: () -> Unit) {
         if (!isInitialized || !isInterstitialLoaded) {
             Log.d(TAG, "Interstitial belum siap, skip nampilin iklan")
+            // Jaga-jaga kalau kebetulan lagi nggak ada retry yang jalan
+            // (misal masih nunggu backoff), coba siapin lagi dari sini juga.
+            if (isInitialized && !isLoadInFlight) loadInterstitial()
             onAdFinished()
             return
         }
