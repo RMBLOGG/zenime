@@ -7,40 +7,39 @@ import android.os.Looper
 import android.util.Log
 import android.widget.Toast
 import com.example.BuildConfig
-import com.unity3d.ads.IUnityAdsInitializationListener
-import com.unity3d.ads.IUnityAdsLoadListener
-import com.unity3d.ads.IUnityAdsShowListener
-import com.unity3d.ads.UnityAds
-import com.unity3d.ads.UnityAdsShowOptions
+import com.unity3d.mediation.LevelPlay
+import com.unity3d.mediation.LevelPlayAdError
+import com.unity3d.mediation.LevelPlayAdInfo
+import com.unity3d.mediation.LevelPlayConfiguration
+import com.unity3d.mediation.LevelPlayInitError
+import com.unity3d.mediation.LevelPlayInitListener
+import com.unity3d.mediation.LevelPlayInitRequest
+import com.unity3d.mediation.interstitial.LevelPlayInterstitialAd
+import com.unity3d.mediation.interstitial.LevelPlayInterstitialAdListener
 
 /**
- * Wrapper tipis di atas Unity Ads SDK buat nampilin interstitial video ad
+ * Wrapper tipis di atas Unity LevelPlay SDK buat nampilin interstitial video ad
  * sebelum user mulai nonton episode.
  *
- * Placement ID diambil dari dashboard Unity Cloud (Monetization > Apps >
- * Zenime > Network Placement ID).
+ * MIGRASI (lihat riwayat chat): sebelumnya pakai legacy `com.unity3d.ads.UnityAds`
+ * langsung ke placement Waterfall di Unity Cloud (Game ID). Per kebijakan Unity,
+ * placement baru di Unity Cloud sekarang otomatis Bidding, dan SDK legacy nggak
+ * bisa konsumsi placement Bidding (error "adMarkup is missing; objectId is
+ * missing"). Solusinya migrasi ke LevelPlay SDK (App Key + Ad Unit ID, didaftarin
+ * lewat platform.ironsrc.com, bukan cloud.unity.com lagi).
  */
 object AdManager {
 
     private const val TAG = "AdManager"
-    // TEMP TESTING: ganti ke placement baru (dibikin lewat "Create placement"
-    // di dashboard, tanpa milih Bidding) buat mastiin ini fix error
-    // "adMarkup is missing; objectId is missing". Kalau kebukti jalan,
-    // archive placement lama & ganti nilai ini balik ke "Interstitial_Android".
-    private const val PLACEMENT_INTERSTITIAL = "Interstitial_Android_v2"
-
-    // Set true kalau lagi development/testing biar cuma dapet iklan dummy
-    // (nggak generate uang beneran, aman dari resiko akun ke-flag karena
-    // klik/impresi berulang dari device sendiri). Production: false.
-    private var testMode = false
 
     private var isInitialized = false
+    private var interstitialAd: LevelPlayInterstitialAd? = null
     private var isInterstitialLoaded = false
 
     // Retry load kalau gagal (no-fill, timeout, dll), backoff naik tiap
     // gagal berturut-turut, di-cap biar nggak nunggu kelamaan. Tanpa ini,
     // sekali load gagal, iklan SELAMANYA nggak ke-refresh lagi karena
-    // satu-satunya pemicu loadInterstitial() lain cuma abis show sukses.
+    // satu-satunya pemicu load ulang lain cuma abis show sukses.
     private val retryDelaysMs = longArrayOf(10_000L, 30_000L, 60_000L, 120_000L)
     private var retryAttempt = 0
     private val retryHandler = Handler(Looper.getMainLooper())
@@ -61,10 +60,6 @@ object AdManager {
         }
     }
 
-    fun setTestMode(enabled: Boolean) {
-        testMode = enabled
-    }
-
     /**
      * Panggil sekali di awal (misal di MainActivity.onCreate) sebelum ada
      * placement yang di-load/ditampilin.
@@ -76,57 +71,72 @@ object AdManager {
             return
         }
 
-        UnityAds.initialize(
+        val initRequest = LevelPlayInitRequest.Builder(BuildConfig.LEVELPLAY_APP_KEY).build()
+
+        LevelPlay.init(
             context.applicationContext,
-            BuildConfig.UNITY_ADS_GAME_ID,
-            testMode,
-            object : IUnityAdsInitializationListener {
-                override fun onInitializationComplete() {
-                    Log.d(TAG, "Unity Ads initialized")
+            initRequest,
+            object : LevelPlayInitListener {
+                override fun onInitSuccess(configuration: LevelPlayConfiguration) {
+                    Log.d(TAG, "LevelPlay initialized")
                     isInitialized = true
-                    debugToast("Unity Ads initialized (gameId=${BuildConfig.UNITY_ADS_GAME_ID}, testMode=$testMode)")
-                    loadInterstitial()
+                    debugToast("LevelPlay initialized (appKey=${BuildConfig.LEVELPLAY_APP_KEY})")
+                    createAndLoadInterstitial()
                     onReady?.invoke()
                 }
 
-                override fun onInitializationFailed(
-                    error: UnityAds.UnityAdsInitializationError?,
-                    message: String?
-                ) {
-                    Log.e(TAG, "Unity Ads init failed: $error - $message")
-                    debugToast("Init GAGAL: $error - $message")
+                override fun onInitFailed(error: LevelPlayInitError) {
+                    Log.e(TAG, "LevelPlay init gagal: $error")
+                    debugToast("Init GAGAL: $error")
                 }
             }
         )
     }
 
-    /** Preload iklan interstitial supaya siap ditampilin instan pas dibutuhin. */
-    fun loadInterstitial() {
-        if (!isInitialized || isLoadInFlight) return
-        isLoadInFlight = true
-        UnityAds.load(
-            PLACEMENT_INTERSTITIAL,
-            object : IUnityAdsLoadListener {
-                override fun onUnityAdsAdLoaded(placementId: String?) {
+    private fun createAndLoadInterstitial() {
+        if (interstitialAd == null) {
+            interstitialAd = LevelPlayInterstitialAd(BuildConfig.LEVELPLAY_INTERSTITIAL_AD_UNIT_ID)
+            interstitialAd?.setListener(object : LevelPlayInterstitialAdListener {
+                override fun onAdLoaded(adInfo: LevelPlayAdInfo) {
                     isLoadInFlight = false
                     isInterstitialLoaded = true
                     retryAttempt = 0
                     debugToast("Interstitial berhasil di-load, siap ditampilin")
                 }
 
-                override fun onUnityAdsFailedToLoad(
-                    placementId: String?,
-                    error: UnityAds.UnityAdsLoadError?,
-                    message: String?
-                ) {
+                override fun onAdLoadFailed(error: LevelPlayAdError) {
                     isLoadInFlight = false
                     isInterstitialLoaded = false
-                    Log.e(TAG, "Gagal load interstitial: $error - $message")
-                    debugToast("Gagal load: $error - $message")
+                    Log.e(TAG, "Gagal load interstitial: $error")
+                    debugToast("Gagal load: $error")
                     scheduleRetry()
                 }
-            }
-        )
+
+                override fun onAdDisplayed(adInfo: LevelPlayAdInfo) {}
+
+                override fun onAdDisplayFailed(error: LevelPlayAdError, adInfo: LevelPlayAdInfo) {
+                    Log.e(TAG, "Gagal nampilin interstitial: $error")
+                    debugToast("Gagal tampil: $error")
+                    onShowFinished()
+                }
+
+                override fun onAdClicked(adInfo: LevelPlayAdInfo) {}
+
+                override fun onAdClosed(adInfo: LevelPlayAdInfo) {
+                    onShowFinished()
+                }
+
+                override fun onAdInfoChanged(adInfo: LevelPlayAdInfo) {}
+            })
+        }
+        loadInterstitial()
+    }
+
+    /** Preload iklan interstitial supaya siap ditampilin instan pas dibutuhin. */
+    private fun loadInterstitial() {
+        if (!isInitialized || isLoadInFlight) return
+        isLoadInFlight = true
+        interstitialAd?.loadAd()
     }
 
     private fun scheduleRetry() {
@@ -134,6 +144,17 @@ object AdManager {
         retryAttempt++
         Log.d(TAG, "Retry load interstitial dalam ${delay / 1000}s (percobaan ke-$retryAttempt)")
         retryHandler.postDelayed({ loadInterstitial() }, delay)
+    }
+
+    private var pendingOnAdFinished: (() -> Unit)? = null
+
+    private fun onShowFinished() {
+        isInterstitialLoaded = false
+        // Siapin iklan berikutnya buat episode selanjutnya.
+        loadInterstitial()
+        val callback = pendingOnAdFinished
+        pendingOnAdFinished = null
+        callback?.invoke()
     }
 
     /**
@@ -144,7 +165,8 @@ object AdManager {
      * nge-block user selamanya.
      */
     fun showInterstitial(activity: Activity, onAdFinished: () -> Unit) {
-        if (!isInitialized || !isInterstitialLoaded) {
+        val ad = interstitialAd
+        if (!isInitialized || !isInterstitialLoaded || ad == null || !ad.isAdReady) {
             Log.d(TAG, "Interstitial belum siap, skip nampilin iklan")
             debugToast("Skip: iklan belum siap (initialized=$isInitialized, loaded=$isInterstitialLoaded)")
             // Jaga-jaga kalau kebetulan lagi nggak ada retry yang jalan
@@ -154,43 +176,7 @@ object AdManager {
             return
         }
 
-        var finished = false
-        fun finishOnce() {
-            if (!finished) {
-                finished = true
-                isInterstitialLoaded = false
-                // Siapin iklan berikutnya buat episode selanjutnya.
-                loadInterstitial()
-                onAdFinished()
-            }
-        }
-
-        UnityAds.show(
-            activity,
-            PLACEMENT_INTERSTITIAL,
-            UnityAdsShowOptions(),
-            object : IUnityAdsShowListener {
-                override fun onUnityAdsShowFailure(
-                    placementId: String?,
-                    error: UnityAds.UnityAdsShowError?,
-                    message: String?
-                ) {
-                    Log.e(TAG, "Gagal nampilin interstitial: $error - $message")
-                    debugToast("Gagal tampil: $error - $message")
-                    finishOnce()
-                }
-
-                override fun onUnityAdsShowStart(placementId: String?) {}
-
-                override fun onUnityAdsShowClick(placementId: String?) {}
-
-                override fun onUnityAdsShowComplete(
-                    placementId: String?,
-                    state: UnityAds.UnityAdsShowCompletionState?
-                ) {
-                    finishOnce()
-                }
-            }
-        )
+        pendingOnAdFinished = onAdFinished
+        ad.showAd(activity)
     }
 }
