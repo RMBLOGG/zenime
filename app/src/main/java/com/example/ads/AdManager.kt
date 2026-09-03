@@ -23,7 +23,11 @@ import com.unity3d.ads.UnityAdsShowOptions
 object AdManager {
 
     private const val TAG = "AdManager"
-    private const val PLACEMENT_INTERSTITIAL = "Interstitial_Android"
+    // TEMP TESTING: ganti ke placement baru (dibikin lewat "Create placement"
+    // di dashboard, tanpa milih Bidding) buat mastiin ini fix error
+    // "adMarkup is missing; objectId is missing". Kalau kebukti jalan,
+    // archive placement lama & ganti nilai ini balik ke "Interstitial_Android".
+    private const val PLACEMENT_INTERSTITIAL = "Interstitial_Android_v2"
 
     // Set true kalau lagi development/testing biar cuma dapet iklan dummy
     // (nggak generate uang beneran, aman dari resiko akun ke-flag karena
