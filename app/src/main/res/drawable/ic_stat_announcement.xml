@@ -4,7 +4,7 @@
     android:viewportWidth="24"
     android:viewportHeight="24"
     android:tint="#FFFFFF">
-    <!-- Bell/lonceng polos -- ikon status bar WAJIB silhouette satu warna
+    <!-- Bell/lonceng polos: ikon status bar WAJIB silhouette satu warna
          (sistem yang nge-tint jadi putih di notification shade), jangan
          pakai logo app yang berwarna-warni kayak ic_launcher. -->
     <path
