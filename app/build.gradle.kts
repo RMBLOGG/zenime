@@ -72,6 +72,11 @@ android {
     buildConfig = true
   }
   testOptions { unitTests { isIncludeAndroidResources = true } }
+  lint {
+    // False positive: project tidak declare dependency Fragment secara eksplisit,
+    // jadi lint gagal verifikasi versinya lewat androidx.activity/Compose yang dipakai.
+    disable += "InvalidFragmentVersionForActivityResult"
+  }
   dependenciesInfo {
     includeInApk = false
     includeInBundle = true
