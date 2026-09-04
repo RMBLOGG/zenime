@@ -16,9 +16,13 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -26,7 +30,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,8 +54,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.data.common.Result
-import com.example.data.model.BacakomikListItem
 import com.example.ui.components.ComicPosterCard
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
@@ -66,9 +70,10 @@ fun ComicScreen(
     onComicClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val homeState by viewModel.homeState.collectAsStateWithLifecycle()
+    val latestState by viewModel.latestState.collectAsStateWithLifecycle()
+    val popularState by viewModel.popularState.collectAsStateWithLifecycle()
     val query by viewModel.searchQuery.collectAsStateWithLifecycle()
-    val searchState by viewModel.searchState.collectAsStateWithLifecycle()
+    val filterState by viewModel.filterState.collectAsStateWithLifecycle()
     val genresState by viewModel.genres.collectAsStateWithLifecycle()
     val selectedGenre by viewModel.selectedGenre.collectAsStateWithLifecycle()
 
@@ -132,7 +137,7 @@ fun ComicScreen(
             }
 
             // Genre Chips
-            val genreList = (genresState as? Result.Success)?.data.orEmpty()
+            val genreList = (genresState as? com.example.data.common.Result.Success)?.data.orEmpty()
             if (genreList.isNotEmpty()) {
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
@@ -168,7 +173,7 @@ fun ComicScreen(
             Box(modifier = Modifier.fillMaxSize()) {
                 if (isFiltering) {
                     ComicResultGrid(
-                        state = searchState ?: Result.Loading,
+                        state = filterState,
                         gridState = gridState,
                         emptyTitle = "Komik Tidak Ditemukan",
                         emptyDescription = "Coba kata kunci atau genre lain.",
@@ -176,7 +181,8 @@ fun ComicScreen(
                         onRetry = {
                             if (query.isNotBlank()) viewModel.onSearchQueryChange(query)
                             else viewModel.selectGenre(selectedGenre)
-                        }
+                        },
+                        onLoadMore = { viewModel.loadMoreFilter() }
                     )
                 } else {
                     AnimatedContent(
@@ -187,18 +193,20 @@ fun ComicScreen(
                         },
                         label = "comicTabContent"
                     ) { tab ->
-                        val listResult = when (val state = homeState) {
-                            is Result.Success -> Result.Success(if (tab == 0) state.data.latest else state.data.popular)
-                            is Result.Loading -> Result.Loading
-                            is Result.Error -> state
-                        }
+                        val state = if (tab == 0) latestState else popularState
                         ComicResultGrid(
-                            state = listResult,
+                            state = state,
                             gridState = gridState,
                             emptyTitle = "Belum Ada Komik",
                             emptyDescription = "Konten belum tersedia saat ini.",
                             onComicClick = onComicClick,
-                            onRetry = { viewModel.loadHome(forceRefresh = true) }
+                            onRetry = {
+                                if (tab == 0) viewModel.loadLatest(forceRefresh = true)
+                                else viewModel.loadPopular(forceRefresh = true)
+                            },
+                            onLoadMore = {
+                                if (tab == 0) viewModel.loadMoreLatest() else viewModel.loadMorePopular()
+                            }
                         )
                     }
                 }
@@ -248,16 +256,17 @@ private fun ComicTabRow(
 
 @Composable
 private fun ComicResultGrid(
-    state: Result<List<BacakomikListItem>>,
-    gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
+    state: ComicListState,
+    gridState: LazyGridState,
     emptyTitle: String,
     emptyDescription: String,
     onComicClick: (String) -> Unit,
     onRetry: () -> Unit,
+    onLoadMore: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    when (state) {
-        is Result.Loading -> {
+    when {
+        state.isInitialLoading -> {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(3),
                 contentPadding = PaddingValues(16.dp),
@@ -268,33 +277,91 @@ private fun ComicResultGrid(
                 items(9) { ShimmerPosterItem(modifier = Modifier.fillMaxWidth()) }
             }
         }
-        is Result.Error -> {
-            ErrorStateView(message = state.message, onRetry = onRetry)
+        state.errorMessage != null && state.items.isEmpty() -> {
+            ErrorStateView(message = state.errorMessage, onRetry = onRetry)
         }
-        is Result.Success -> {
-            val comics = state.data
-            if (comics.isEmpty()) {
-                EmptyStateView(title = emptyTitle, description = emptyDescription)
-            } else {
-                LazyVerticalGrid(
-                    state = gridState,
-                    columns = GridCells.Fixed(3),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 110.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    modifier = modifier.fillMaxSize()
-                ) {
-                    items(comics, key = { it.slug }) { comic ->
-                        AnimatedVisibility(
-                            visible = true,
-                            enter = fadeIn(tween(280)) + slideInVertically(tween(280)) { it / 8 }
-                        ) {
-                            ComicPosterCard(
-                                comic = comic,
-                                onClick = { onComicClick(comic.slug) }
-                            )
-                        }
+        state.isEmpty -> {
+            EmptyStateView(title = emptyTitle, description = emptyDescription)
+        }
+        else -> {
+            LazyVerticalGrid(
+                state = gridState,
+                columns = GridCells.Fixed(3),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 110.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = modifier.fillMaxSize()
+            ) {
+                items(state.items, key = { it.slug }) { comic ->
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn(tween(280)) + slideInVertically(tween(280)) { it / 8 }
+                    ) {
+                        ComicPosterCard(
+                            comic = comic,
+                            onClick = { onComicClick(comic.slug) }
+                        )
                     }
+                }
+
+                // Tombol "Load More" -- span 3 kolom penuh di baris terakhir.
+                if (state.hasNextPage) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        LoadMoreButton(isLoading = state.isLoadingMore, onClick = onLoadMore)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LoadMoreButton(
+    isLoading: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surface,
+            modifier = Modifier
+                .border(1.dp, CardOutlineBorder, RoundedCornerShape(14.dp))
+                .clickable(enabled = !isLoading) { onClick() }
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        color = ZenimePrimary,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "Memuat...",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        text = "Muat Lebih Banyak",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Icon(
+                        imageVector = Icons.Filled.ExpandMore,
+                        contentDescription = null,
+                        tint = ZenimePrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
         }

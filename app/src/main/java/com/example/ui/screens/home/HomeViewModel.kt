@@ -61,7 +61,13 @@ class HomeViewModel(
 
     fun loadComicLatest() {
         viewModelScope.launch {
-            comicRepository.getLatest().collect { _comicLatestState.value = it }
+            comicRepository.getLatest(page = 1).collect { res ->
+                _comicLatestState.value = when (res) {
+                    is Result.Success -> Result.Success(res.data.komikList ?: emptyList())
+                    is Result.Loading -> Result.Loading
+                    is Result.Error -> res
+                }
+            }
         }
     }
 

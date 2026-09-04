@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.common.Result
 import com.example.data.model.BacakomikGenreItem
 import com.example.data.model.BacakomikListItem
+import com.example.data.model.BacakomikListResponse
 import com.example.data.repository.ComicRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -13,15 +14,29 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-data class ComicHomeData(
-    val latest: List<BacakomikListItem>,
-    val popular: List<BacakomikListItem>
-)
+/**
+ * State list komik yang bisa "Load More" -- dipakai buat keempat mode
+ * (Terbaru, Populer, Search, Genre). "hasNextPage" ngikutin field yang
+ * dikasih API di tiap response (lihat BacakomikListResponse).
+ */
+data class ComicListState(
+    val items: List<BacakomikListItem> = emptyList(),
+    val isInitialLoading: Boolean = true,
+    val isLoadingMore: Boolean = false,
+    val hasNextPage: Boolean = false,
+    val currentPage: Int = 1,
+    val errorMessage: String? = null
+) {
+    val isEmpty: Boolean get() = !isInitialLoading && errorMessage == null && items.isEmpty()
+}
 
 class ComicViewModel(private val repository: ComicRepository) : ViewModel() {
 
-    private val _homeState = MutableStateFlow<Result<ComicHomeData>>(Result.Loading)
-    val homeState: StateFlow<Result<ComicHomeData>> = _homeState.asStateFlow()
+    private val _latestState = MutableStateFlow(ComicListState())
+    val latestState: StateFlow<ComicListState> = _latestState.asStateFlow()
+
+    private val _popularState = MutableStateFlow(ComicListState())
+    val popularState: StateFlow<ComicListState> = _popularState.asStateFlow()
 
     private val _genres = MutableStateFlow<Result<List<BacakomikGenreItem>>>(Result.Loading)
     val genres: StateFlow<Result<List<BacakomikGenreItem>>> = _genres.asStateFlow()
@@ -29,46 +44,61 @@ class ComicViewModel(private val repository: ComicRepository) : ViewModel() {
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
-    // null = lagi gak nyari/filter -> HomeScreen komik nampilin tab Latest/Populer.
-    private val _searchState = MutableStateFlow<Result<List<BacakomikListItem>>?>(null)
-    val searchState: StateFlow<Result<List<BacakomikListItem>>?> = _searchState.asStateFlow()
+    // Dipake bareng buat mode search MAUPUN filter genre -- cuma satu yang
+    // aktif dalam satu waktu (lihat isFiltering di ComicScreen).
+    private val _filterState = MutableStateFlow(ComicListState(isInitialLoading = false))
+    val filterState: StateFlow<ComicListState> = _filterState.asStateFlow()
 
     private val _selectedGenre = MutableStateFlow<BacakomikGenreItem?>(null)
     val selectedGenre: StateFlow<BacakomikGenreItem?> = _selectedGenre.asStateFlow()
 
     private var searchJob: Job? = null
+    private var filterLoadJob: Job? = null
 
     init {
-        loadHome()
+        loadLatest()
+        loadPopular()
         loadGenres()
     }
 
-    fun loadHome(forceRefresh: Boolean = false) {
+    fun loadLatest(forceRefresh: Boolean = false) {
         viewModelScope.launch {
-            var latest: List<BacakomikListItem>? = null
-            var popular: List<BacakomikListItem>? = null
-
-            launch {
-                repository.getLatest(forceRefresh).collect { res ->
-                    if (res is Result.Success) {
-                        latest = res.data
-                        popular?.let { _homeState.value = Result.Success(ComicHomeData(latest!!, it)) }
-                    } else if (res is Result.Loading && _homeState.value !is Result.Success) {
-                        _homeState.value = Result.Loading
-                    } else if (res is Result.Error && _homeState.value !is Result.Success) {
-                        _homeState.value = res
-                    }
-                }
+            _latestState.value = ComicListState(isInitialLoading = true)
+            repository.getLatest(page = 1, forceRefresh = forceRefresh).collect { res ->
+                _latestState.value = mapFirstPage(res)
             }
-            launch {
-                repository.getPopular(forceRefresh).collect { res ->
-                    if (res is Result.Success) {
-                        popular = res.data
-                        latest?.let { _homeState.value = Result.Success(ComicHomeData(it, popular!!)) }
-                    } else if (res is Result.Error && _homeState.value !is Result.Success) {
-                        _homeState.value = res
-                    }
-                }
+        }
+    }
+
+    fun loadMoreLatest() {
+        val current = _latestState.value
+        if (current.isLoadingMore || !current.hasNextPage) return
+        viewModelScope.launch {
+            _latestState.value = current.copy(isLoadingMore = true)
+            val nextPage = current.currentPage + 1
+            repository.getLatest(page = nextPage).collect { res ->
+                _latestState.value = mergeNextPage(current, res, nextPage)
+            }
+        }
+    }
+
+    fun loadPopular(forceRefresh: Boolean = false) {
+        viewModelScope.launch {
+            _popularState.value = ComicListState(isInitialLoading = true)
+            repository.getPopular(page = 1, forceRefresh = forceRefresh).collect { res ->
+                _popularState.value = mapFirstPage(res)
+            }
+        }
+    }
+
+    fun loadMorePopular() {
+        val current = _popularState.value
+        if (current.isLoadingMore || !current.hasNextPage) return
+        viewModelScope.launch {
+            _popularState.value = current.copy(isLoadingMore = true)
+            val nextPage = current.currentPage + 1
+            repository.getPopular(page = nextPage).collect { res ->
+                _popularState.value = mergeNextPage(current, res, nextPage)
             }
         }
     }
@@ -82,36 +112,91 @@ class ComicViewModel(private val repository: ComicRepository) : ViewModel() {
     fun onSearchQueryChange(query: String) {
         _searchQuery.value = query
         searchJob?.cancel()
+        filterLoadJob?.cancel()
         if (query.isBlank()) {
-            _searchState.value = null
+            _filterState.value = ComicListState(isInitialLoading = false)
             return
         }
         searchJob = viewModelScope.launch {
             delay(400) // debounce - jangan nembak API tiap keystroke
-            repository.search(query).collect { _searchState.value = it }
+            _filterState.value = ComicListState(isInitialLoading = true)
+            repository.search(query, page = 1).collect { res ->
+                _filterState.value = mapFirstPage(res)
+            }
         }
     }
 
     fun clearSearch() {
         searchJob?.cancel()
+        filterLoadJob?.cancel()
         _searchQuery.value = ""
-        _searchState.value = null
+        _filterState.value = ComicListState(isInitialLoading = false)
     }
 
     fun selectGenre(genre: BacakomikGenreItem?) {
+        searchJob?.cancel()
+        filterLoadJob?.cancel()
+        _searchQuery.value = ""
         _selectedGenre.value = genre
         if (genre == null) {
-            _searchState.value = null
+            _filterState.value = ComicListState(isInitialLoading = false)
             return
         }
-        clearSearchQueryOnly()
-        viewModelScope.launch {
-            repository.getByGenre(genre.slug).collect { _searchState.value = it }
+        filterLoadJob = viewModelScope.launch {
+            _filterState.value = ComicListState(isInitialLoading = true)
+            repository.getByGenre(genre.slug, page = 1).collect { res ->
+                _filterState.value = mapFirstPage(res)
+            }
         }
     }
 
-    private fun clearSearchQueryOnly() {
-        searchJob?.cancel()
-        _searchQuery.value = ""
+    // Load more buat mode filter -- otomatis lanjut ke sumber yang lagi
+    // aktif (search kalau query keisi, genre kalau lagi milih genre).
+    fun loadMoreFilter() {
+        val current = _filterState.value
+        if (current.isLoadingMore || !current.hasNextPage) return
+        val query = _searchQuery.value
+        val genre = _selectedGenre.value
+        if (query.isBlank() && genre == null) return
+
+        viewModelScope.launch {
+            _filterState.value = current.copy(isLoadingMore = true)
+            val nextPage = current.currentPage + 1
+            val flow = if (query.isNotBlank()) {
+                repository.search(query, page = nextPage)
+            } else {
+                repository.getByGenre(genre!!.slug, page = nextPage)
+            }
+            flow.collect { res -> _filterState.value = mergeNextPage(current, res, nextPage) }
+        }
     }
+
+    private fun mapFirstPage(res: Result<BacakomikListResponse>): ComicListState = when (res) {
+        is Result.Loading -> ComicListState(isInitialLoading = true)
+        is Result.Error -> ComicListState(isInitialLoading = false, errorMessage = res.message)
+        is Result.Success -> ComicListState(
+            items = res.data.komikList ?: emptyList(),
+            isInitialLoading = false,
+            hasNextPage = res.data.hasNextPage ?: false,
+            currentPage = res.data.currentPage ?: 1
+        )
+    }
+
+    private fun mergeNextPage(current: ComicListState, res: Result<BacakomikListResponse>, requestedPage: Int): ComicListState =
+        when (res) {
+            is Result.Loading -> current
+            is Result.Error -> current.copy(isLoadingMore = false) // gagal load more -> diem aja, biarin retry via tombol lagi
+            is Result.Success -> {
+                val newItems = res.data.komikList ?: emptyList()
+                // Kalau halaman baru ternyata kosong / gak nambah apa-apa,
+                // anggap udah abis -- matiin hasNextPage biar gak infinite loop.
+                val stillHasNext = (res.data.hasNextPage ?: false) && newItems.isNotEmpty()
+                current.copy(
+                    items = current.items + newItems,
+                    isLoadingMore = false,
+                    hasNextPage = stillHasNext,
+                    currentPage = res.data.currentPage ?: requestedPage
+                )
+            }
+        }
 }
