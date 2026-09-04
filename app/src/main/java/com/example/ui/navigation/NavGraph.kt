@@ -89,6 +89,7 @@ import com.example.ui.screens.chat.ChatScreen
 import com.example.ui.screens.chat.ChatViewModel
 import com.example.ui.screens.comic.ComicDetailScreen
 import com.example.ui.screens.comic.ComicDetailViewModel
+import com.example.ui.screens.comic.ComicPremiumGate
 import com.example.ui.screens.comic.ComicReaderScreen
 import com.example.ui.screens.comic.ComicReaderViewModel
 import com.example.ui.screens.comic.ComicScreen
@@ -406,10 +407,16 @@ fun ZenimeAppNavHost(
             ) { backStackEntry ->
                 val chapterSlug = backStackEntry.arguments?.getString("chapterSlug") ?: ""
                 val comicReaderViewModel = remember(chapterSlug) { ComicReaderViewModel(comicRepository, chapterSlug) }
-                ComicReaderScreen(
-                    viewModel = comicReaderViewModel,
-                    onBackClick = { navController.popBackStack() }
-                )
+                ComicPremiumGate(
+                    firebaseUid = currentUser?.uid,
+                    onBackClick = { navController.popBackStack() },
+                    onUpgradeClick = { navController.navigate(Screen.Premium.route) }
+                ) {
+                    ComicReaderScreen(
+                        viewModel = comicReaderViewModel,
+                        onBackClick = { navController.popBackStack() }
+                    )
+                }
             }
 
             // Search Screen
