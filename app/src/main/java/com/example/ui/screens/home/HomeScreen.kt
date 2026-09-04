@@ -972,7 +972,8 @@ fun ComicHorizontalSection(
             items(items, key = { it.slug }) { comic ->
                 ComicPosterCard(
                     comic = comic,
-                    onClick = { onComicClick(comic.slug) }
+                    onClick = { onComicClick(comic.slug) },
+                    modifier = Modifier.width(120.dp)
                 )
             }
         }

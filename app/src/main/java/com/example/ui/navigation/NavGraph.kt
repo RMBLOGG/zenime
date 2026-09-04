@@ -675,16 +675,31 @@ fun FloatingPillBottomBar(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 18.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                sideScreens.take(2).forEach { screen ->
-                    NavIconButton(screen = screen, selected = currentRoute == screen.route, onClick = { onNavigate(screen) })
+                // Dibungkus Row ber-weight biar kedua sisi dapet jatah ruang
+                // yang SAMA PERSIS (50/50) -- jumlah ikon kiri/kanan boleh beda
+                // (2 vs 3), tapi spacing di dalam masing-masing sisi tetep rapi
+                // dan gak nge-gerombol ke salah satu ujung.
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    sideScreens.take(2).forEach { screen ->
+                        NavIconButton(screen = screen, selected = currentRoute == screen.route, onClick = { onNavigate(screen) })
+                    }
                 }
                 // Ruang kosong buat notch/tombol tengah.
                 Spacer(modifier = Modifier.width(centerButtonSize))
-                sideScreens.drop(2).forEach { screen ->
-                    NavIconButton(screen = screen, selected = currentRoute == screen.route, onClick = { onNavigate(screen) })
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    sideScreens.drop(2).forEach { screen ->
+                        NavIconButton(screen = screen, selected = currentRoute == screen.route, onClick = { onNavigate(screen) })
+                    }
                 }
             }
         }

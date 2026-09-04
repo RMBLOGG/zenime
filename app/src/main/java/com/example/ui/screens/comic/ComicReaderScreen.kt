@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -48,7 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.example.data.common.Result
 import com.example.data.model.extractChapterLabel
@@ -97,14 +98,37 @@ fun ComicReaderScreen(
                     contentPadding = PaddingValues(bottom = 90.dp)
                 ) {
                     items(images) { imageUrl ->
-                        AsyncImage(
+                        // SubcomposeAsyncImage + placeholder aspect ratio -- WAJIB
+                        // biar tinggi tiap gambar udah "kereserve" duluan sebelum
+                        // kekonten asli kesalin. Kalau pake AsyncImage biasa,
+                        // tinggi item awalnya 0 terus baru "loncat" pas gambar
+                        // kelar didekode, dan loncatan itu numpuk buat tiap
+                        // gambar di atas viewport -- akibatnya scroll keliatan
+                        // ujug-ujug udah di tengah, bukan mulai dari paling atas.
+                        SubcomposeAsyncImage(
                             model = ImageRequest.Builder(LocalContext.current)
                                 .data(imageUrl)
                                 .crossfade(true)
                                 .build(),
                             contentDescription = null,
                             contentScale = ContentScale.FillWidth,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            loading = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .aspectRatio(0.7f) // rasio umum halaman manhwa/manga
+                                        .background(Color(0xFF15181F))
+                                )
+                            },
+                            error = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .aspectRatio(0.7f)
+                                        .background(Color(0xFF15181F))
+                                )
+                            }
                         )
                     }
 
