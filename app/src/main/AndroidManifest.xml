@@ -4,7 +4,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Wajib buat nampilin notifikasi pengumuman/update di Android 13+
-         (API 33) -- dialog izin runtime-nya diminta dari MainActivity. -->
+         (API 33): dialog izin runtime-nya diminta dari MainActivity. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Wajib buat pasang APK update yang didownload di dalam app sendiri
          (lewat PackageInstaller system, dipicu dari ApkDownloader.launchInstall).
@@ -55,7 +55,7 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- Terima push notifikasi pengumuman/update dari FCM -- lihat
+        <!-- Terima push notifikasi pengumuman/update dari FCM: lihat
              com.example.notifications.ZenimeMessagingService. -->
         <service
             android:name="com.example.notifications.ZenimeMessagingService"
