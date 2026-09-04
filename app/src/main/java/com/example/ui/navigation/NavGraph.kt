@@ -12,11 +12,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import android.content.pm.ActivityInfo
 import android.view.WindowManager
 import androidx.compose.material.icons.Icons
@@ -46,19 +46,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -620,34 +612,32 @@ fun ZenimeAppNavHost(
     }
 }
 
+/**
+ * Satu pill utuh, semua item (termasuk Jadwal) sejajar rata di dalamnya --
+ * gak ada lagi tombol tengah yang dinaikkan/nongol keluar pill kayak versi
+ * sebelumnya (FAB merah ngambang yang nutupin konten di atasnya). Item aktif
+ * dibedain cuma lewat warna icon + titik indikator, konsisten sama gaya
+ * NavIconButton yang lain -- gak butuh warna solid/gradient terpisah buat
+ * nandain "yang paling penting".
+ */
 @Composable
 fun FloatingPillBottomBar(
     currentRoute: String?,
     onNavigate: (Screen) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // 5 item: 2 di kiri, 1 di tengah (dinaikkan, jadi tombol utama), 2 di kanan.
-    val sideScreens = bottomNavScreens.filterIndexed { index, _ -> index != 2 }
-    val centerScreen = bottomNavScreens[2]
-    val centerSelected = currentRoute == centerScreen.route
-
-    val pillHeight = 66.dp
-    val centerButtonSize = 58.dp
-    // Seberapa jauh tombol tengah "nongol" ke atas pill.
-    val centerButtonRaise = 24.dp
-    val pillShape = NotchedPillShape(cornerRadius = 33.dp, notchRadius = centerButtonSize / 2 + 7.dp)
+    val pillHeight = 64.dp
+    val pillShape = RoundedCornerShape(32.dp)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp),
-        contentAlignment = Alignment.TopCenter
+            .padding(horizontal = 20.dp)
     ) {
         // Pill dasar -- efek "glass": permukaan gelap semi-transparan dengan
         // gradient halus (lebih terang dikit di atas, lebih gelap di bawah)
         // buat kesan kedalaman, plus border tipis gradient yang mensimulasikan
-        // highlight kaca di tepi atas. Ini yang bikin kerasa lebih modern
-        // dibanding pill warna solid rata.
+        // highlight kaca di tepi atas.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -681,91 +671,13 @@ fun FloatingPillBottomBar(
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 18.dp),
+                    .padding(horizontal = 10.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Dibungkus Row ber-weight biar kedua sisi dapet jatah ruang
-                // yang SAMA PERSIS (50/50) -- jumlah ikon kiri/kanan boleh beda
-                // (2 vs 3), tapi spacing di dalam masing-masing sisi tetep rapi
-                // dan gak nge-gerombol ke salah satu ujung.
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    sideScreens.take(2).forEach { screen ->
-                        NavIconButton(screen = screen, selected = currentRoute == screen.route, onClick = { onNavigate(screen) })
-                    }
+                bottomNavScreens.forEach { screen ->
+                    NavIconButton(screen = screen, selected = currentRoute == screen.route, onClick = { onNavigate(screen) })
                 }
-                // Ruang kosong buat notch/tombol tengah.
-                Spacer(modifier = Modifier.width(centerButtonSize))
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    sideScreens.drop(2).forEach { screen ->
-                        NavIconButton(screen = screen, selected = currentRoute == screen.route, onClick = { onNavigate(screen) })
-                    }
-                }
-            }
-        }
-
-        // Glow halus di belakang tombol tengah, biar nyala kayak referensi.
-        Box(
-            modifier = Modifier
-                .size(centerButtonSize + 32.dp)
-                .offset(y = -centerButtonRaise - 8.dp)
-                .background(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            ZenimePrimary.copy(alpha = 0.4f),
-                            Color.Transparent
-                        )
-                    ),
-                    shape = CircleShape
-                )
-        )
-
-        // Tombol tengah -- dinaikkan di atas pill, gradient merah (bukan
-        // warna solid datar) biar keliatan ada dimensi/pop, dengan cincin
-        // highlight tipis di tepi atas mensimulasikan pantulan cahaya kaca.
-        Box(
-            modifier = Modifier
-                .size(centerButtonSize)
-                .offset(y = -centerButtonRaise)
-                .shadow(elevation = 14.dp, shape = CircleShape, ambientColor = ZenimePrimary, spotColor = ZenimePrimary)
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFFFF5C72),
-                            ZenimePrimary
-                        ),
-                        center = androidx.compose.ui.geometry.Offset(0.3f, 0.25f),
-                        radius = 90f
-                    )
-                )
-                .border(
-                    width = 1.2.dp,
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.55f),
-                            Color.White.copy(alpha = 0f)
-                        )
-                    ),
-                    shape = CircleShape
-                )
-                .testTag("nav_item_${centerScreen.route}"),
-            contentAlignment = Alignment.Center
-        ) {
-            IconButton(onClick = { onNavigate(centerScreen) }) {
-                Icon(
-                    imageVector = if (centerSelected) centerScreen.selectedIcon!! else centerScreen.unselectedIcon!!,
-                    contentDescription = centerScreen.title,
-                    tint = Color.White,
-                    modifier = Modifier.size(25.dp)
-                )
             }
         }
     }
@@ -808,68 +720,4 @@ private fun NavIconButton(
     }
 }
 
-/**
- * Shape pill dengan lekukan (notch) setengah lingkaran di tengah sisi atas --
- * tempat tombol nav utama "duduk" biar keliatan menyatu, bukan cuma numpuk
- * di atas pill. Notch-nya dibikin pakai cubicTo (kurva-S) supaya transisinya
- * halus, bukan sudut tajam.
- */
-class NotchedPillShape(
-    private val cornerRadius: Dp,
-    private val notchRadius: Dp
-) : Shape {
-    override fun createOutline(
-        size: Size,
-        layoutDirection: LayoutDirection,
-        density: Density
-    ): Outline {
-        val cornerPx = with(density) { cornerRadius.toPx() }
-        val notchPx = with(density) { notchRadius.toPx() }
-        val centerX = size.width / 2f
 
-        val path = Path().apply {
-            moveTo(cornerPx, 0f)
-            lineTo(centerX - notchPx, 0f)
-            cubicTo(
-                centerX - notchPx * 0.55f, 0f,
-                centerX - notchPx * 0.85f, notchPx * 1.15f,
-                centerX, notchPx * 1.15f
-            )
-            cubicTo(
-                centerX + notchPx * 0.85f, notchPx * 1.15f,
-                centerX + notchPx * 0.55f, 0f,
-                centerX + notchPx, 0f
-            )
-            lineTo(size.width - cornerPx, 0f)
-            arcTo(
-                rect = Rect(size.width - 2 * cornerPx, 0f, size.width, 2 * cornerPx),
-                startAngleDegrees = -90f,
-                sweepAngleDegrees = 90f,
-                forceMoveTo = false
-            )
-            lineTo(size.width, size.height - cornerPx)
-            arcTo(
-                rect = Rect(size.width - 2 * cornerPx, size.height - 2 * cornerPx, size.width, size.height),
-                startAngleDegrees = 0f,
-                sweepAngleDegrees = 90f,
-                forceMoveTo = false
-            )
-            lineTo(cornerPx, size.height)
-            arcTo(
-                rect = Rect(0f, size.height - 2 * cornerPx, 2 * cornerPx, size.height),
-                startAngleDegrees = 90f,
-                sweepAngleDegrees = 90f,
-                forceMoveTo = false
-            )
-            lineTo(0f, cornerPx)
-            arcTo(
-                rect = Rect(0f, 0f, 2 * cornerPx, 2 * cornerPx),
-                startAngleDegrees = 180f,
-                sweepAngleDegrees = 90f,
-                forceMoveTo = false
-            )
-            close()
-        }
-        return Outline.Generic(path)
-    }
-}

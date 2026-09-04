@@ -220,6 +220,7 @@ private fun PremiumPromoPackageCard(pkg: PremiumPackage) {
         "Download anime buat ditonton offline",
         "Bebas iklan sepenuhnya",
         "Resolusi unlock, dari terendah sampai 1080p",
+        "Baca semua komik tanpa batas",
         "Badge khusus Premium"
     )
 
