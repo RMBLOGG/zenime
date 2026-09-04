@@ -25,6 +25,7 @@ import com.example.data.download.EpisodeDownloadManager
 import com.example.data.local.UserPreferencesRepository
 import com.example.data.local.ZenimeDatabase
 import com.example.data.repository.AnimeRepository
+import com.example.data.repository.ComicRepository
 import com.example.ui.navigation.ZenimeAppNavHost
 import com.example.ui.screens.update.ForceUpdateScreen
 import com.example.ui.theme.ZenimeTheme
@@ -77,6 +78,7 @@ class MainActivity : ComponentActivity() {
             userPrefs = userPrefs,
             downloadManager = downloadManager
         )
+        val comicRepository = ComicRepository(api = NetworkModule.comicApi)
 
         // Nyambungin lagi polling progress buat download yang masih
         // QUEUED/DOWNLOADING dari sesi sebelumnya (system DownloadManager-nya
@@ -154,7 +156,7 @@ class MainActivity : ComponentActivity() {
                     // false = versi aman -> app normal. null = masih ngecek
                     // Remote Config -> blank sebentar (biasanya cuma sekejap,
                     // gak pakai splash animasi lagi supaya gak dobel).
-                    false -> ZenimeAppNavHost(repository = repository)
+                    false -> ZenimeAppNavHost(repository = repository, comicRepository = comicRepository)
                     null -> Box(
                         modifier = Modifier
                             .fillMaxSize()

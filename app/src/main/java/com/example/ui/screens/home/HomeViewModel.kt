@@ -5,8 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.api.RemoteConfigManager
 import com.example.data.common.Result
 import com.example.data.local.DownloadedEpisodeEntity
+import com.example.data.model.BacakomikListItem
 import com.example.data.model.HomeResponse
 import com.example.data.repository.AnimeRepository
+import com.example.data.repository.ComicRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -14,10 +16,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class HomeViewModel(private val repository: AnimeRepository) : ViewModel() {
+class HomeViewModel(
+    private val repository: AnimeRepository,
+    private val comicRepository: ComicRepository
+) : ViewModel() {
 
     private val _homeState = MutableStateFlow<Result<HomeResponse>>(Result.Loading)
     val homeState: StateFlow<Result<HomeResponse>> = _homeState.asStateFlow()
+
+    // Section "Komik Terbaru" di Beranda -- diambil terpisah dari homeState
+    // anime supaya gagal/lambatnya salah satu gak saling block yang lain.
+    private val _comicLatestState = MutableStateFlow<Result<List<BacakomikListItem>>>(Result.Loading)
+    val comicLatestState: StateFlow<Result<List<BacakomikListItem>>> = _comicLatestState.asStateFlow()
 
     // Kustomisasi Hero Banner Carousel -- dibaca dari Pengaturan, live-update
     // (bukan cuma dibaca sekali pas init) berkat StateFlow, jadi begitu user
@@ -46,6 +56,13 @@ class HomeViewModel(private val repository: AnimeRepository) : ViewModel() {
 
     init {
         loadHome()
+        loadComicLatest()
+    }
+
+    fun loadComicLatest() {
+        viewModelScope.launch {
+            comicRepository.getLatest().collect { _comicLatestState.value = it }
+        }
     }
 
     /** Dipakai dari kartu download di Beranda (fallback pas offline). */

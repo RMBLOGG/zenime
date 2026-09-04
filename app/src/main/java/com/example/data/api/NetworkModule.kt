@@ -91,4 +91,23 @@ object NetworkModule {
             .build()
             .create(DayynimeV5Api::class.java)
     }
+
+    // KOMIK: client terpisah, khusus buat API komik Sanka (bacakomik.my).
+    // Base URL-nya FIXED (bukan dynamic dari Remote Config kayak okHttpClient
+    // di atas), jadi gak perlu dynamicBaseUrlInterceptor sama sekali.
+    private val comicOkHttpClient: OkHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS)
+            .build()
+    }
+
+    val comicApi: ComicApi by lazy {
+        Retrofit.Builder()
+            .baseUrl(ComicApi.BASE_URL)
+            .client(comicOkHttpClient)
+            .addConverterFactory(MoshiConverterFactory.create(moshi))
+            .build()
+            .create(ComicApi::class.java)
+    }
 }

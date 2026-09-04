@@ -74,7 +74,9 @@ import com.example.data.common.Result
 import com.example.data.local.DownloadStatus
 import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.model.AnimeItem
+import com.example.data.model.BacakomikListItem
 import com.example.ui.components.AnimePosterCard
+import com.example.ui.components.ComicPosterCard
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.SectionHeader
 import com.example.ui.components.ShimmerBanner
@@ -94,9 +96,12 @@ fun HomeScreen(
     onSeeAllOngoingClick: () -> Unit,
     onChatClick: () -> Unit,
     onPlayEpisodeClick: (episodeId: String, animeId: String) -> Unit,
+    onComicClick: (String) -> Unit = {},
+    onSeeAllComicClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val homeState by viewModel.homeState.collectAsStateWithLifecycle()
+    val comicLatestState by viewModel.comicLatestState.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val heroStyle by viewModel.heroStyle.collectAsStateWithLifecycle()
     val heroAutoplay by viewModel.heroAutoplay.collectAsStateWithLifecycle()
@@ -282,6 +287,21 @@ fun HomeScreen(
                                             onAnimeClick = onAnimeClick
                                         )
                                     }
+                                }
+                            }
+
+                            // Section: Komik Terbaru -- sumber terpisah dari data
+                            // anime (Result sendiri), jadi ditampilin selama ada
+                            // isinya walau homeState anime masih loading/gagal.
+                            val comicList = (comicLatestState as? Result.Success)?.data.orEmpty()
+                            if (comicList.isNotEmpty()) {
+                                item {
+                                    ComicHorizontalSection(
+                                        title = "Komik Terbaru",
+                                        items = comicList,
+                                        onComicClick = onComicClick,
+                                        onSeeAllClick = onSeeAllComicClick
+                                    )
                                 }
                             }
 
@@ -928,6 +948,31 @@ fun AnimeHorizontalSection(
                 AnimePosterCard(
                     anime = anime,
                     onClick = { onAnimeClick(anime.id) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ComicHorizontalSection(
+    title: String,
+    items: List<BacakomikListItem>,
+    onComicClick: (String) -> Unit,
+    onSeeAllClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.padding(vertical = 10.dp)) {
+        SectionHeader(title = title, onSeeAllClick = onSeeAllClick)
+
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            items(items, key = { it.slug }) { comic ->
+                ComicPosterCard(
+                    comic = comic,
+                    onClick = { onComicClick(comic.slug) }
                 )
             }
         }

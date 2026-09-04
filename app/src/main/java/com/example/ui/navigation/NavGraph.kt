@@ -20,11 +20,13 @@ import androidx.compose.foundation.shape.CircleShape
 import android.content.pm.ActivityInfo
 import android.view.WindowManager
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.AutoStories
 import androidx.compose.material.icons.outlined.Bookmark
 import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Home
@@ -81,9 +83,16 @@ import kotlinx.coroutines.launch
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.ChatRepository
+import com.example.data.repository.ComicRepository
 import com.example.data.repository.PremiumRepository
 import com.example.ui.screens.chat.ChatScreen
 import com.example.ui.screens.chat.ChatViewModel
+import com.example.ui.screens.comic.ComicDetailScreen
+import com.example.ui.screens.comic.ComicDetailViewModel
+import com.example.ui.screens.comic.ComicReaderScreen
+import com.example.ui.screens.comic.ComicReaderViewModel
+import com.example.ui.screens.comic.ComicScreen
+import com.example.ui.screens.comic.ComicViewModel
 import com.example.ui.screens.detail.DetailScreen
 import com.example.ui.screens.detail.DetailViewModel
 import com.example.ui.screens.favorites.FavoritesHistoryScreen
@@ -127,6 +136,7 @@ sealed class Screen(
     data object Schedule : Screen("schedule", "Jadwal", Icons.Filled.DateRange, Icons.Outlined.DateRange)
     data object Favorites : Screen("favorites", "Koleksi", Icons.Filled.Bookmark, Icons.Outlined.Bookmark)
     data object Settings : Screen("settings", "Pengaturan", Icons.Filled.Settings, Icons.Outlined.Settings)
+    data object Comic : Screen("comic", "Komik", Icons.Filled.AutoStories, Icons.Outlined.AutoStories)
 
     data object Premium : Screen("premium")
 
@@ -139,6 +149,17 @@ sealed class Screen(
     data object Player : Screen("player/{episodeId}/{animeId}") {
         fun createRoute(episodeId: String, animeId: String) = "player/$episodeId/$animeId"
     }
+
+    data object ComicDetail : Screen("comic-detail/{slug}") {
+        fun createRoute(slug: String) = "comic-detail/$slug"
+    }
+
+    // Slug chapter (mis. "nano-machine-chapter-1") dilewatin apa adanya --
+    // isinya cuma huruf/angka/strip, aman lewat NavType.StringType biasa
+    // tanpa perlu encode/decode URL kayak query pencarian.
+    data object ComicReader : Screen("comic-reader/{chapterSlug}") {
+        fun createRoute(chapterSlug: String) = "comic-reader/$chapterSlug"
+    }
 }
 
 val bottomNavScreens = listOf(
@@ -146,12 +167,14 @@ val bottomNavScreens = listOf(
     Screen.Search,
     Screen.Schedule,
     Screen.Favorites,
-    Screen.Settings
+    Screen.Settings,
+    Screen.Comic
 )
 
 @Composable
 fun ZenimeAppNavHost(
     repository: AnimeRepository,
+    comicRepository: ComicRepository,
     navController: NavHostController = rememberNavController()
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -318,7 +341,7 @@ fun ZenimeAppNavHost(
             // Home Screen
             composable(Screen.Home.route) {
                 val homeViewModel: HomeViewModel = viewModel(
-                    factory = viewModelFactory { initializer { HomeViewModel(repository) } }
+                    factory = viewModelFactory { initializer { HomeViewModel(repository, comicRepository) } }
                 )
                 HomeScreen(
                     viewModel = homeViewModel,
@@ -336,7 +359,56 @@ fun ZenimeAppNavHost(
                     },
                     onPlayEpisodeClick = { episodeId, animeId ->
                         navController.navigate(Screen.Player.createRoute(episodeId, animeId))
+                    },
+                    onComicClick = { slug ->
+                        navController.navigate(Screen.ComicDetail.createRoute(slug))
+                    },
+                    onSeeAllComicClick = {
+                        navController.navigate(Screen.Comic.route)
                     }
+                )
+            }
+
+            // Komik -- daftar terbaru/populer, pencarian, filter genre
+            composable(Screen.Comic.route) {
+                val comicViewModel: ComicViewModel = viewModel(
+                    factory = viewModelFactory { initializer { ComicViewModel(comicRepository) } }
+                )
+                ComicScreen(
+                    viewModel = comicViewModel,
+                    onComicClick = { slug ->
+                        navController.navigate(Screen.ComicDetail.createRoute(slug))
+                    }
+                )
+            }
+
+            // Detail Komik
+            composable(
+                route = Screen.ComicDetail.route,
+                arguments = listOf(navArgument("slug") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val slug = backStackEntry.arguments?.getString("slug") ?: ""
+                val comicDetailViewModel = remember(slug) { ComicDetailViewModel(comicRepository, slug) }
+                ComicDetailScreen(
+                    viewModel = comicDetailViewModel,
+                    onBackClick = { navController.popBackStack() },
+                    onChapterClick = { chapterSlug ->
+                        navController.navigate(Screen.ComicReader.createRoute(chapterSlug))
+                    }
+                )
+            }
+
+            // Reader Komik -- baca gambar chapter, bisa lanjut/mundur chapter
+            // tanpa balik ke halaman detail (langsung ganti state di ViewModel).
+            composable(
+                route = Screen.ComicReader.route,
+                arguments = listOf(navArgument("chapterSlug") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val chapterSlug = backStackEntry.arguments?.getString("chapterSlug") ?: ""
+                val comicReaderViewModel = remember(chapterSlug) { ComicReaderViewModel(comicRepository, chapterSlug) }
+                ComicReaderScreen(
+                    viewModel = comicReaderViewModel,
+                    onBackClick = { navController.popBackStack() }
                 )
             }
 
