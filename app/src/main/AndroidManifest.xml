@@ -3,6 +3,9 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Wajib buat nampilin notifikasi pengumuman/update di Android 13+
+         (API 33) -- dialog izin runtime-nya diminta dari MainActivity. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Wajib buat pasang APK update yang didownload di dalam app sendiri
          (lewat PackageInstaller system, dipicu dari ApkDownloader.launchInstall).
          Ini "special permission", gak muncul dialog runtime kayak kamera/lokasi,
@@ -51,6 +54,25 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+
+        <!-- Terima push notifikasi pengumuman/update dari FCM -- lihat
+             com.example.notifications.ZenimeMessagingService. -->
+        <service
+            android:name="com.example.notifications.ZenimeMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Channel default kalau ada notif FCM yang dikirim tanpa
+             "android_channel_id" eksplisit di payload-nya. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="announcements" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_announcement" />
     </application>
 
 </manifest>

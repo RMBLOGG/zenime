@@ -127,6 +127,9 @@ dependencies {
   // Firebase Auth dan Google Sign-In via Credential Manager.
   implementation(libs.firebase.auth)
   implementation(libs.firebase.config)
+  // Push notifikasi real-time (pengumuman rilis GitHub, dll) -- lihat
+  // com.example.notifications.ZenimeMessagingService.
+  implementation(libs.firebase.messaging)
   implementation(libs.androidx.credentials)
   implementation(libs.androidx.credentials.play.services)
   implementation(libs.googleid)

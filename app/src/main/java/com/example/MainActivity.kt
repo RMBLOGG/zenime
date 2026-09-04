@@ -1,10 +1,15 @@
 package com.example
 
 import android.content.res.Configuration
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -26,6 +31,7 @@ import com.example.data.local.UserPreferencesRepository
 import com.example.data.local.ZenimeDatabase
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.ComicRepository
+import com.example.notifications.setupAnnouncementNotifications
 import com.example.ui.navigation.ZenimeAppNavHost
 import com.example.ui.screens.update.ForceUpdateScreen
 import com.example.ui.theme.ZenimeTheme
@@ -58,9 +64,30 @@ class MainActivity : ComponentActivity() {
     // kelar. Cuma dipakai kalau needsUpdate == true.
     private val apkDownloader by lazy { ApkDownloader(applicationContext) }
 
+    // Dialog izin notifikasi Android 13+ (POST_NOTIFICATIONS) -- gak
+    // ngeblok apa-apa kalau user nolak, cuma berarti notif pengumuman
+    // gak bakal muncul (fitur lain tetep jalan normal).
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Siapin channel notifikasi + subscribe device ini ke topic
+        // pengumuman rilis (lihat ANNOUNCEMENT_TOPIC), lalu minta izin
+        // runtime-nya kalau di Android 13+ dan belum pernah dikasih.
+        setupAnnouncementNotifications(applicationContext)
+        requestNotificationPermissionIfNeeded()
 
         // Init Unity Ads sedini mungkin biar interstitial udah siap kepake
         // pas user pertama kali buka PlayerScreen.
