@@ -70,6 +70,8 @@ import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -106,6 +108,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -136,9 +139,11 @@ import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.model.EpisodeItem
 import com.example.ui.components.DownloadQualityPickerDialog
 import com.example.ui.components.ErrorStateView
+import com.example.util.FREE_EPISODE_LIMIT
 import com.example.util.PipController
 import com.example.util.findActivity
 import com.example.util.isDownloadAllowed
+import com.example.util.isEpisodeLocked
 import com.example.util.isQualityLocked
 import com.example.util.qualityValueP
 import kotlinx.coroutines.delay
@@ -200,18 +205,6 @@ fun PlayerScreen(
     // episodeId), jadi LaunchedEffect(Unit) di sini otomatis cuma jalan
     // sekali per episode -- BUKAN tiap kali user pencet tombol play.
     //
-    // Member Premium bebas iklan -- iklan cuma ditampilin kalau isPremium
-    // false. Sekarang PremiumGate emang ngeblok non-premium buat nonton
-    // sama sekali, jadi ini juga jaga-jaga kalau nanti modelnya diubah ke
-    // freemium (non-premium boleh nonton tapi kena iklan).
-    LaunchedEffect(Unit) {
-        if (isPremium) return@LaunchedEffect
-        val activity = context.findActivity()
-        if (activity != null) {
-            AdManager.showInterstitial(activity) {}
-        }
-    }
-
     val streamState by viewModel.streamState.collectAsStateWithLifecycle()
     val selectedServer by viewModel.selectedServer.collectAsStateWithLifecycle()
     val resumePositionMs by viewModel.resumePositionMs.collectAsStateWithLifecycle()
@@ -226,6 +219,24 @@ fun PlayerScreen(
     // kualitas (yang dirender di akhir fun, di luar scope nested itu) tetap
     // bisa akses judul/index episode buat metadata download.
     val currentEpisodeDetail = (streamState as? Result.Success)?.data?.episode
+
+    // Episode 1-4 gratis, selebihnya cuma buat Premium (lihat isEpisodeLocked).
+    // null selama streamState masih Loading (currentEpisodeDetail belum ada)
+    // -- dianggap belum terkunci sampai kebukti sebaliknya biar gak salah
+    // block pas masih nunggu data kebaca.
+    val isEpisodeLockedForUser = isEpisodeLocked(currentEpisodeDetail?.index, isPremium)
+
+    // Member Premium bebas iklan -- iklan cuma ditampilin kalau isPremium
+    // false. Ditunggu sampai currentEpisodeDetail kebaca (bukan langsung
+    // LaunchedEffect(Unit)) biar gak sempat nampilin iklan buat episode yang
+    // ternyata terkunci Premium (yang gak akan diputer videonya sama sekali).
+    LaunchedEffect(currentEpisodeDetail?.id) {
+        if (currentEpisodeDetail == null || isPremium || isEpisodeLockedForUser) return@LaunchedEffect
+        val activity = context.findActivity()
+        if (activity != null) {
+            AdManager.showInterstitial(activity) {}
+        }
+    }
 
     var showEpisodeList by remember { mutableStateOf(false) }
     var showDeleteDownloadConfirm by remember { mutableStateOf(false) }
@@ -401,7 +412,11 @@ fun PlayerScreen(
 
     // Update MediaSource when selectedServer changes (atau pas file offline
     // episode ini kedetek udah COMPLETED -- lihat pengecekan localFile di bawah).
-    LaunchedEffect(selectedServer, downloadEntry?.status) {
+    LaunchedEffect(selectedServer, downloadEntry?.status, isEpisodeLockedForUser) {
+        // Episode terkunci Premium -- jangan siapin/puter video sama sekali,
+        // gak peduli ada link server atau file offline-nya.
+        if (isEpisodeLockedForUser) return@LaunchedEffect
+
         // Prioritaskan file yang udah di-download (offline) kalau ada dan
         // masih beneran ada di disk -- gak perlu internet/link server sama
         // sekali buat kasus ini.
@@ -1022,6 +1037,20 @@ fun PlayerScreen(
                         )
                         } // tutup if (!isInPip)
                     }
+
+                    // Overlay kunci Premium -- dirender PALING TERAKHIR biar
+                    // nutupin semua konten video/kontrol di atasnya (video-nya
+                    // sendiri emang gak pernah disiapin/diputer buat episode
+                    // terkunci, lihat LaunchedEffect(selectedServer, ...) di
+                    // atas, jadi ini murni lapisan visual + nge-block sentuhan
+                    // biar gak bisa niru gesture ke kontrol player di belakangnya).
+                    if (isEpisodeLockedForUser) {
+                        EpisodeLockedContent(
+                            episodeIndex = epDetail?.index,
+                            onBackClick = onBackClick,
+                            onUpgradeClick = onUpgradeClick
+                        )
+                    }
                 }
             }
         }
@@ -1073,6 +1102,73 @@ fun PlayerScreen(
         if (message != null) {
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
             viewModel.clearDownloadError()
+        }
+    }
+}
+
+/**
+ * Layar pengganti video buat episode yang masih terkunci Premium (di luar
+ * trial episode 1-[FREE_EPISODE_LIMIT]). Full-screen + background solid
+ * biar nutupin sepenuhnya konten di belakangnya, dan clickable kosong biar
+ * sentuhan gak nembus ke gesture player di baliknya.
+ */
+@Composable
+private fun EpisodeLockedContent(
+    episodeIndex: String?,
+    onBackClick: () -> Unit,
+    onUpgradeClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {},
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = PlayerAccent.copy(alpha = 0.15f),
+                modifier = Modifier.size(72.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = "Episode Premium",
+                        tint = PlayerAccent,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+            Text(
+                text = if (episodeIndex != null) "Episode $episodeIndex Khusus Premium" else "Episode Khusus Premium",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = Color.White,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Episode 1-$FREE_EPISODE_LIMIT bisa ditonton gratis. Upgrade ke Premium buat lanjut nonton episode ini dan seterusnya, bebas iklan, kualitas HD, dan bisa download offline.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.White.copy(alpha = 0.7f),
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = onUpgradeClick,
+                colors = ButtonDefaults.buttonColors(containerColor = PlayerAccent),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Text("Upgrade Premium", color = Color.Black, fontWeight = FontWeight.Bold)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            TextButton(onClick = onBackClick) {
+                Text("Kembali", color = Color.White.copy(alpha = 0.7f))
+            }
         }
     }
 }

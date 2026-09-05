@@ -24,9 +24,9 @@ class DetailViewModel(
     private val firebaseUid: String? = null
 ) : ViewModel() {
 
-    // Dipakai buat nge-lock episode 1-3 di daftar episode (lihat
-    // EpisodeHorizontalCard). Default false -- aman-nya anggap non-premium
-    // sampai kebukti sebaliknya.
+    // Dipakai buat nge-lock episode di luar trial gratis (lihat
+    // isEpisodeLocked & EpisodeHorizontalCard). Default false -- aman-nya
+    // anggap non-premium sampai kebukti sebaliknya.
     private val _isPremium = MutableStateFlow(false)
     val isPremium: StateFlow<Boolean> = _isPremium.asStateFlow()
 

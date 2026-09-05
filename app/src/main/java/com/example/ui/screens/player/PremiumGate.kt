@@ -27,10 +27,11 @@ private sealed interface GateState {
 
 /**
  * Resolve status premium user SEBELUM render player, buat dipassing ke
- * [content] (dipakai konsumen buat nentuin tampilin iklan/cap kualitas/dll
- * -- lihat util.PremiumAccess). Nonton video itu sendiri TERBUKA buat
- * semua orang, premium atau bukan -- gate ini bukan lagi pintu terkunci,
- * cuma nunggu tau isPremium-nya apa dulu sebelum lanjut.
+ * [content] (dipakai konsumen buat nentuin tampilin iklan/cap kualitas/lock
+ * episode/dll -- lihat util.PremiumAccess). Gate ini SENDIRI bukan pintu
+ * terkunci -- cuma nunggu tau isPremium-nya apa dulu sebelum lanjut. Blokir
+ * beneran (episode di luar trial gratis, lihat isEpisodeLocked) dihandle di
+ * consumer-nya (PlayerScreen), bukan di sini.
  *
  * Kalau cek live ke server gagal (misal lagi offline -- kasus umum pas
  * mau nonton episode yang udah didownload), fallback ke
