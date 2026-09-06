@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.zenime.app"
     minSdk = 24
     targetSdk = 36
-    versionCode = 4
-    versionName = "1.3"
+    versionCode = 5
+    versionName = "1.4"
 
     // Unity LevelPlay App Key (platform.ironsrc.com > Apps > Zenime > App key).
     buildConfigField("String", "LEVELPLAY_APP_KEY", "\"27ed6ea75\"")
