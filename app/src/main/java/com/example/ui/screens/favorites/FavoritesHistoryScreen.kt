@@ -159,7 +159,7 @@ fun FavoritesHistoryScreen(
                         ContentTypeToggle(
                             isComic = favoriteContentIsComic,
                             onToggle = { favoriteContentIsComic = it },
-                            modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 8.dp)
+                            modifier = Modifier.padding(horizontal = 16.dp, top = 4.dp, bottom = 8.dp)
                         )
                         if (!favoriteContentIsComic) {
                             if (favorites.isEmpty()) {
@@ -279,7 +279,7 @@ fun FavoritesHistoryScreen(
                         ContentTypeToggle(
                             isComic = historyContentIsComic,
                             onToggle = { historyContentIsComic = it },
-                            modifier = Modifier.padding(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 8.dp)
+                            modifier = Modifier.padding(horizontal = 16.dp, top = 4.dp, bottom = 8.dp)
                         )
                         if (!historyContentIsComic) {
                     // Watch History List
