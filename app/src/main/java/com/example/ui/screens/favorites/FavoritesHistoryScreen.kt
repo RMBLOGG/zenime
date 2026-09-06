@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DownloadDone
@@ -46,6 +47,7 @@ import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -63,11 +65,15 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.data.local.ComicFavoriteEntity
+import com.example.data.local.ComicReadingProgressEntity
 import com.example.data.local.DownloadStatus
 import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.local.WatchHistoryEntity
 import com.example.data.model.AnimeItem
+import com.example.data.model.BacakomikListItem
 import com.example.ui.components.AnimePosterCard
+import com.example.ui.components.ComicPosterCard
 import com.example.ui.components.EmptyStateView
 import com.example.ui.theme.ZenimePrimary
 import com.example.ui.theme.ZenimeSurfaceVariantDark
@@ -81,13 +87,20 @@ fun FavoritesHistoryScreen(
     viewModel: FavoritesHistoryViewModel,
     onAnimeClick: (String) -> Unit,
     onPlayEpisodeClick: (episodeId: String, animeId: String) -> Unit,
+    onComicClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val favorites by viewModel.favorites.collectAsStateWithLifecycle()
     val watchHistory by viewModel.watchHistory.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
+    val comicFavorites by viewModel.comicFavorites.collectAsStateWithLifecycle()
+    val comicReadingProgress by viewModel.comicReadingProgress.collectAsStateWithLifecycle()
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
+    // Sub-toggle "Anime / Komik" -- cuma relevan di tab Favorit & Riwayat,
+    // soalnya dua-duanya sekarang punya versi anime DAN versi komik.
+    var favoriteContentIsComic by remember { mutableStateOf(false) }
+    var historyContentIsComic by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -142,64 +155,133 @@ fun FavoritesHistoryScreen(
 
             Box(modifier = Modifier.fillMaxSize()) {
                 if (selectedTabIndex == 0) {
-                    if (favorites.isEmpty()) {
-                        EmptyStateView(
-                            title = "Belum Ada Favorit",
-                            description = "Tekan ikon bookmark pada halaman detail anime untuk menyimpannya ke favorit.",
-                            icon = Icons.Default.Bookmark
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        ContentTypeToggle(
+                            isComic = favoriteContentIsComic,
+                            onToggle = { favoriteContentIsComic = it },
+                            modifier = Modifier.padding(horizontal = 16.dp, top = 4.dp, bottom = 8.dp)
                         )
-                    } else {
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(3),
-                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 110.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(16.dp),
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            items(favorites, key = { it.id }) { fav ->
-                                val dummyItem = AnimeItem(
-                                    id = fav.id,
-                                    title = fav.title,
-                                    image_poster = fav.posterUrl,
-                                    type = fav.type,
-                                    status = fav.status
+                        if (!favoriteContentIsComic) {
+                            if (favorites.isEmpty()) {
+                                EmptyStateView(
+                                    title = "Belum Ada Favorit",
+                                    description = "Tekan ikon bookmark pada halaman detail anime untuk menyimpannya ke favorit.",
+                                    icon = Icons.Default.Bookmark
                                 )
-                                Box(modifier = Modifier.fillMaxWidth()) {
-                                    AnimePosterCard(
-                                        anime = dummyItem,
-                                        onClick = { onAnimeClick(fav.id) },
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    // Tombol hapus favorit -- nempel di pojok
-                                    // kanan-atas poster, background bulat
-                                    // gelap biar kebaca di atas poster apa pun.
-                                    Box(
-                                        modifier = Modifier
-                                            .align(Alignment.TopEnd)
-                                            .padding(6.dp)
-                                            .size(26.dp)
-                                            .clip(CircleShape)
-                                            .background(Color.Black.copy(alpha = 0.55f))
-                                            .clickable(
-                                                indication = null,
-                                                interactionSource = remember { MutableInteractionSource() },
-                                                onClick = { viewModel.removeFavorite(fav.id) }
-                                            ),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Delete,
-                                            contentDescription = "Hapus dari Favorit",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(14.dp)
+                            } else {
+                                LazyVerticalGrid(
+                                    columns = GridCells.Fixed(3),
+                                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 110.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    items(favorites, key = { it.id }) { fav ->
+                                        val dummyItem = AnimeItem(
+                                            id = fav.id,
+                                            title = fav.title,
+                                            image_poster = fav.posterUrl,
+                                            type = fav.type,
+                                            status = fav.status
                                         )
+                                        Box(modifier = Modifier.fillMaxWidth()) {
+                                            AnimePosterCard(
+                                                anime = dummyItem,
+                                                onClick = { onAnimeClick(fav.id) },
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+
+                                            // Tombol hapus favorit -- nempel di pojok
+                                            // kanan-atas poster, background bulat
+                                            // gelap biar kebaca di atas poster apa pun.
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .padding(6.dp)
+                                                    .size(26.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color.Black.copy(alpha = 0.55f))
+                                                    .clickable(
+                                                        indication = null,
+                                                        interactionSource = remember { MutableInteractionSource() },
+                                                        onClick = { viewModel.removeFavorite(fav.id) }
+                                                    ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Delete,
+                                                    contentDescription = "Hapus dari Favorit",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            if (comicFavorites.isEmpty()) {
+                                EmptyStateView(
+                                    title = "Belum Ada Komik Favorit",
+                                    description = "Tekan ikon bookmark pada halaman detail komik untuk menyimpannya ke favorit.",
+                                    icon = Icons.Default.AutoStories
+                                )
+                            } else {
+                                LazyVerticalGrid(
+                                    columns = GridCells.Fixed(3),
+                                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 110.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    items(comicFavorites, key = { it.slug }) { fav ->
+                                        val dummyComic = BacakomikListItem(
+                                            title = fav.title,
+                                            slug = fav.slug,
+                                            cover = fav.cover,
+                                            type = fav.status
+                                        )
+                                        Box(modifier = Modifier.fillMaxWidth()) {
+                                            ComicPosterCard(
+                                                comic = dummyComic,
+                                                onClick = { onComicClick(fav.slug) },
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.TopEnd)
+                                                    .padding(6.dp)
+                                                    .size(26.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color.Black.copy(alpha = 0.55f))
+                                                    .clickable(
+                                                        indication = null,
+                                                        interactionSource = remember { MutableInteractionSource() },
+                                                        onClick = { viewModel.removeComicFavorite(fav.slug) }
+                                                    ),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Delete,
+                                                    contentDescription = "Hapus dari Favorit",
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 } else if (selectedTabIndex == 1) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        ContentTypeToggle(
+                            isComic = historyContentIsComic,
+                            onToggle = { historyContentIsComic = it },
+                            modifier = Modifier.padding(horizontal = 16.dp, top = 4.dp, bottom = 8.dp)
+                        )
+                        if (!historyContentIsComic) {
                     // Watch History List
                     if (watchHistory.isEmpty()) {
                         EmptyStateView(
@@ -209,7 +291,7 @@ fun FavoritesHistoryScreen(
                         )
                     } else {
                         LazyColumn(
-                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 110.dp),
+                            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 110.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
@@ -226,6 +308,33 @@ fun FavoritesHistoryScreen(
                                     onResumeClick = { onPlayEpisodeClick(historyItem.episodeId, historyItem.animeId) },
                                     onDeleteClick = { viewModel.deleteHistoryItem(historyItem.animeId) }
                                 )
+                            }
+                        }
+                    }
+                        } else {
+                            // Progress baca komik ("Lanjutkan Baca") -- tap kartu
+                            // buka halaman detail komik, yang bakal langsung
+                            // nampilin tombol lanjutkan ke chapter terakhir.
+                            if (comicReadingProgress.isEmpty()) {
+                                EmptyStateView(
+                                    title = "Belum Ada Progress Baca",
+                                    description = "Komik yang kamu baca akan otomatis muncul di sini.",
+                                    icon = Icons.Default.AutoStories
+                                )
+                            } else {
+                                LazyColumn(
+                                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 110.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    items(comicReadingProgress, key = { it.comicSlug }) { progress ->
+                                        ComicProgressCard(
+                                            item = progress,
+                                            onCardClick = { onComicClick(progress.comicSlug) },
+                                            onDeleteClick = { viewModel.deleteComicProgress(progress.comicSlug) }
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -721,6 +830,113 @@ fun DownloadedEpisodeCard(
         }
     }
 }
+/** Toggle kecil "Anime / Komik" -- dipakai di tab Favorit & Riwayat karena
+ * keduanya sekarang punya dua sumber data (anime lokal lama + komik baru). */
+@Composable
+private fun ContentTypeToggle(
+    isComic: Boolean,
+    onToggle: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(ZenimeSurfaceVariantDark)
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        listOf(false to "Anime", true to "Komik").forEach { (value, label) ->
+            val selected = isComic == value
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
+                ),
+                color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (selected) ZenimePrimary else Color.Transparent)
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = { onToggle(value) }
+                    )
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+            )
+        }
+    }
+}
+
+/** Item "Lanjutkan Baca" komik -- tap kartu buka detail komik (yang bakal
+ * langsung nawarin tombol lanjutkan ke chapter ini), tombol trash buat hapus
+ * dari daftar progress. */
+@Composable
+private fun ComicProgressCard(
+    item: ComicReadingProgressEntity,
+    onCardClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable { onCardClick() }
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(item.comicCover)
+                .crossfade(true)
+                .build(),
+            contentDescription = item.comicTitle,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier
+                .size(width = 56.dp, height = 76.dp)
+                .clip(RoundedCornerShape(8.dp))
+        )
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = item.comicTitle,
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 15.sp),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = item.chapterLabel ?: "Lanjutkan baca",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Surface(
+            shape = CircleShape,
+            color = ZenimePrimary,
+            modifier = Modifier
+                .size(36.dp)
+                .clickable { onCardClick() }
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.PlayArrow, contentDescription = "Lanjutkan", tint = Color.White, modifier = Modifier.size(18.dp))
+            }
+        }
+        IconButton(onClick = onDeleteClick, modifier = Modifier.size(32.dp)) {
+            Icon(
+                imageVector = Icons.Default.Delete,
+                contentDescription = "Hapus",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
 private fun formatRelativeTime(timestampMs: Long): String {
     val diffMs = (System.currentTimeMillis() - timestampMs).coerceAtLeast(0)
     val minutes = diffMs / 60_000

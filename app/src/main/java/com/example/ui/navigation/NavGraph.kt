@@ -1,6 +1,8 @@
 package com.example.ui.navigation
 
 import androidx.compose.animation.Crossfade
+import java.net.URLDecoder
+import java.net.URLEncoder
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -149,9 +151,18 @@ sealed class Screen(
 
     // Slug chapter (mis. "nano-machine-chapter-1") dilewatin apa adanya --
     // isinya cuma huruf/angka/strip, aman lewat NavType.StringType biasa
-    // tanpa perlu encode/decode URL kayak query pencarian.
-    data object ComicReader : Screen("comic-reader/{chapterSlug}") {
-        fun createRoute(chapterSlug: String) = "comic-reader/$chapterSlug"
+    // tanpa perlu encode/decode URL kayak query pencarian. comicSlug/title/
+    // cover dilewatin lewat query param (di-URL-encode) -- dipakai reader
+    // buat nyimpen progress "Lanjutkan Baca" per komik tanpa fetch ulang detail.
+    data object ComicReader : Screen(
+        "comic-reader/{chapterSlug}?comicSlug={comicSlug}&title={title}&cover={cover}"
+    ) {
+        fun createRoute(chapterSlug: String, comicSlug: String, title: String?, cover: String?): String {
+            val encodedComicSlug = URLEncoder.encode(comicSlug, "UTF-8")
+            val encodedTitle = URLEncoder.encode(title.orEmpty(), "UTF-8")
+            val encodedCover = URLEncoder.encode(cover.orEmpty(), "UTF-8")
+            return "comic-reader/$chapterSlug?comicSlug=$encodedComicSlug&title=$encodedTitle&cover=$encodedCover"
+        }
     }
 }
 
@@ -385,8 +396,10 @@ fun ZenimeAppNavHost(
                 ComicDetailScreen(
                     viewModel = comicDetailViewModel,
                     onBackClick = { navController.popBackStack() },
-                    onChapterClick = { chapterSlug ->
-                        navController.navigate(Screen.ComicReader.createRoute(chapterSlug))
+                    onChapterClick = { chapterSlug, comicTitle, comicCover ->
+                        navController.navigate(
+                            Screen.ComicReader.createRoute(chapterSlug, slug, comicTitle, comicCover)
+                        )
                     }
                 )
             }
@@ -395,10 +408,22 @@ fun ZenimeAppNavHost(
             // tanpa balik ke halaman detail (langsung ganti state di ViewModel).
             composable(
                 route = Screen.ComicReader.route,
-                arguments = listOf(navArgument("chapterSlug") { type = NavType.StringType })
+                arguments = listOf(
+                    navArgument("chapterSlug") { type = NavType.StringType },
+                    navArgument("comicSlug") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("title") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("cover") { type = NavType.StringType; defaultValue = "" }
+                )
             ) { backStackEntry ->
                 val chapterSlug = backStackEntry.arguments?.getString("chapterSlug") ?: ""
-                val comicReaderViewModel = remember(chapterSlug) { ComicReaderViewModel(comicRepository, chapterSlug) }
+                val comicSlug = URLDecoder.decode(backStackEntry.arguments?.getString("comicSlug") ?: "", "UTF-8")
+                val comicTitle = URLDecoder.decode(backStackEntry.arguments?.getString("title") ?: "", "UTF-8")
+                    .takeIf { it.isNotBlank() }
+                val comicCover = URLDecoder.decode(backStackEntry.arguments?.getString("cover") ?: "", "UTF-8")
+                    .takeIf { it.isNotBlank() }
+                val comicReaderViewModel = remember(chapterSlug) {
+                    ComicReaderViewModel(comicRepository, chapterSlug, comicSlug, comicTitle, comicCover)
+                }
                 ComicPremiumGate(
                     firebaseUid = currentUser?.uid,
                     onBackClick = { navController.popBackStack() },
@@ -448,7 +473,7 @@ fun ZenimeAppNavHost(
             // Favorites & Watch History Screen
             composable(Screen.Favorites.route) {
                 val favViewModel: FavoritesHistoryViewModel = viewModel(
-                    factory = viewModelFactory { initializer { FavoritesHistoryViewModel(repository) } }
+                    factory = viewModelFactory { initializer { FavoritesHistoryViewModel(repository, comicRepository) } }
                 )
                 FavoritesHistoryScreen(
                     viewModel = favViewModel,
@@ -457,6 +482,9 @@ fun ZenimeAppNavHost(
                     },
                     onPlayEpisodeClick = { episodeId, animeId ->
                         navController.navigate(Screen.Player.createRoute(episodeId, animeId))
+                    },
+                    onComicClick = { slug ->
+                        navController.navigate(Screen.ComicDetail.createRoute(slug))
                     }
                 )
             }

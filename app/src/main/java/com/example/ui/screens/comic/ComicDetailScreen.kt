@@ -26,9 +26,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -58,6 +61,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.data.common.Result
+import com.example.data.local.ComicReadingProgressEntity
 import com.example.data.model.BacakomikChapterRef
 import com.example.data.model.BacakomikDetail
 import com.example.data.model.extractChapterLabel
@@ -70,10 +74,12 @@ import com.example.ui.theme.ZenimePrimary
 fun ComicDetailScreen(
     viewModel: ComicDetailViewModel,
     onBackClick: () -> Unit,
-    onChapterClick: (chapterSlug: String) -> Unit,
+    onChapterClick: (chapterSlug: String, comicTitle: String?, comicCover: String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.detailState.collectAsStateWithLifecycle()
+    val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
+    val readingProgress by viewModel.readingProgress.collectAsStateWithLifecycle()
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background, modifier = modifier) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding)) {
@@ -91,17 +97,39 @@ fun ComicDetailScreen(
                     )
                 }
                 is Result.Success -> {
-                    ComicDetailContent(detail = s.data, onChapterClick = onChapterClick)
+                    ComicDetailContent(
+                        detail = s.data,
+                        readingProgress = readingProgress,
+                        onChapterClick = { chapterSlug ->
+                            onChapterClick(chapterSlug, s.data.title, s.data.cover)
+                        }
+                    )
                 }
             }
 
-            IconButton(
-                onClick = onBackClick,
+            Row(
                 modifier = Modifier
-                    .padding(12.dp)
-                    .background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                    .fillMaxWidth()
+                    .padding(12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali", tint = Color.White)
+                IconButton(
+                    onClick = onBackClick,
+                    modifier = Modifier.background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali", tint = Color.White)
+                }
+
+                IconButton(
+                    onClick = { viewModel.toggleFavorite() },
+                    modifier = Modifier.background(Color.Black.copy(alpha = 0.4f), CircleShape)
+                ) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        contentDescription = "Favorit",
+                        tint = if (isFavorite) ZenimePrimary else Color.White
+                    )
+                }
             }
         }
     }
@@ -111,6 +139,7 @@ fun ComicDetailScreen(
 @Composable
 private fun ComicDetailContent(
     detail: BacakomikDetail,
+    readingProgress: ComicReadingProgressEntity?,
     onChapterClick: (String) -> Unit
 ) {
     var synopsisExpanded by remember { mutableStateOf(false) }
@@ -279,9 +308,37 @@ private fun ComicDetailContent(
                     Spacer(modifier = Modifier.height(18.dp))
                 }
 
-                // Tombol baca dari chapter pertama (asumsi urutan terbaru di atas ->
-                // chapter pertama = elemen paling akhir di list)
-                if (chapters.isNotEmpty()) {
+                // Tombol baca -- kalau ada progress tersimpan buat komik ini,
+                // tampilin "Lanjutkan Baca" langsung ke chapter terakhir yang
+                // dibaca; kalau belum pernah, "Mulai Baca" dari chapter pertama
+                // (asumsi urutan terbaru di atas -> chapter pertama = elemen
+                // paling akhir di list).
+                if (readingProgress != null) {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = ZenimePrimary,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onChapterClick(readingProgress.chapterSlug) }
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 14.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = Color.White)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Lanjutkan Baca • ${readingProgress.chapterLabel ?: extractChapterLabel(readingProgress.chapterSlug)}",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = Color.White
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                } else if (chapters.isNotEmpty()) {
                     val firstChapter = chapters.last()
                     Surface(
                         shape = RoundedCornerShape(14.dp),

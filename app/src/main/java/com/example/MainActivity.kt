@@ -105,7 +105,7 @@ class MainActivity : ComponentActivity() {
             userPrefs = userPrefs,
             downloadManager = downloadManager
         )
-        val comicRepository = ComicRepository(api = NetworkModule.comicApi)
+        val comicRepository = ComicRepository(api = NetworkModule.comicApi, dao = database.zenimeDao())
 
         // Nyambungin lagi polling progress buat download yang masih
         // QUEUED/DOWNLOADING dari sesi sebelumnya (system DownloadManager-nya

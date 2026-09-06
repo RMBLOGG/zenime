@@ -9,8 +9,14 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [FavoriteEntity::class, WatchHistoryEntity::class, DownloadedEpisodeEntity::class],
-    version = 3,
+    entities = [
+        FavoriteEntity::class,
+        WatchHistoryEntity::class,
+        DownloadedEpisodeEntity::class,
+        ComicFavoriteEntity::class,
+        ComicReadingProgressEntity::class
+    ],
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(DownloadStatusConverter::class)
@@ -60,6 +66,39 @@ abstract class ZenimeDatabase : RoomDatabase() {
             }
         }
 
+        // v3 -> v4: nambah tabel comic_favorites (bookmark komik) dan
+        // comic_reading_progress ("Lanjutkan Baca" per komik). Ditulis manual
+        // biar data lama (favorit/histori/download anime) gak ikut kehapus.
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `comic_favorites` (
+                        `slug` TEXT NOT NULL PRIMARY KEY,
+                        `title` TEXT NOT NULL,
+                        `cover` TEXT,
+                        `status` TEXT,
+                        `timestamp` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `comic_reading_progress` (
+                        `comicSlug` TEXT NOT NULL PRIMARY KEY,
+                        `comicTitle` TEXT NOT NULL,
+                        `comicCover` TEXT,
+                        `chapterSlug` TEXT NOT NULL,
+                        `chapterLabel` TEXT,
+                        `scrollItemIndex` INTEGER NOT NULL DEFAULT 0,
+                        `scrollItemOffset` INTEGER NOT NULL DEFAULT 0,
+                        `updatedAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun getInstance(context: Context): ZenimeDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -67,7 +106,7 @@ abstract class ZenimeDatabase : RoomDatabase() {
                     ZenimeDatabase::class.java,
                     "zenime_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                 INSTANCE = instance
                 instance

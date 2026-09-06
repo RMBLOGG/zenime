@@ -2,6 +2,9 @@ package com.example.data.repository
 
 import com.example.data.api.ComicApi
 import com.example.data.common.Result
+import com.example.data.local.ComicFavoriteEntity
+import com.example.data.local.ComicReadingProgressEntity
+import com.example.data.local.ZenimeDao
 import com.example.data.model.BacakomikChapterResponse
 import com.example.data.model.BacakomikDetail
 import com.example.data.model.BacakomikGenreItem
@@ -10,7 +13,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import java.util.concurrent.ConcurrentHashMap
 
-class ComicRepository(private val api: ComicApi) {
+class ComicRepository(
+    private val api: ComicApi,
+    private val dao: ZenimeDao
+) {
 
     private data class CacheEntry<T>(val data: T, val timestamp: Long)
 
@@ -146,5 +152,65 @@ class ComicRepository(private val api: ComicApi) {
         } catch (e: Exception) {
             emit(Result.Error(e))
         }
+    }
+
+    // Comic Favorites (bookmark)
+    val comicFavorites: Flow<List<ComicFavoriteEntity>> = dao.getAllComicFavorites()
+
+    fun isComicFavorite(comicSlug: String): Flow<Boolean> = dao.isComicFavoriteFlow(comicSlug)
+
+    suspend fun removeComicFavorite(comicSlug: String) {
+        dao.deleteComicFavorite(comicSlug)
+    }
+
+    suspend fun toggleComicFavorite(
+        slug: String,
+        title: String,
+        cover: String?,
+        status: String?,
+        isCurrentlyFavorite: Boolean
+    ) {
+        if (isCurrentlyFavorite) {
+            dao.deleteComicFavorite(slug)
+        } else {
+            dao.insertComicFavorite(
+                ComicFavoriteEntity(slug = slug, title = title, cover = cover, status = status)
+            )
+        }
+    }
+
+    // Comic Reading Progress ("Lanjutkan Baca")
+    val comicReadingProgress: Flow<List<ComicReadingProgressEntity>> = dao.getAllComicProgress()
+
+    fun getComicProgress(comicSlug: String): Flow<ComicReadingProgressEntity?> =
+        dao.getComicProgressFlow(comicSlug)
+
+    suspend fun getComicProgressOnce(comicSlug: String): ComicReadingProgressEntity? =
+        dao.getComicProgressOnce(comicSlug)
+
+    suspend fun saveComicProgress(
+        comicSlug: String,
+        comicTitle: String,
+        comicCover: String?,
+        chapterSlug: String,
+        chapterLabel: String?,
+        scrollItemIndex: Int,
+        scrollItemOffset: Int
+    ) {
+        dao.upsertComicProgress(
+            ComicReadingProgressEntity(
+                comicSlug = comicSlug,
+                comicTitle = comicTitle,
+                comicCover = comicCover,
+                chapterSlug = chapterSlug,
+                chapterLabel = chapterLabel,
+                scrollItemIndex = scrollItemIndex,
+                scrollItemOffset = scrollItemOffset
+            )
+        )
+    }
+
+    suspend fun deleteComicProgress(comicSlug: String) {
+        dao.deleteComicProgress(comicSlug)
     }
 }

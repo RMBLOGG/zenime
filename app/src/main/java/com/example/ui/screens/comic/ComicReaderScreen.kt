@@ -8,20 +8,21 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -35,10 +36,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -52,9 +56,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
 import com.example.data.common.Result
+import com.example.data.model.BacakomikChapterResponse
 import com.example.data.model.extractChapterLabel
 import com.example.ui.components.ErrorStateView
 import com.example.ui.theme.ZenimePrimary
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 @Composable
 fun ComicReaderScreen(
@@ -64,6 +71,10 @@ fun ComicReaderScreen(
 ) {
     val state by viewModel.chapterState.collectAsStateWithLifecycle()
     val currentSlug by viewModel.currentSlug.collectAsStateWithLifecycle()
+    // Null = masih nunggu query posisi scroll tersimpan dari DB -- konten
+    // baru dirender kalau ini udah keisi, biar LazyListState langsung
+    // dibikin dengan posisi awal yang benar (gak "loncat" abis kekonten).
+    val initialScrollPosition by viewModel.initialScrollPosition.collectAsStateWithLifecycle()
     var uiVisible by remember { mutableStateOf(true) }
 
     Box(
@@ -71,156 +82,204 @@ fun ComicReaderScreen(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        when (val s = state) {
-            is Result.Loading -> {
+        val resolvedPosition = initialScrollPosition
+        val currentState = state
+
+        when {
+            resolvedPosition == null || currentState is Result.Loading -> {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = ZenimePrimary)
                 }
             }
-            is Result.Error -> {
+            currentState is Result.Error -> {
                 ErrorStateView(
-                    message = s.message,
+                    message = currentState.message,
                     onRetry = { viewModel.loadChapter(currentSlug) },
                     modifier = Modifier.fillMaxSize()
                 )
             }
-            is Result.Success -> {
-                val chapter = s.data
-                val images = chapter.images.orEmpty()
+            currentState is Result.Success -> {
+                val chapter = currentState.data
 
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clickable(
-                            indication = null,
-                            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                        ) { uiVisible = !uiVisible },
-                    contentPadding = PaddingValues(bottom = 90.dp)
-                ) {
-                    items(images) { imageUrl ->
-                        // SubcomposeAsyncImage + placeholder aspect ratio -- WAJIB
-                        // biar tinggi tiap gambar udah "kereserve" duluan sebelum
-                        // kekonten asli kesalin. Kalau pake AsyncImage biasa,
-                        // tinggi item awalnya 0 terus baru "loncat" pas gambar
-                        // kelar didekode, dan loncatan itu numpuk buat tiap
-                        // gambar di atas viewport -- akibatnya scroll keliatan
-                        // ujug-ujug udah di tengah, bukan mulai dari paling atas.
-                        SubcomposeAsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(imageUrl)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = null,
-                            contentScale = ContentScale.FillWidth,
-                            modifier = Modifier.fillMaxWidth(),
-                            loading = {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .aspectRatio(0.7f) // rasio umum halaman manhwa/manga
-                                        .background(Color(0xFF15181F))
-                                )
-                            },
-                            error = {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .aspectRatio(0.7f)
-                                        .background(Color(0xFF15181F))
-                                )
+                // key(currentSlug) -- listState HARUS dibikin ulang tiap ganti
+                // chapter, biar posisi scroll gak kebawa dari chapter sebelumnya.
+                key(currentSlug) {
+                    val listState = rememberLazyListState(
+                        initialFirstVisibleItemIndex = resolvedPosition.first,
+                        initialFirstVisibleItemScrollOffset = resolvedPosition.second
+                    )
+
+                    // Simpen posisi scroll ke DB tiap berhenti scroll (debounce
+                    // ~600ms) -- delay di dalam collect, emisi baru otomatis
+                    // membatalkan delay yang lama (setara collectLatest).
+                    LaunchedEffect(listState) {
+                        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+                            .distinctUntilChanged()
+                            .collect { (index, offset) ->
+                                delay(600)
+                                viewModel.updateScrollPosition(index, offset)
                             }
-                        )
                     }
 
-                    // Navigasi bawah -- selalu muncul di akhir list, biar user gak
-                    // perlu balik ke atas buat pindah chapter.
-                    item {
-                        ChapterNavFooter(
-                            hasNext = !chapter.navigation?.next.isNullOrBlank(),
-                            hasPrev = !chapter.navigation?.prev.isNullOrBlank(),
-                            onNext = { chapter.navigation?.next?.let { viewModel.loadChapter(it) } },
-                            onPrev = { chapter.navigation?.prev?.let { viewModel.loadChapter(it) } }
-                        )
-                    }
+                    ComicReaderContent(
+                        chapter = chapter,
+                        currentSlug = currentSlug,
+                        listState = listState,
+                        uiVisible = uiVisible,
+                        onToggleUi = { uiVisible = !uiVisible },
+                        onBackClick = onBackClick,
+                        onNext = { chapter.navigation?.next?.let { viewModel.loadChapter(it) } },
+                        onPrev = { chapter.navigation?.prev?.let { viewModel.loadChapter(it) } }
+                    )
                 }
+            }
+        }
+    }
+}
 
-                // Top bar overlay -- fade in/out mengikuti tap di area baca.
-                AnimatedVisibility(
-                    visible = uiVisible,
-                    enter = fadeIn(tween(180)) + slideInVertically(tween(180)) { -it },
-                    exit = fadeOut(tween(180)) + slideOutVertically(tween(180)) { -it }
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .statusBarsPadding()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(Color.Black.copy(alpha = 0.75f), Color.Transparent)
-                                )
-                            )
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = onBackClick) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali", tint = Color.White)
-                        }
-                        Text(
-                            text = chapter.title?.takeIf { it.isNotBlank() } ?: extractChapterLabel(currentSlug),
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(start = 4.dp)
+@Composable
+private fun ComicReaderContent(
+    chapter: BacakomikChapterResponse,
+    currentSlug: String,
+    listState: LazyListState,
+    uiVisible: Boolean,
+    onToggleUi: () -> Unit,
+    onBackClick: () -> Unit,
+    onNext: () -> Unit,
+    onPrev: () -> Unit
+) {
+    val images = chapter.images.orEmpty()
+    val chapterLabel = chapter.title?.takeIf { it.isNotBlank() } ?: extractChapterLabel(currentSlug)
+    val hasNext = !chapter.navigation?.next.isNullOrBlank()
+    val hasPrev = !chapter.navigation?.prev.isNullOrBlank()
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) { onToggleUi() },
+            contentPadding = PaddingValues(bottom = 90.dp)
+        ) {
+            items(images) { imageUrl ->
+                // SubcomposeAsyncImage + placeholder aspect ratio -- WAJIB
+                // biar tinggi tiap gambar udah "kereserve" duluan sebelum
+                // kekonten asli kesalin. Kalau pake AsyncImage biasa,
+                // tinggi item awalnya 0 terus baru "loncat" pas gambar
+                // kelar didekode, dan loncatan itu numpuk buat tiap
+                // gambar di atas viewport -- akibatnya scroll keliatan
+                // ujug-ujug udah di tengah, bukan mulai dari paling atas.
+                SubcomposeAsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(imageUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.FillWidth,
+                    modifier = Modifier.fillMaxWidth(),
+                    loading = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(0.7f) // rasio umum halaman manhwa/manga
+                                .background(Color(0xFF15181F))
+                        )
+                    },
+                    error = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(0.7f)
+                                .background(Color(0xFF15181F))
                         )
                     }
+                )
+            }
+
+            // Navigasi bawah -- selalu muncul di akhir list, biar user gak
+            // perlu balik ke atas buat pindah chapter.
+            item {
+                ChapterNavFooter(
+                    hasNext = hasNext,
+                    hasPrev = hasPrev,
+                    onNext = onNext,
+                    onPrev = onPrev
+                )
+            }
+        }
+
+        // Top bar overlay -- fade in/out mengikuti tap di area baca.
+        AnimatedVisibility(
+            visible = uiVisible,
+            enter = fadeIn(tween(180)) + slideInVertically(tween(180)) { -it },
+            exit = fadeOut(tween(180)) + slideOutVertically(tween(180)) { -it }
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Black.copy(alpha = 0.75f), Color.Transparent)
+                        )
+                    )
+                    .padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBackClick) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali", tint = Color.White)
                 }
+                Text(
+                    text = chapterLabel,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
+            }
+        }
 
-                // Prev/Next mengambang -- juga fade sesuai uiVisible.
-                AnimatedVisibility(
-                    visible = uiVisible,
-                    enter = fadeIn(tween(180)) + slideInVertically(tween(180)) { it },
-                    exit = fadeOut(tween(180)) + slideOutVertically(tween(180)) { it },
-                    modifier = Modifier.align(Alignment.BottomCenter)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
-                                )
-                            )
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        IconButton(
-                            onClick = { chapter.navigation?.prev?.let { viewModel.loadChapter(it) } },
-                            enabled = !chapter.navigation?.prev.isNullOrBlank()
-                        ) {
-                            Icon(
-                                Icons.Filled.NavigateBefore,
-                                contentDescription = "Chapter Sebelumnya",
-                                tint = if (chapter.navigation?.prev.isNullOrBlank()) Color.White.copy(alpha = 0.3f) else Color.White
-                            )
-                        }
-                        Text(
-                            text = chapter.title?.takeIf { it.isNotBlank() } ?: extractChapterLabel(currentSlug),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = Color.White
+        // Prev/Next mengambang -- juga fade sesuai uiVisible.
+        AnimatedVisibility(
+            visible = uiVisible,
+            enter = fadeIn(tween(180)) + slideInVertically(tween(180)) { it },
+            exit = fadeOut(tween(180)) + slideOutVertically(tween(180)) { it },
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
                         )
-                        IconButton(
-                            onClick = { chapter.navigation?.next?.let { viewModel.loadChapter(it) } },
-                            enabled = !chapter.navigation?.next.isNullOrBlank()
-                        ) {
-                            Icon(
-                                Icons.Filled.NavigateNext,
-                                contentDescription = "Chapter Berikutnya",
-                                tint = if (chapter.navigation?.next.isNullOrBlank()) Color.White.copy(alpha = 0.3f) else Color.White
-                            )
-                        }
-                    }
+                    )
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                IconButton(onClick = onPrev, enabled = hasPrev) {
+                    Icon(
+                        Icons.Filled.NavigateBefore,
+                        contentDescription = "Chapter Sebelumnya",
+                        tint = if (hasPrev) Color.White else Color.White.copy(alpha = 0.3f)
+                    )
+                }
+                Text(
+                    text = chapterLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White
+                )
+                IconButton(onClick = onNext, enabled = hasNext) {
+                    Icon(
+                        Icons.Filled.NavigateNext,
+                        contentDescription = "Chapter Berikutnya",
+                        tint = if (hasNext) Color.White else Color.White.copy(alpha = 0.3f)
+                    )
                 }
             }
         }

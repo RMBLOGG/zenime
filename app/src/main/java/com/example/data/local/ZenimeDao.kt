@@ -67,4 +67,33 @@ interface ZenimeDao {
     // dihitung karena gak makan slot/storage beneran (file udah gagal/dihapus).
     @Query("SELECT COUNT(*) FROM downloaded_episodes WHERE status != 'FAILED'")
     suspend fun getActiveDownloadCountOnce(): Int
+
+    // Comic Favorites
+    @Query("SELECT * FROM comic_favorites ORDER BY timestamp DESC")
+    fun getAllComicFavorites(): Flow<List<ComicFavoriteEntity>>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM comic_favorites WHERE slug = :comicSlug)")
+    fun isComicFavoriteFlow(comicSlug: String): Flow<Boolean>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertComicFavorite(favorite: ComicFavoriteEntity)
+
+    @Query("DELETE FROM comic_favorites WHERE slug = :comicSlug")
+    suspend fun deleteComicFavorite(comicSlug: String)
+
+    // Comic Reading Progress ("Lanjutkan Baca")
+    @Query("SELECT * FROM comic_reading_progress ORDER BY updatedAt DESC")
+    fun getAllComicProgress(): Flow<List<ComicReadingProgressEntity>>
+
+    @Query("SELECT * FROM comic_reading_progress WHERE comicSlug = :comicSlug LIMIT 1")
+    fun getComicProgressFlow(comicSlug: String): Flow<ComicReadingProgressEntity?>
+
+    @Query("SELECT * FROM comic_reading_progress WHERE comicSlug = :comicSlug LIMIT 1")
+    suspend fun getComicProgressOnce(comicSlug: String): ComicReadingProgressEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertComicProgress(progress: ComicReadingProgressEntity)
+
+    @Query("DELETE FROM comic_reading_progress WHERE comicSlug = :comicSlug")
+    suspend fun deleteComicProgress(comicSlug: String)
 }
