@@ -53,6 +53,7 @@ class ChatRepository(
         avatarUrl: String?,
         audioUrl: String,
         durationSeconds: Int,
+        waveform: String?,
         replyToId: Long? = null,
         replyToUsername: String? = null,
         replyToMessage: String? = null
@@ -66,6 +67,7 @@ class ChatRepository(
                 messageType = "voice",
                 audioUrl = audioUrl,
                 durationSeconds = durationSeconds,
+                waveform = waveform,
                 replyToId = replyToId,
                 replyToUsername = replyToUsername,
                 replyToMessage = replyToMessage

@@ -30,6 +30,10 @@ private const val COOLDOWN_SECONDS = 5
 private const val RESYNC_INTERVAL_MS = 45_000L
 private const val MAX_MESSAGE_LENGTH = 300
 private const val MAX_USERNAME_LENGTH = 24
+// Jumlah titik data waveform yang disimpen per pesan voice (di-downsample
+// dari sampel amplitudo mentah selama rekaman) -- cukup buat bentuk gelombang
+// keliatan halus tanpa bikin kolom `waveform` di DB kepanjangan.
+private const val WAVEFORM_POINTS = 40
 
 data class ChatUiState(
     val messages: List<ChatMessage> = emptyList(),
@@ -66,10 +70,14 @@ data class ChatUiState(
     // buat semua user (lihat catatan di ChatRepository.sendVoiceMessage).
     val isRecording: Boolean = false,
     val recordingSeconds: Int = 0,
+    // Gelombang suara live (amplitudo 0-100, beberapa sampel terakhir) buat
+    // ditampilin selagi lagi ngerekam.
+    val recordingWaveform: List<Int> = emptyList(),
     // Rekaman yang udah selesai & lagi nunggu dikonfirmasi kirim (preview
     // bar di atas ChatInputBar) -- null = gak ada rekaman pending.
     val pendingVoiceFile: File? = null,
     val pendingVoiceDurationSeconds: Int = 0,
+    val pendingVoiceWaveform: List<Int> = emptyList(),
     val isSendingVoice: Boolean = false
 )
 
@@ -109,7 +117,11 @@ class ChatViewModel(
     private var resyncJob: Job? = null
     private var cooldownJob: Job? = null
     private var recordingTimerJob: Job? = null
+    private var amplitudeJob: Job? = null
     private var voiceRecorder: VoiceRecorder? = null
+    // Semua sampel amplitudo mentah (0-100) sepanjang sesi rekam yang lagi
+    // jalan -- di-downsample jadi ~40 titik pas rekaman selesai (stopVoiceRecording).
+    private val amplitudeSamples = mutableListOf<Int>()
 
     // Cache status premium per firebase_uid biar gak nge-hit zenime-check-premium
     // berkali-kali buat pengirim yang sama. Sekali dicek, hasilnya dipakai
@@ -431,9 +443,11 @@ class ChatViewModel(
             val recorder = VoiceRecorder(context.applicationContext)
             recorder.start()
             voiceRecorder = recorder
+            amplitudeSamples.clear()
             _uiState.value = _uiState.value.copy(
                 isRecording = true,
                 recordingSeconds = 0,
+                recordingWaveform = emptyList(),
                 errorMessage = null
             )
             recordingTimerJob?.cancel()
@@ -442,6 +456,20 @@ class ChatViewModel(
                     delay(1000L)
                     _uiState.value = _uiState.value.copy(
                         recordingSeconds = _uiState.value.recordingSeconds + 1
+                    )
+                }
+            }
+            // Nyampel amplitudo suara tiap ~120ms selagi rekam, buat nyusun
+            // data gelombang suara (waveform) & nampilin animasi live-nya.
+            amplitudeJob?.cancel()
+            amplitudeJob = viewModelScope.launch {
+                while (true) {
+                    delay(120L)
+                    val raw = voiceRecorder?.sampleAmplitude() ?: break
+                    val normalized = (raw * 100 / 32767).coerceIn(0, 100)
+                    amplitudeSamples.add(normalized)
+                    _uiState.value = _uiState.value.copy(
+                        recordingWaveform = amplitudeSamples.takeLast(40)
                     )
                 }
             }
@@ -457,22 +485,32 @@ class ChatViewModel(
     /** Batalin rekaman yang lagi jalan, gak jadi disimpen. */
     fun cancelVoiceRecording() {
         recordingTimerJob?.cancel()
+        amplitudeJob?.cancel()
+        amplitudeSamples.clear()
         voiceRecorder?.cancel()
         voiceRecorder = null
-        _uiState.value = _uiState.value.copy(isRecording = false, recordingSeconds = 0)
+        _uiState.value = _uiState.value.copy(
+            isRecording = false,
+            recordingSeconds = 0,
+            recordingWaveform = emptyList()
+        )
     }
 
     /** Berhentiin rekaman & taruh hasilnya sebagai "pending" -- nunggu user konfirmasi kirim lewat sendVoiceNote(). */
     fun stopVoiceRecording() {
         recordingTimerJob?.cancel()
+        amplitudeJob?.cancel()
         val file = voiceRecorder?.currentFile()
         val duration = voiceRecorder?.stop()
         voiceRecorder = null
+        val waveform = downsampleWaveform(amplitudeSamples, WAVEFORM_POINTS)
+        amplitudeSamples.clear()
 
         if (duration == null || file == null) {
             _uiState.value = _uiState.value.copy(
                 isRecording = false,
                 recordingSeconds = 0,
+                recordingWaveform = emptyList(),
                 errorMessage = "Rekaman kependekan, coba lagi ya"
             )
             return
@@ -481,15 +519,33 @@ class ChatViewModel(
         _uiState.value = _uiState.value.copy(
             isRecording = false,
             recordingSeconds = 0,
+            recordingWaveform = emptyList(),
             pendingVoiceFile = file,
-            pendingVoiceDurationSeconds = duration
+            pendingVoiceDurationSeconds = duration,
+            pendingVoiceWaveform = waveform
         )
+    }
+
+    /** Ringkas daftar sampel amplitudo mentah jadi [targetSize] titik (dirata-rata per kelompok), buat disimpen & digambar sebagai waveform. */
+    private fun downsampleWaveform(samples: List<Int>, targetSize: Int): List<Int> {
+        if (samples.isEmpty()) return emptyList()
+        if (samples.size <= targetSize) return samples
+        val chunkSize = samples.size.toDouble() / targetSize
+        return (0 until targetSize).map { i ->
+            val start = (i * chunkSize).toInt()
+            val end = (((i + 1) * chunkSize).toInt()).coerceAtLeast(start + 1).coerceAtMost(samples.size)
+            samples.subList(start, end).average().toInt()
+        }
     }
 
     /** Buang rekaman pending (user pencet tombol hapus di preview bar). */
     fun discardPendingVoice() {
         _uiState.value.pendingVoiceFile?.delete()
-        _uiState.value = _uiState.value.copy(pendingVoiceFile = null, pendingVoiceDurationSeconds = 0)
+        _uiState.value = _uiState.value.copy(
+            pendingVoiceFile = null,
+            pendingVoiceDurationSeconds = 0,
+            pendingVoiceWaveform = emptyList()
+        )
     }
 
     /** Upload & kirim rekaman pending sebagai pesan voice di Chat Global. */
@@ -512,6 +568,7 @@ class ChatViewModel(
                     avatarUrl = state.displayAvatarUrl,
                     audioUrl = audioUrl,
                     durationSeconds = state.pendingVoiceDurationSeconds,
+                    waveform = state.pendingVoiceWaveform.takeIf { it.isNotEmpty() }?.joinToString(","),
                     replyToId = state.replyTarget?.id,
                     replyToUsername = state.replyTarget?.username,
                     replyToMessage = state.replyTarget?.message
@@ -521,6 +578,7 @@ class ChatViewModel(
                     isSendingVoice = false,
                     pendingVoiceFile = null,
                     pendingVoiceDurationSeconds = 0,
+                    pendingVoiceWaveform = emptyList(),
                     replyTarget = null
                 )
                 refreshMessages()
@@ -540,6 +598,7 @@ class ChatViewModel(
         resyncJob?.cancel()
         cooldownJob?.cancel()
         recordingTimerJob?.cancel()
+        amplitudeJob?.cancel()
         voiceRecorder?.cancel()
         _uiState.value.pendingVoiceFile?.delete()
     }

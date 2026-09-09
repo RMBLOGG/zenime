@@ -81,4 +81,18 @@ class VoiceRecorder(private val context: Context) {
     }
 
     fun currentFile(): File? = outputFile
+
+    /**
+     * Amplitudo mentah (0-32767) dari audio yang lagi kerekam SEJAK kali
+     * terakhir fungsi ini dipanggil (perilaku bawaan MediaRecorder.getMaxAmplitude).
+     * Dipanggil berkala (~tiap 100-150ms) dari ChatViewModel buat nyusun data
+     * gelombang suara (waveform). Null kalau gak lagi ada rekaman aktif.
+     */
+    fun sampleAmplitude(): Int? {
+        return try {
+            recorder?.maxAmplitude
+        } catch (e: Exception) {
+            null
+        }
+    }
 }
