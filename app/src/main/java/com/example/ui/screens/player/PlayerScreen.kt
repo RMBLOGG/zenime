@@ -87,12 +87,15 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -883,10 +886,14 @@ fun PlayerScreen(
                                             onDismissRequest = { showSettingsMenu = false },
                                             qualityOptions = servers.map { server ->
                                                 val locked = isQualityLocked(server.quality, isPremium)
+                                                val quality = server.quality ?: "720p"
                                                 PlayerMenuOption(
-                                                    label = "${server.name ?: "Server"} (${server.quality ?: "720p"})",
+                                                    label = "$quality (${qualityTag(quality)})",
                                                     isSelected = selectedServer?.id == server.id,
                                                     isLocked = locked,
+                                                    description = server.name?.let { "$it \u2022 ${qualityDescription(quality)}" }
+                                                        ?: qualityDescription(quality),
+                                                    accentColor = qualityAccentColor(quality),
                                                     onClick = {
                                                         showSettingsMenu = false
                                                         if (locked) {
@@ -1464,8 +1471,42 @@ private data class PlayerMenuOption(
     val label: String,
     val isSelected: Boolean,
     val onClick: () -> Unit,
-    val isLocked: Boolean = false
+    val isLocked: Boolean = false,
+    val description: String? = null,
+    val accentColor: Color? = null
 )
+
+/**
+ * Tag & deskripsi singkat per kualitas, gaya "Pilihan Kualitas Video" ala
+ * Doronime -- tiap opsi kualitas dikasih label warna + kalimat penjelas,
+ * bukan cuma angka polos, biar user awam lebih gampang milih.
+ */
+private fun qualityTag(quality: String?): String =
+    when (qualityValueP(quality)) {
+        null -> "Alternatif"
+        in 1080..Int.MAX_VALUE -> "Premium"
+        in 720..1079 -> "Bagus"
+        in 480..719 -> "Standar"
+        else -> "Hemat"
+    }
+
+private fun qualityAccentColor(quality: String?): Color =
+    when (qualityValueP(quality)) {
+        null -> Color.White
+        in 1080..Int.MAX_VALUE -> Color(0xFFFFC107)
+        in 720..1079 -> Color(0xFFFF7043)
+        in 480..719 -> Color(0xFF66BB6A)
+        else -> Color.White.copy(alpha = 0.85f)
+    }
+
+private fun qualityDescription(quality: String?): String =
+    when (qualityValueP(quality)) {
+        null -> "Kualitas alternatif buat nonton episode ini."
+        in 1080..Int.MAX_VALUE -> "Kualitas paling tinggi untuk tampilan maksimal, terbaik di jaringan cepat."
+        in 720..1079 -> "Gambar lebih tajam dan nyaman ditonton jika internet kamu cukup stabil."
+        in 480..719 -> "Pilihan aman untuk harian, cukup jernih dan tetap hemat data."
+        else -> "Ringan untuk kuota dan cepat diputar di koneksi yang tidak stabil."
+    }
 
 /**
  * Popup di Compose bikin window Android baru yang KELUAR dari window
@@ -1549,10 +1590,12 @@ private fun PlayerMenuSection(title: String, options: List<PlayerMenuOption>) {
 
 /**
  * Menu "Settings" gabungan -- kualitas video & kecepatan putar dalam satu
- * panel, dipisah garis tipis antar section. Gantiin dua ikon+dropdown
- * terpisah biar top bar lebih minimalis, mirip menu pengaturan satu pintu
- * di app streaming modern (YouTube, Netflix).
+ * bottom sheet, dipisah garis tipis antar section. Dulunya dropdown kecil
+ * nempel di top bar; sekarang bottom sheet full-width gaya "Pilihan
+ * Kualitas Video" ala Doronime -- tiap opsi kualitas dikasih label warna
+ * + kalimat penjelas biar lebih gampang dibaca & di-tap di layar sentuh.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PlayerSettingsMenu(
     expanded: Boolean,
@@ -1563,47 +1606,110 @@ private fun PlayerSettingsMenu(
 ) {
     if (!expanded) return
 
-    val density = LocalDensity.current
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    Popup(
-        alignment = Alignment.TopEnd,
-        offset = with(density) { IntOffset(x = 0, y = 48.dp.roundToPx()) },
+    ModalBottomSheet(
         onDismissRequest = onDismissRequest,
-        properties = PopupProperties(focusable = true)
+        sheetState = sheetState,
+        modifier = modifier,
+        containerColor = Color(0xFF121317),
+        contentColor = Color.White,
+        dragHandle = {
+            Box(
+                modifier = Modifier
+                    .padding(top = 10.dp, bottom = 2.dp)
+                    .width(36.dp)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White.copy(alpha = 0.25f))
+            )
+        }
     ) {
         ImmersivePopupEffect()
 
-        val visibleState = remember { MutableTransitionState(false) }
-        LaunchedEffect(Unit) { visibleState.targetState = true }
-
-        androidx.compose.animation.AnimatedVisibility(
-            visibleState = visibleState,
-            enter = fadeIn(tween(140)) + scaleIn(initialScale = 0.9f, animationSpec = tween(140)),
-            exit = fadeOut(tween(100)) + scaleOut(targetScale = 0.9f, animationSpec = tween(100))
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 24.dp)
         ) {
-            Column(
-                modifier = modifier
-                    .widthIn(min = 200.dp, max = 260.dp)
-                    .shadow(elevation = 16.dp, shape = RoundedCornerShape(16.dp), clip = false)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFF16171C).copy(alpha = 0.97f))
-                    .border(
-                        BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
-                        RoundedCornerShape(16.dp)
-                    )
-                    .padding(vertical = 6.dp)
-            ) {
-                PlayerMenuSection(title = "Kualitas Video", options = qualityOptions)
+            QualityMenuSection(title = "Pilihan Kualitas Video", options = qualityOptions)
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                        .height(1.dp)
-                        .background(Color.White.copy(alpha = 0.08f))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
+                    .height(1.dp)
+                    .background(Color.White.copy(alpha = 0.08f))
+            )
+
+            PlayerMenuSection(title = "Kecepatan Putar", options = speedOptions)
+        }
+    }
+}
+
+/**
+ * Baris opsi kualitas gaya "Pilihan Kualitas Video" -- label kualitas
+ * tebal + berwarna (beda warna per tier), kalimat penjelas kecil di
+ * bawahnya, centang/gembok di kanan. Dipisah dari [PlayerMenuSection]
+ * biasa (dipakai speed) karena speed gak butuh deskripsi & warna per opsi.
+ */
+@Composable
+private fun QualityMenuSection(title: String, options: List<PlayerMenuOption>) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+        color = Color.White,
+        modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+    )
+
+    options.forEach { option ->
+        Row(
+            verticalAlignment = Alignment.Top,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() },
+                    onClick = option.onClick
                 )
-
-                PlayerMenuSection(title = "Kecepatan Putar", options = speedOptions)
+                .background(
+                    if (option.isSelected) PlayerAccent.copy(alpha = 0.10f) else Color.Transparent
+                )
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = option.label,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                    color = if (option.isLocked) Color.White.copy(alpha = 0.4f) else (option.accentColor ?: Color.White)
+                )
+                if (option.description != null) {
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = option.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.55f)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            when {
+                option.isLocked -> Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = "Kualitas Premium",
+                    tint = PlayerAccent,
+                    modifier = Modifier
+                        .padding(top = 2.dp)
+                        .size(18.dp)
+                )
+                option.isSelected -> Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = null,
+                    tint = PlayerAccent,
+                    modifier = Modifier
+                        .padding(top = 2.dp)
+                        .size(20.dp)
+                )
             }
         }
     }
