@@ -27,10 +27,7 @@ data class ChatMessage(
     // yang masih baca `message.message` gak nampilin kosong.
     @Json(name = "message_type") val messageType: String = "text",
     @Json(name = "audio_url") val audioUrl: String? = null,
-    @Json(name = "duration_seconds") val durationSeconds: Int? = null,
-    // Data amplitudo suara (CSV angka 0-100, mis. "12,40,88,55,...") buat
-    // digambar jadi gelombang suara di bubble chat -- lihat WaveformBars.
-    @Json(name = "waveform") val waveform: String? = null
+    @Json(name = "duration_seconds") val durationSeconds: Int? = null
 )
 
 /** Body buat POST insert pesan baru -- tanpa id/created_at (di-generate DB). */
@@ -45,6 +42,5 @@ data class ChatMessageInsert(
     @Json(name = "reply_to_message") val replyToMessage: String? = null,
     @Json(name = "message_type") val messageType: String = "text",
     @Json(name = "audio_url") val audioUrl: String? = null,
-    @Json(name = "duration_seconds") val durationSeconds: Int? = null,
-    @Json(name = "waveform") val waveform: String? = null
+    @Json(name = "duration_seconds") val durationSeconds: Int? = null
 )

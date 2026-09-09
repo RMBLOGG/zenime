@@ -6,7 +6,6 @@ import android.media.MediaPlayer
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Canvas
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -70,9 +69,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -92,7 +88,6 @@ import com.example.ui.theme.CardOutlineBorder
 import com.example.ui.theme.ZenimeBackgroundDark
 import com.example.ui.theme.ZenimePrimary
 import com.example.ui.theme.ZenimeSurfaceDark
-import kotlinx.coroutines.delay
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -249,9 +244,7 @@ fun ChatScreen(
                 isPremium = uiState.isPremium,
                 isRecording = uiState.isRecording,
                 recordingSeconds = uiState.recordingSeconds,
-                recordingWaveform = uiState.recordingWaveform,
                 pendingVoiceDurationSeconds = uiState.pendingVoiceDurationSeconds.takeIf { uiState.pendingVoiceFile != null },
-                pendingVoiceWaveform = uiState.pendingVoiceWaveform,
                 isSendingVoice = uiState.isSendingVoice,
                 onMicTap = onMicTap,
                 onStopRecording = { viewModel.stopVoiceRecording() },
@@ -414,7 +407,6 @@ private fun ChatBubble(
                         VoiceMessagePlayer(
                             audioUrl = message.audioUrl,
                             durationSeconds = message.durationSeconds ?: 0,
-                            waveformCsv = message.waveform,
                             isOwnMessage = isOwnMessage
                         )
                     } else {
@@ -548,28 +540,17 @@ private fun ChatAvatar(url: String?, seed: String, label: String, modifier: Modi
  * Player buat pesan voice (VN) di dalam bubble chat. Dengerin/play kebuka
  * buat SEMUA user (premium maupun free) -- yang dibatasi cuma sisi KIRIM
  * (lihat tombol mic di ChatInputBar & pengecekan premium di ChatViewModel).
- * Gelombang suara (waveform) digambar dari data amplitudo yang direkam pas
- * user aslinya ngirim VN -- lihat WaveformBars & ChatViewModel.
  */
 @Composable
 private fun VoiceMessagePlayer(
     audioUrl: String,
     durationSeconds: Int,
-    waveformCsv: String?,
     isOwnMessage: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
     var isPlaying by remember { mutableStateOf(false) }
-    var progress by remember { mutableStateOf(0f) }
-
-    val waveform = remember(waveformCsv) {
-        waveformCsv
-            ?.split(",")
-            ?.mapNotNull { it.trim().toIntOrNull() }
-            ?.takeIf { it.isNotEmpty() }
-            ?: List(28) { 35 } // fallback: bar rata kalau pesan lama belum punya data waveform
-    }
 
     DisposableEffect(audioUrl) {
         onDispose {
@@ -578,24 +559,11 @@ private fun VoiceMessagePlayer(
         }
     }
 
-    // Update progress tiap ~80ms selagi lagi main, biar animasi gelombangnya mulus.
-    LaunchedEffect(isPlaying) {
-        while (isPlaying) {
-            val mp = mediaPlayer
-            if (mp != null) {
-                val dur = mp.duration.takeIf { it > 0 } ?: 1
-                progress = (mp.currentPosition.toFloat() / dur).coerceIn(0f, 1f)
-            }
-            delay(80L)
-        }
-    }
-
     val tint = if (isOwnMessage) Color.White else ZenimePrimary
-    val unplayedTint = tint.copy(alpha = 0.35f)
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        modifier = modifier.widthIn(min = 160.dp, max = 220.dp)
+        modifier = modifier.widthIn(min = 140.dp)
     ) {
         Box(
             modifier = Modifier
@@ -609,8 +577,6 @@ private fun VoiceMessagePlayer(
                             setDataSource(audioUrl)
                             setOnCompletionListener {
                                 isPlaying = false
-                                progress = 0f
-                                it.seekTo(0)
                             }
                             setOnPreparedListener {
                                 start()
@@ -637,64 +603,11 @@ private fun VoiceMessagePlayer(
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            WaveformBars(
-                amplitudes = waveform,
-                progress = progress,
-                playedColor = tint,
-                unplayedColor = unplayedTint,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = formatDuration(durationSeconds),
-                color = if (isOwnMessage) Color.White.copy(alpha = 0.8f) else Color.White.copy(alpha = 0.6f),
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp)
-            )
-        }
-    }
-}
-
-/**
- * Gambar gelombang suara (waveform) dari data amplitudo (0-100 per titik).
- * [progress] (0f-1f) nentuin berapa persen bar di sebelah kiri diwarnai
- * [playedColor] (posisi playback), sisanya [unplayedColor].
- */
-@Composable
-private fun WaveformBars(
-    amplitudes: List<Int>,
-    progress: Float,
-    playedColor: Color,
-    unplayedColor: Color,
-    modifier: Modifier = Modifier,
-    barWidth: androidx.compose.ui.unit.Dp = 3.dp,
-    gap: androidx.compose.ui.unit.Dp = 2.dp,
-    maxBarHeight: androidx.compose.ui.unit.Dp = 24.dp
-) {
-    Canvas(
-        modifier = modifier
-            .height(maxBarHeight)
-    ) {
-        if (amplitudes.isEmpty()) return@Canvas
-        val barWidthPx = barWidth.toPx()
-        val gapPx = gap.toPx()
-        val totalBarWidth = barWidthPx + gapPx
-        val count = amplitudes.size
-        val maxHeightPx = size.height
-        val playedCount = (count * progress).toInt().coerceIn(0, count)
-
-        for (i in 0 until count) {
-            val amplitudeFraction = amplitudes[i].coerceIn(6, 100) / 100f
-            val barHeight = (maxHeightPx * amplitudeFraction).coerceAtLeast(4f)
-            val x = i * totalBarWidth
-            if (x > size.width) break
-            drawRoundRect(
-                color = if (i < playedCount) playedColor else unplayedColor,
-                topLeft = Offset(x, (maxHeightPx - barHeight) / 2f),
-                size = Size(barWidthPx, barHeight),
-                cornerRadius = CornerRadius(barWidthPx / 2f, barWidthPx / 2f)
-            )
-        }
+        Text(
+            text = "Pesan suara \u00b7 ${formatDuration(durationSeconds)}",
+            color = if (isOwnMessage) Color.White else Color.White.copy(alpha = 0.85f),
+            style = MaterialTheme.typography.bodySmall
+        )
     }
 }
 
@@ -715,10 +628,8 @@ private fun ChatInputBar(
     isPremium: Boolean,
     isRecording: Boolean,
     recordingSeconds: Int,
-    recordingWaveform: List<Int>,
     // non-null (walau 0) = ada rekaman VN pending yang lagi nunggu dikirim/dibuang.
     pendingVoiceDurationSeconds: Int?,
-    pendingVoiceWaveform: List<Int>,
     isSendingVoice: Boolean,
     onMicTap: () -> Unit,
     onStopRecording: () -> Unit,
@@ -745,19 +656,11 @@ private fun ChatInputBar(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = formatDuration(recordingSeconds),
+                    text = "Merekam... ${formatDuration(recordingSeconds)}",
                     color = Color.White,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                WaveformBars(
-                    amplitudes = recordingWaveform,
-                    progress = 1f,
-                    playedColor = ZenimePrimary,
-                    unplayedColor = ZenimePrimary,
+                    style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f)
                 )
-                Spacer(modifier = Modifier.width(10.dp))
                 IconButton(onClick = onCancelRecording) {
                     Icon(
                         imageVector = Icons.Filled.Delete,
@@ -799,20 +702,12 @@ private fun ChatInputBar(
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(10.dp))
-                WaveformBars(
-                    amplitudes = pendingVoiceWaveform,
-                    progress = 1f,
-                    playedColor = ZenimePrimary,
-                    unplayedColor = ZenimePrimary,
+                Text(
+                    text = "Pesan suara \u00b7 ${formatDuration(pendingVoiceDurationSeconds)}",
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f)
                 )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = formatDuration(pendingVoiceDurationSeconds),
-                    color = Color.White,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Spacer(modifier = Modifier.width(10.dp))
                 IconButton(onClick = onDiscardPendingVoice, enabled = !isSendingVoice) {
                     Icon(
                         imageVector = Icons.Filled.Delete,
