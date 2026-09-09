@@ -283,6 +283,12 @@ fun PlayerScreen(
     // top bar penuh.
     var showSettingsMenu by remember { mutableStateOf(false) }
 
+    // State TERPISAH buat bottom sheet "Pilihan Kualitas Video" -- dipicu
+    // dari tombol "Kualitas" di halaman episode (bawah video), bukan dari
+    // ikon gear di kontrol player. Sengaja gak gabung sama showSettingsMenu
+    // biar dua tombol beda konteks itu gak nampilin komponen yang sama.
+    var showQualitySheet by remember { mutableStateOf(false) }
+
     val isInPip by PipController.isInPipMode.collectAsState()
 
     // Mode fullscreen (landscape + immersive) vs portrait biasa (video 16:9
@@ -385,6 +391,7 @@ fun PlayerScreen(
     LaunchedEffect(isInPip) {
         if (isInPip) {
             showSettingsMenu = false
+            showQualitySheet = false
             showEpisodeList = false
             isControlsVisible = false
         }
@@ -887,14 +894,10 @@ fun PlayerScreen(
                                             onDismissRequest = { showSettingsMenu = false },
                                             qualityOptions = servers.map { server ->
                                                 val locked = isQualityLocked(server.quality, isPremium)
-                                                val quality = server.quality ?: "720p"
                                                 PlayerMenuOption(
-                                                    label = "$quality (${qualityTag(quality)})",
+                                                    label = "${server.name ?: "Server"} (${server.quality ?: "720p"})",
                                                     isSelected = selectedServer?.id == server.id,
                                                     isLocked = locked,
-                                                    description = server.name?.let { "$it \u2022 ${qualityDescription(quality)}" }
-                                                        ?: qualityDescription(quality),
-                                                    accentColor = qualityAccentColor(quality),
                                                     onClick = {
                                                         showSettingsMenu = false
                                                         if (locked) {
@@ -1132,7 +1135,7 @@ fun PlayerScreen(
                             epDetail = epDetail,
                             episodeListState = episodeListState,
                             currentEpisodeId = viewModel.episodeId,
-                            onQualityClick = { showSettingsMenu = true },
+                            onQualityClick = { showQualitySheet = true },
                             onDownloadClick = {
                                 if (isDownloadAllowed(isPremium)) {
                                     viewModel.openDownloadQualityPicker()
@@ -1144,6 +1147,39 @@ fun PlayerScreen(
                             modifier = Modifier.weight(1f)
                         )
                     }
+
+                    // Bottom sheet "Pilihan Kualitas Video" -- dipicu tombol
+                    // "Kualitas" di halaman episode (bawah video), sengaja
+                    // terpisah dari menu gear di kontrol player (lihat
+                    // catatan di [QualityPickerSheet]). Ditaruh di sini
+                    // (bukan di luar Scaffold) karena butuh `servers` &
+                    // `selectedServer` yang scope-nya cuma di dalam blok
+                    // Result.Success ini.
+                    QualityPickerSheet(
+                        expanded = showQualitySheet,
+                        onDismissRequest = { showQualitySheet = false },
+                        qualityOptions = servers.map { server ->
+                            val locked = isQualityLocked(server.quality, isPremium)
+                            val quality = server.quality ?: "720p"
+                            PlayerMenuOption(
+                                label = "$quality (${qualityTag(quality)})",
+                                isSelected = selectedServer?.id == server.id,
+                                isLocked = locked,
+                                description = server.name?.let { "$it \u2022 ${qualityDescription(quality)}" }
+                                    ?: qualityDescription(quality),
+                                accentColor = qualityAccentColor(quality),
+                                onClick = {
+                                    showQualitySheet = false
+                                    if (locked) {
+                                        // Kualitas di atas 480p ekslusif Premium.
+                                        onUpgradeClick()
+                                    } else {
+                                        viewModel.selectServer(server)
+                                    }
+                                }
+                            )
+                        }
+                    )
                     } // tutup Column
 
                     // Overlay kunci Premium -- dirender PALING TERAKHIR biar
@@ -1591,18 +1627,84 @@ private fun PlayerMenuSection(title: String, options: List<PlayerMenuOption>) {
 
 /**
  * Menu "Settings" gabungan -- kualitas video & kecepatan putar dalam satu
- * bottom sheet, dipisah garis tipis antar section. Dulunya dropdown kecil
- * nempel di top bar; sekarang bottom sheet full-width gaya "Pilihan
- * Kualitas Video" ala Doronime -- tiap opsi kualitas dikasih label warna
- * + kalimat penjelas biar lebih gampang dibaca & di-tap di layar sentuh.
+ * panel, dipisah garis tipis antar section. Gantiin dua ikon+dropdown
+ * terpisah biar top bar lebih minimalis, mirip menu pengaturan satu pintu
+ * di app streaming modern (YouTube, Netflix). Ini KHUSUS buat ikon gear
+ * di kontrol player (compact dropdown) -- beda sama [QualityPickerSheet]
+ * yang dipakai tombol "Kualitas" di halaman episode bawah video.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PlayerSettingsMenu(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
     qualityOptions: List<PlayerMenuOption>,
     speedOptions: List<PlayerMenuOption>,
+    modifier: Modifier = Modifier
+) {
+    if (!expanded) return
+
+    val density = LocalDensity.current
+
+    Popup(
+        alignment = Alignment.TopEnd,
+        offset = with(density) { IntOffset(x = 0, y = 48.dp.roundToPx()) },
+        onDismissRequest = onDismissRequest,
+        properties = PopupProperties(focusable = true)
+    ) {
+        ImmersivePopupEffect()
+
+        val visibleState = remember { MutableTransitionState(false) }
+        LaunchedEffect(Unit) { visibleState.targetState = true }
+
+        androidx.compose.animation.AnimatedVisibility(
+            visibleState = visibleState,
+            enter = fadeIn(tween(140)) + scaleIn(initialScale = 0.9f, animationSpec = tween(140)),
+            exit = fadeOut(tween(100)) + scaleOut(targetScale = 0.9f, animationSpec = tween(100))
+        ) {
+            Column(
+                modifier = modifier
+                    .widthIn(min = 200.dp, max = 260.dp)
+                    .shadow(elevation = 16.dp, shape = RoundedCornerShape(16.dp), clip = false)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(Color(0xFF16171C).copy(alpha = 0.97f))
+                    .border(
+                        BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+                        RoundedCornerShape(16.dp)
+                    )
+                    .padding(vertical = 6.dp)
+            ) {
+                PlayerMenuSection(title = "Kualitas Video", options = qualityOptions)
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
+                        .height(1.dp)
+                        .background(Color.White.copy(alpha = 0.08f))
+                )
+
+                PlayerMenuSection(title = "Kecepatan Putar", options = speedOptions)
+            }
+        }
+    }
+}
+
+/**
+ * Bottom sheet "Pilihan Kualitas Video" -- KHUSUS tombol "Kualitas" di
+ * halaman episode (di bawah video, section [PlayerDetailsSection]).
+ * Sengaja dipisah dari [PlayerSettingsMenu] (dropdown compact punya ikon
+ * gear di kontrol player): dua tombol ini konteksnya beda -- satu buat
+ * ganti kualitas cepat pas lagi nonton fullscreen, satu lagi halaman info
+ * episode yang gak butuh section kecepatan putar sama sekali. Disamain
+ * jadi satu komponen dulu sempat bikin bingung (sheet gede + section
+ * speed nongol padahal yang diklik cuma tombol kualitas di halaman info).
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun QualityPickerSheet(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    qualityOptions: List<PlayerMenuOption>,
     modifier: Modifier = Modifier
 ) {
     if (!expanded) return
@@ -1626,24 +1728,12 @@ private fun PlayerSettingsMenu(
             )
         }
     ) {
-        ImmersivePopupEffect()
-
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 24.dp)
         ) {
             QualityMenuSection(title = "Pilihan Kualitas Video", options = qualityOptions)
-
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 8.dp)
-                    .height(1.dp)
-                    .background(Color.White.copy(alpha = 0.08f))
-            )
-
-            PlayerMenuSection(title = "Kecepatan Putar", options = speedOptions)
         }
     }
 }
