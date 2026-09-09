@@ -696,7 +696,7 @@ fun PlayerScreen(
                         // sistem yang gambar tombol play/pause/close sendiri.
                         if (!isInPip) {
                             // Flash ikon "+10/-10" pas double-tap kiri/kanan.
-                            AnimatedVisibility(
+                            androidx.compose.animation.AnimatedVisibility(
                                 visible = showSeekFlash,
                                 enter = fadeIn(tween(120)),
                                 exit = fadeOut(tween(200)),
@@ -720,7 +720,7 @@ fun PlayerScreen(
                             }
 
                             // Indikator brightness pas swipe di setengah layar kiri.
-                            AnimatedVisibility(
+                            androidx.compose.animation.AnimatedVisibility(
                                 visible = showBrightnessIndicator,
                                 enter = fadeIn(tween(100)),
                                 exit = fadeOut(tween(200)),
@@ -735,7 +735,7 @@ fun PlayerScreen(
                             }
 
                             // Indikator volume pas swipe di setengah layar kanan.
-                            AnimatedVisibility(
+                            androidx.compose.animation.AnimatedVisibility(
                                 visible = showVolumeIndicator,
                                 enter = fadeIn(tween(100)),
                                 exit = fadeOut(tween(200)),
@@ -750,7 +750,7 @@ fun PlayerScreen(
                             }
 
                             // Custom Controls Overlay
-                            AnimatedVisibility(
+                            androidx.compose.animation.AnimatedVisibility(
                                 visible = isControlsVisible,
                                 enter = fadeIn(tween(150)),
                                 exit = fadeOut(tween(150)),
@@ -1025,7 +1025,7 @@ fun PlayerScreen(
                                         duration > MIN_DURATION_FOR_SKIP_MS
                                     val showNextEpisode = !nextEpId.isNullOrEmpty()
 
-                                    AnimatedVisibility(
+                                    androidx.compose.animation.AnimatedVisibility(
                                         visible = showSkipIntro || showNextEpisode,
                                         enter = fadeIn(tween(180)) + slideInHorizontally(
                                             animationSpec = tween(180),
@@ -1576,7 +1576,7 @@ private fun PlayerSettingsMenu(
         val visibleState = remember { MutableTransitionState(false) }
         LaunchedEffect(Unit) { visibleState.targetState = true }
 
-        AnimatedVisibility(
+        androidx.compose.animation.AnimatedVisibility(
             visibleState = visibleState,
             enter = fadeIn(tween(140)) + scaleIn(initialScale = 0.9f, animationSpec = tween(140)),
             exit = fadeOut(tween(100)) + scaleOut(targetScale = 0.9f, animationSpec = tween(100))
@@ -1685,7 +1685,7 @@ private fun EpisodeListSidebar(
     onEpisodeClick: (EpisodeItem) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    AnimatedVisibility(
+    androidx.compose.animation.AnimatedVisibility(
         visible = visible,
         enter = fadeIn(tween(200)),
         exit = fadeOut(tween(200)),
@@ -1704,7 +1704,7 @@ private fun EpisodeListSidebar(
                     )
             )
 
-            AnimatedVisibility(
+            androidx.compose.animation.AnimatedVisibility(
                 visible = visible,
                 enter = slideInHorizontally(animationSpec = tween(220), initialOffsetX = { it }) + fadeIn(tween(220)),
                 exit = slideOutHorizontally(animationSpec = tween(200), targetOffsetX = { it }) + fadeOut(tween(200)),
