@@ -10,7 +10,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.annotation.OptIn
+import androidx.annotation.OptIn as UnstableOptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.animateFloatAsState
@@ -191,7 +191,8 @@ private const val MIN_DURATION_FOR_SKIP_MS = INTRO_SKIP_MS * 3
 // warna sendiri buat player-nya.
 private val PlayerAccent = Color(0xFF4DD8FF)
 
-@OptIn(UnstableApi::class)
+@UnstableOptIn(UnstableApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
     viewModel: PlayerViewModel,
