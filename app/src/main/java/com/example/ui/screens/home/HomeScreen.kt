@@ -53,7 +53,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -79,7 +78,6 @@ import com.example.R
 import com.example.data.common.Result
 import com.example.data.local.DownloadStatus
 import com.example.data.local.DownloadedEpisodeEntity
-import com.example.data.local.WatchHistoryEntity
 import com.example.data.model.AnimeItem
 import com.example.data.model.BacakomikListItem
 import com.example.ui.components.AnimePosterCard
@@ -89,9 +87,6 @@ import com.example.ui.components.GeneratedAvatar
 import com.example.ui.components.SectionHeader
 import com.example.ui.components.ShimmerBanner
 import com.example.ui.components.ShimmerHorizontalSection
-import com.example.ui.components.ZenimeHeader
-import com.example.ui.components.ZenimeHeaderActionButton
-import com.example.ui.components.ZenimeLogoTitle
 import com.example.ui.theme.CardOutlineBorder
 import com.example.ui.theme.StarYellow
 import com.example.ui.theme.ZenimeInfoBlue
@@ -120,18 +115,12 @@ fun HomeScreen(
     val comicLatestState by viewModel.comicLatestState.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val profileState by viewModel.profileState.collectAsStateWithLifecycle()
-    val continueWatching by viewModel.continueWatching.collectAsStateWithLifecycle()
     val heroStyle by viewModel.heroStyle.collectAsStateWithLifecycle()
     val heroAutoplay by viewModel.heroAutoplay.collectAsStateWithLifecycle()
     val heroIntervalMs by viewModel.heroIntervalMs.collectAsStateWithLifecycle()
     val heroItemCount by viewModel.heroItemCount.collectAsStateWithLifecycle()
     val heroSource by viewModel.heroSource.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
-    val isScrolled by remember {
-        derivedStateOf {
-            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 30
-        }
-    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -147,7 +136,7 @@ fun HomeScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(top = 54.dp, bottom = 8.dp)
+                            .padding(top = 16.dp, bottom = 8.dp)
                     ) {
                         ShimmerBanner()
                         Spacer(modifier = Modifier.height(16.dp))
@@ -164,7 +153,7 @@ fun HomeScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .padding(top = 54.dp)
+                                .padding(top = 16.dp)
                         ) {
                             ErrorStateView(
                                 message = state.message,
@@ -173,7 +162,7 @@ fun HomeScreen(
                         }
                     } else {
                         LazyColumn(
-                            contentPadding = PaddingValues(top = 54.dp, start = 16.dp, end = 16.dp, bottom = 110.dp),
+                            contentPadding = PaddingValues(top = 16.dp, start = 16.dp, end = 16.dp, bottom = 110.dp),
                             verticalArrangement = Arrangement.spacedBy(20.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
@@ -232,9 +221,8 @@ fun HomeScreen(
                         ) {
                             // Kartu profil ala AniBiPlay -- avatar, username,
                             // zenime_code, status Premium (sisa hari), & saldo
-                            // ZCoin. Padding atas 54.dp biar gak ketutup
-                            // ZenimeHeader yang statusnya transparan pas di
-                            // paling atas.
+                            // ZCoin. Header floating "Zenime" sudah dihapus,
+                            // jadi cukup sedikit padding atas buat jarak status bar.
                             item {
                                 HomeProfileHeader(
                                     state = profileState,
@@ -242,7 +230,7 @@ fun HomeScreen(
                                     onPremiumClick = onPremiumClick,
                                     onCoinClick = onCoinClick,
                                     onSearchClick = onSearchClick,
-                                    modifier = Modifier.padding(top = 54.dp)
+                                    modifier = Modifier.padding(top = 16.dp)
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
                                 HomePremiumBanner(
@@ -253,20 +241,8 @@ fun HomeScreen(
                                 Spacer(modifier = Modifier.height(16.dp))
                             }
 
-                            // "Terakhir Ditonton" -- continue watching row,
-                            // posisinya sama kayak di referensi AniBiPlay
-                            // (persis di bawah kartu profil).
-                            if (continueWatching.isNotEmpty()) {
-                                item {
-                                    ContinueWatchingSection(
-                                        items = continueWatching,
-                                        onItemClick = { history ->
-                                            onPlayEpisodeClick(history.episodeId, history.animeId)
-                                        }
-                                    )
-                                    Spacer(modifier = Modifier.height(20.dp))
-                                }
-                            }
+                            // "Terakhir Ditonton" -- continue watching row dihapus
+                            // dari Beranda sesuai permintaan user.
 
                             // Hero Banner Carousel -- sumber & jumlah item
                             // ngikutin preferensi "Sumber Banner" & "Jumlah
@@ -411,28 +387,6 @@ fun HomeScreen(
                     }
                 }
             }
-
-            // Custom Compact Floating Scroll-Aware Header
-            ZenimeHeader(
-                isScrolled = isScrolled,
-                transparentWhenTop = true,
-                title = { ZenimeLogoTitle() },
-                actions = {
-                    ZenimeHeaderActionButton(
-                        icon = Icons.AutoMirrored.Filled.Chat,
-                        contentDescription = "Chat Global",
-                        onClick = onChatClick,
-                        testTag = "home_chat_button"
-                    )
-                    ZenimeHeaderActionButton(
-                        icon = Icons.Default.Search,
-                        contentDescription = "Search Anime",
-                        onClick = onSearchClick,
-                        testTag = "home_search_button"
-                    )
-                },
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
         }
     }
 }
@@ -721,147 +675,6 @@ private fun formatCountLabel(raw: String?): String? {
         value >= 1_000_000 -> "%.1fM".format(value / 1_000_000.0)
         value >= 1_000 -> "%.1fK".format(value / 1_000.0)
         else -> value.toString()
-    }
-}
-
-/**
- * Row "Terakhir Ditonton" -- posisinya persis di bawah kartu profil, sama
- * kayak referensi AniBiPlay. Sumbernya riwayat tonton lokal (watch_history),
- * masing-masing kartu nampilin progress bar tipis di bawah poster.
- */
-@Composable
-private fun ContinueWatchingSection(
-    items: List<WatchHistoryEntity>,
-    onItemClick: (WatchHistoryEntity) -> Unit,
-    onSeeAllClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
-) {
-    HomeSectionCard(
-        modifier = modifier,
-        contentPadding = Modifier.padding(vertical = 14.dp)
-    ) {
-        SectionHeader(
-            title = "Terakhir Ditonton",
-            onSeeAllClick = onSeeAllClick,
-            modifier = Modifier.padding(horizontal = 6.dp)
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(horizontal = 6.dp)
-        ) {
-            items(items.take(12), key = { it.animeId }) { history ->
-                ContinueWatchingCard(
-                    item = history,
-                    onClick = { onItemClick(history) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ContinueWatchingCard(
-    item: WatchHistoryEntity,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(
-        modifier = modifier
-            .width(150.dp)
-            .clickable(onClick = onClick)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-        ) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(item.posterUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = item.animeTitle,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-
-            if (!item.episodeIndex.isNullOrEmpty()) {
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = Color.Black.copy(alpha = 0.75f),
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(6.dp)
-                ) {
-                    Text(
-                        text = "EP ${item.episodeIndex}",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                    )
-                }
-            }
-
-            // Progress bar tipis nempel di bawah poster, kayak di YouTube/Netflix.
-            if (item.durationMs > 0) {
-                val progress = (item.progressMs.toFloat() / item.durationMs.toFloat()).coerceIn(0f, 1f)
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .background(Color.White.copy(alpha = 0.3f))
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(progress)
-                            .fillMaxHeight()
-                            .background(ZenimePrimary)
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        Text(
-            text = if (!item.episodeIndex.isNullOrEmpty()) "Eps ${item.episodeIndex}" else item.animeTitle,
-            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = item.animeTitle,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-        if (item.durationMs > 0) {
-            Text(
-                text = "${formatDuration(item.progressMs)} / ${formatDuration(item.durationMs)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = ZenimeInfoBlue,
-                maxLines = 1
-            )
-        }
-    }
-}
-
-/** Format milidetik jadi "mm:ss" (atau "h:mm:ss" kalau lebih dari 1 jam), ala referensi. */
-private fun formatDuration(ms: Long): String {
-    val totalSeconds = (ms / 1000).coerceAtLeast(0)
-    val hours = totalSeconds / 3600
-    val minutes = (totalSeconds % 3600) / 60
-    val seconds = totalSeconds % 60
-    return if (hours > 0) {
-        "%d:%02d:%02d".format(hours, minutes, seconds)
-    } else {
-        "%02d:%02d".format(minutes, seconds)
     }
 }
 
