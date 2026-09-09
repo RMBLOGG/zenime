@@ -19,7 +19,15 @@ data class ChatMessage(
     @Json(name = "created_at") val createdAt: String = "",
     @Json(name = "reply_to_id") val replyToId: Long? = null,
     @Json(name = "reply_to_username") val replyToUsername: String? = null,
-    @Json(name = "reply_to_message") val replyToMessage: String? = null
+    @Json(name = "reply_to_message") val replyToMessage: String? = null,
+    // --- Pesan Suara (VN) -- khusus user Premium yang boleh KIRIM, tapi
+    // semua user (premium & free) tetap boleh DENGERIN. "text" = pesan biasa,
+    // "voice" = pesan suara. Field `message` tetap keisi teks placeholder
+    // ("🎤 Pesan suara") buat pesan voice, biar reply-preview & tempat lain
+    // yang masih baca `message.message` gak nampilin kosong.
+    @Json(name = "message_type") val messageType: String = "text",
+    @Json(name = "audio_url") val audioUrl: String? = null,
+    @Json(name = "duration_seconds") val durationSeconds: Int? = null
 )
 
 /** Body buat POST insert pesan baru -- tanpa id/created_at (di-generate DB). */
@@ -31,5 +39,8 @@ data class ChatMessageInsert(
     @Json(name = "message") val message: String,
     @Json(name = "reply_to_id") val replyToId: Long? = null,
     @Json(name = "reply_to_username") val replyToUsername: String? = null,
-    @Json(name = "reply_to_message") val replyToMessage: String? = null
+    @Json(name = "reply_to_message") val replyToMessage: String? = null,
+    @Json(name = "message_type") val messageType: String = "text",
+    @Json(name = "audio_url") val audioUrl: String? = null,
+    @Json(name = "duration_seconds") val durationSeconds: Int? = null
 )

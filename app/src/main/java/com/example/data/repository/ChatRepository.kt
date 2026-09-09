@@ -43,6 +43,38 @@ class ChatRepository(
     }
 
     /**
+     * Kirim pesan suara (VN) -- pemanggil (ChatViewModel) wajib udah ngecek
+     * status Premium sebelum manggil ini, karena kirim VN dibatasi khusus
+     * Premium (dengerin/play tetap terbuka buat semua user).
+     */
+    suspend fun sendVoiceMessage(
+        firebaseUid: String,
+        username: String,
+        avatarUrl: String?,
+        audioUrl: String,
+        durationSeconds: Int,
+        replyToId: Long? = null,
+        replyToUsername: String? = null,
+        replyToMessage: String? = null
+    ): ChatMessage {
+        val result = api.postChatMessage(
+            ChatMessageInsert(
+                firebaseUid = firebaseUid,
+                username = username,
+                avatarUrl = avatarUrl,
+                message = "🎤 Pesan suara",
+                messageType = "voice",
+                audioUrl = audioUrl,
+                durationSeconds = durationSeconds,
+                replyToId = replyToId,
+                replyToUsername = replyToUsername,
+                replyToMessage = replyToMessage
+            )
+        )
+        return result.first()
+    }
+
+    /**
      * Hapus pesan milik sendiri. Filter firebase_uid ikut dikirim di query
      * (bukan cuma dicek di UI) biar request-nya sendiri gak bisa dipakai
      * buat hapus pesan orang lain.

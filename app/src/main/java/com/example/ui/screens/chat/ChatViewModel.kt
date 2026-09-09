@@ -10,6 +10,8 @@ import com.example.data.realtime.ChatRealtimeEvent
 import com.example.data.repository.ChatRepository
 import com.example.data.repository.PremiumRepository
 import com.example.util.AvatarUploader
+import com.example.util.VoiceNoteUploader
+import com.example.util.VoiceRecorder
 import com.example.util.friendlyErrorMessage
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -19,6 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import java.io.File
 
 private const val COOLDOWN_SECONDS = 5
 // Resync penuh cuma dipakai sesekali sebagai jaring pengaman (bukan lagi
@@ -57,7 +60,17 @@ data class ChatUiState(
 
     // Kumpulan firebase_uid pengirim yang statusnya premium -- dipakai buat
     // nampilin badge Premium di samping username di bubble chat.
-    val premiumUids: Set<String> = emptySet()
+    val premiumUids: Set<String> = emptySet(),
+
+    // --- Pesan Suara (VN) -- kirim khusus Premium, dengerin/play terbuka
+    // buat semua user (lihat catatan di ChatRepository.sendVoiceMessage).
+    val isRecording: Boolean = false,
+    val recordingSeconds: Int = 0,
+    // Rekaman yang udah selesai & lagi nunggu dikonfirmasi kirim (preview
+    // bar di atas ChatInputBar) -- null = gak ada rekaman pending.
+    val pendingVoiceFile: File? = null,
+    val pendingVoiceDurationSeconds: Int = 0,
+    val isSendingVoice: Boolean = false
 )
 
 /**
@@ -95,6 +108,8 @@ class ChatViewModel(
     private var realtimeJob: Job? = null
     private var resyncJob: Job? = null
     private var cooldownJob: Job? = null
+    private var recordingTimerJob: Job? = null
+    private var voiceRecorder: VoiceRecorder? = null
 
     // Cache status premium per firebase_uid biar gak nge-hit zenime-check-premium
     // berkali-kali buat pengirim yang sama. Sekali dicek, hasilnya dipakai
@@ -391,10 +406,141 @@ class ChatViewModel(
         }
     }
 
+    // --- Pesan Suara (VN) ---
+
+    /** Dipanggil pas user non-premium coba pencet tombol mic. */
+    fun notifyVoiceRequiresPremium() {
+        _uiState.value = _uiState.value.copy(
+            errorMessage = "Kirim pesan suara khusus buat member Premium"
+        )
+    }
+
+    /**
+     * Mulai rekam. Pengecekan premium diulang di sini (bukan cuma di UI)
+     * biar gak bisa dilewatin dengan manggil fungsi ini langsung. Izin
+     * RECORD_AUDIO wajib udah di-grant sebelum fungsi ini dipanggil dari UI.
+     */
+    fun startVoiceRecording(context: Context) {
+        if (!_uiState.value.isPremium) {
+            notifyVoiceRequiresPremium()
+            return
+        }
+        if (_uiState.value.isRecording || _uiState.value.isSending || _uiState.value.isSendingVoice) return
+
+        try {
+            val recorder = VoiceRecorder(context.applicationContext)
+            recorder.start()
+            voiceRecorder = recorder
+            _uiState.value = _uiState.value.copy(
+                isRecording = true,
+                recordingSeconds = 0,
+                errorMessage = null
+            )
+            recordingTimerJob?.cancel()
+            recordingTimerJob = viewModelScope.launch {
+                while (true) {
+                    delay(1000L)
+                    _uiState.value = _uiState.value.copy(
+                        recordingSeconds = _uiState.value.recordingSeconds + 1
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            voiceRecorder = null
+            _uiState.value = _uiState.value.copy(
+                isRecording = false,
+                errorMessage = "Gagal mulai rekam. Cek izin mikrofon, ya."
+            )
+        }
+    }
+
+    /** Batalin rekaman yang lagi jalan, gak jadi disimpen. */
+    fun cancelVoiceRecording() {
+        recordingTimerJob?.cancel()
+        voiceRecorder?.cancel()
+        voiceRecorder = null
+        _uiState.value = _uiState.value.copy(isRecording = false, recordingSeconds = 0)
+    }
+
+    /** Berhentiin rekaman & taruh hasilnya sebagai "pending" -- nunggu user konfirmasi kirim lewat sendVoiceNote(). */
+    fun stopVoiceRecording() {
+        recordingTimerJob?.cancel()
+        val file = voiceRecorder?.currentFile()
+        val duration = voiceRecorder?.stop()
+        voiceRecorder = null
+
+        if (duration == null || file == null) {
+            _uiState.value = _uiState.value.copy(
+                isRecording = false,
+                recordingSeconds = 0,
+                errorMessage = "Rekaman kependekan, coba lagi ya"
+            )
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(
+            isRecording = false,
+            recordingSeconds = 0,
+            pendingVoiceFile = file,
+            pendingVoiceDurationSeconds = duration
+        )
+    }
+
+    /** Buang rekaman pending (user pencet tombol hapus di preview bar). */
+    fun discardPendingVoice() {
+        _uiState.value.pendingVoiceFile?.delete()
+        _uiState.value = _uiState.value.copy(pendingVoiceFile = null, pendingVoiceDurationSeconds = 0)
+    }
+
+    /** Upload & kirim rekaman pending sebagai pesan voice di Chat Global. */
+    fun sendVoiceNote() {
+        val state = _uiState.value
+        val file = state.pendingVoiceFile ?: return
+        if (!state.isPremium) {
+            notifyVoiceRequiresPremium()
+            return
+        }
+        if (state.cooldownSeconds > 0 || state.isSendingVoice) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isSendingVoice = true, errorMessage = null)
+            try {
+                val audioUrl = VoiceNoteUploader.uploadVoiceNote(file, firebaseUid)
+                repository.sendVoiceMessage(
+                    firebaseUid = firebaseUid,
+                    username = state.displayUsername,
+                    avatarUrl = state.displayAvatarUrl,
+                    audioUrl = audioUrl,
+                    durationSeconds = state.pendingVoiceDurationSeconds,
+                    replyToId = state.replyTarget?.id,
+                    replyToUsername = state.replyTarget?.username,
+                    replyToMessage = state.replyTarget?.message
+                )
+                file.delete()
+                _uiState.value = _uiState.value.copy(
+                    isSendingVoice = false,
+                    pendingVoiceFile = null,
+                    pendingVoiceDurationSeconds = 0,
+                    replyTarget = null
+                )
+                refreshMessages()
+                startCooldown()
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    isSendingVoice = false,
+                    errorMessage = friendlyErrorMessage(e, "Gagal mengirim pesan suara")
+                )
+            }
+        }
+    }
+
     override fun onCleared() {
         super.onCleared()
         realtimeJob?.cancel()
         resyncJob?.cancel()
         cooldownJob?.cancel()
+        recordingTimerJob?.cancel()
+        voiceRecorder?.cancel()
+        _uiState.value.pendingVoiceFile?.delete()
     }
 }

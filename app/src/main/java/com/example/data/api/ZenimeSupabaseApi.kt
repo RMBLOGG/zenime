@@ -43,7 +43,7 @@ interface ZenimeSupabaseApi {
 
     @GET("rest/v1/global_chat_messages")
     suspend fun getChatMessages(
-        @Query("select") select: String = "id,firebase_uid,username,avatar_url,message,created_at,reply_to_id,reply_to_username,reply_to_message",
+        @Query("select") select: String = "id,firebase_uid,username,avatar_url,message,created_at,reply_to_id,reply_to_username,reply_to_message,message_type,audio_url,duration_seconds",
         @Query("order") order: String = "created_at.desc",
         @Query("limit") limit: Int = 50
     ): List<ChatMessage>

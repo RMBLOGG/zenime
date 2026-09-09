@@ -1,8 +1,12 @@
 package com.example.ui.screens.chat
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.media.MediaPlayer
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -31,8 +35,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import com.example.R
@@ -51,6 +60,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -95,6 +105,28 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val context = LocalContext.current
     var pendingDelete by remember { mutableStateOf<ChatMessage?>(null) }
+
+    // Izin mikrofon buat rekam VN -- diminta pas user premium pencet tombol
+    // mic. Kalau di-grant, langsung mulai rekam (bukan cuma nyimpen status).
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) viewModel.startVoiceRecording(context)
+    }
+    val onMicTap = {
+        if (!uiState.isPremium) {
+            viewModel.notifyVoiceRequiresPremium()
+        } else {
+            val hasPermission = ContextCompat.checkSelfPermission(
+                context, Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+            if (hasPermission) {
+                viewModel.startVoiceRecording(context)
+            } else {
+                micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        }
+    }
 
     // Auto-scroll ke pesan paling bawah tiap ada pesan baru masuk.
     LaunchedEffect(uiState.messages.size) {
@@ -209,6 +241,16 @@ fun ChatScreen(
                     viewModel.sendMessage(input)
                     input = ""
                 },
+                isPremium = uiState.isPremium,
+                isRecording = uiState.isRecording,
+                recordingSeconds = uiState.recordingSeconds,
+                pendingVoiceDurationSeconds = uiState.pendingVoiceDurationSeconds.takeIf { uiState.pendingVoiceFile != null },
+                isSendingVoice = uiState.isSendingVoice,
+                onMicTap = onMicTap,
+                onStopRecording = { viewModel.stopVoiceRecording() },
+                onCancelRecording = { viewModel.cancelVoiceRecording() },
+                onDiscardPendingVoice = { viewModel.discardPendingVoice() },
+                onSendPendingVoice = { viewModel.sendVoiceNote() },
                 modifier = Modifier
                     .navigationBarsPadding()
                     .imePadding()
@@ -361,11 +403,19 @@ private fun ChatBubble(
                         Spacer(modifier = Modifier.height(6.dp))
                     }
 
-                    Text(
-                        text = message.message,
-                        color = Color.White,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    if (message.messageType == "voice" && !message.audioUrl.isNullOrBlank()) {
+                        VoiceMessagePlayer(
+                            audioUrl = message.audioUrl,
+                            durationSeconds = message.durationSeconds ?: 0,
+                            isOwnMessage = isOwnMessage
+                        )
+                    } else {
+                        Text(
+                            text = message.message,
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                 }
             }
 
@@ -486,6 +536,87 @@ private fun ChatAvatar(url: String?, seed: String, label: String, modifier: Modi
     }
 }
 
+/**
+ * Player buat pesan voice (VN) di dalam bubble chat. Dengerin/play kebuka
+ * buat SEMUA user (premium maupun free) -- yang dibatasi cuma sisi KIRIM
+ * (lihat tombol mic di ChatInputBar & pengecekan premium di ChatViewModel).
+ */
+@Composable
+private fun VoiceMessagePlayer(
+    audioUrl: String,
+    durationSeconds: Int,
+    isOwnMessage: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    var mediaPlayer by remember { mutableStateOf<MediaPlayer?>(null) }
+    var isPlaying by remember { mutableStateOf(false) }
+
+    DisposableEffect(audioUrl) {
+        onDispose {
+            mediaPlayer?.release()
+            mediaPlayer = null
+        }
+    }
+
+    val tint = if (isOwnMessage) Color.White else ZenimePrimary
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier.widthIn(min = 140.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(tint.copy(alpha = 0.18f))
+                .clickable {
+                    val player = mediaPlayer
+                    if (player == null) {
+                        val newPlayer = MediaPlayer().apply {
+                            setDataSource(audioUrl)
+                            setOnCompletionListener {
+                                isPlaying = false
+                            }
+                            setOnPreparedListener {
+                                start()
+                                isPlaying = true
+                            }
+                            prepareAsync()
+                        }
+                        mediaPlayer = newPlayer
+                    } else if (player.isPlaying) {
+                        player.pause()
+                        isPlaying = false
+                    } else {
+                        player.start()
+                        isPlaying = true
+                    }
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                contentDescription = if (isPlaying) "Jeda" else "Putar",
+                tint = tint,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = "Pesan suara \u00b7 ${formatDuration(durationSeconds)}",
+            color = if (isOwnMessage) Color.White else Color.White.copy(alpha = 0.85f),
+            style = MaterialTheme.typography.bodySmall
+        )
+    }
+}
+
+private fun formatDuration(totalSeconds: Int): String {
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "%d:%02d".format(minutes, seconds)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ChatInputBar(
@@ -494,65 +625,200 @@ private fun ChatInputBar(
     cooldownSeconds: Int,
     isSending: Boolean,
     onSend: () -> Unit,
+    isPremium: Boolean,
+    isRecording: Boolean,
+    recordingSeconds: Int,
+    // non-null (walau 0) = ada rekaman VN pending yang lagi nunggu dikirim/dibuang.
+    pendingVoiceDurationSeconds: Int?,
+    isSendingVoice: Boolean,
+    onMicTap: () -> Unit,
+    onStopRecording: () -> Unit,
+    onCancelRecording: () -> Unit,
+    onDiscardPendingVoice: () -> Unit,
+    onSendPendingVoice: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val canSend = value.isNotBlank() && cooldownSeconds == 0 && !isSending
-
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(ZenimeBackgroundDark)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier.weight(1f),
-            placeholder = { Text("Tulis pesan...", color = Color.White.copy(alpha = 0.4f)) },
-            shape = RoundedCornerShape(20.dp),
-            maxLines = 4,
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
-                focusedBorderColor = ZenimePrimary,
-                unfocusedBorderColor = CardOutlineBorder,
-                focusedContainerColor = ZenimeSurfaceDark,
-                unfocusedContainerColor = ZenimeSurfaceDark,
-                cursorColor = ZenimePrimary
-            )
-        )
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(if (canSend) ZenimePrimary else ZenimeSurfaceDark)
-                .border(1.dp, if (canSend) Color.Transparent else CardOutlineBorder, CircleShape)
-                .clickable(enabled = canSend, onClick = onSend),
-            contentAlignment = Alignment.Center
-        ) {
-            if (cooldownSeconds > 0) {
+    when {
+        // --- Mode 1: lagi rekam ---
+        isRecording -> {
+            Row(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .background(ZenimeBackgroundDark)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(ZenimePrimary)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "$cooldownSeconds",
-                    color = Color.White.copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
-                )
-            } else if (isSending) {
-                CircularProgressIndicator(
+                    text = "Merekam... ${formatDuration(recordingSeconds)}",
                     color = Color.White,
-                    strokeWidth = 2.dp,
-                    modifier = Modifier.size(18.dp)
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f)
                 )
-            } else {
+                IconButton(onClick = onCancelRecording) {
+                    Icon(
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = "Batal rekam",
+                        tint = Color.White.copy(alpha = 0.6f)
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(ZenimePrimary)
+                        .clickable(onClick = onStopRecording),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Stop,
+                        contentDescription = "Selesai rekam",
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
+        // --- Mode 2: ada rekaman VN pending, nunggu konfirmasi kirim ---
+        pendingVoiceDurationSeconds != null -> {
+            Row(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .background(ZenimeBackgroundDark)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Icon(
-                    imageVector = Icons.Filled.Send,
-                    contentDescription = "Kirim",
-                    tint = if (canSend) Color.White else Color.White.copy(alpha = 0.4f),
-                    modifier = Modifier.size(18.dp)
+                    imageVector = Icons.Filled.Mic,
+                    contentDescription = null,
+                    tint = ZenimePrimary,
+                    modifier = Modifier.size(20.dp)
                 )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Pesan suara \u00b7 ${formatDuration(pendingVoiceDurationSeconds)}",
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = onDiscardPendingVoice, enabled = !isSendingVoice) {
+                    Icon(
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = "Hapus rekaman",
+                        tint = Color.White.copy(alpha = 0.6f)
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(ZenimePrimary)
+                        .clickable(enabled = !isSendingVoice, onClick = onSendPendingVoice),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isSendingVoice) {
+                        CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
+                    } else {
+                        Icon(
+                            imageVector = Icons.Filled.Send,
+                            contentDescription = "Kirim pesan suara",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        // --- Mode 3: normal (teks + tombol mic) ---
+        else -> {
+            val canSend = value.isNotBlank() && cooldownSeconds == 0 && !isSending
+
+            Row(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .background(ZenimeBackgroundDark)
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    modifier = Modifier.weight(1f),
+                    placeholder = { Text("Tulis pesan...", color = Color.White.copy(alpha = 0.4f)) },
+                    shape = RoundedCornerShape(20.dp),
+                    maxLines = 4,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = ZenimePrimary,
+                        unfocusedBorderColor = CardOutlineBorder,
+                        focusedContainerColor = ZenimeSurfaceDark,
+                        unfocusedContainerColor = ZenimeSurfaceDark,
+                        cursorColor = ZenimePrimary
+                    )
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // Tombol mic cuma muncul kalau input teks lagi kosong (mirip
+                // WhatsApp) -- kalau lagi ngetik, slot ini gantian jadi kirim.
+                if (value.isBlank()) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(ZenimeSurfaceDark)
+                            .border(1.dp, CardOutlineBorder, CircleShape)
+                            .clickable(enabled = cooldownSeconds == 0, onClick = onMicTap),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Mic,
+                            contentDescription = if (isPremium) "Rekam pesan suara" else "Pesan suara khusus Premium",
+                            tint = if (isPremium) Color.White else Color.White.copy(alpha = 0.4f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(if (canSend) ZenimePrimary else ZenimeSurfaceDark)
+                            .border(1.dp, if (canSend) Color.Transparent else CardOutlineBorder, CircleShape)
+                            .clickable(enabled = canSend, onClick = onSend),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (cooldownSeconds > 0) {
+                            Text(
+                                text = "$cooldownSeconds",
+                                color = Color.White.copy(alpha = 0.6f),
+                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                            )
+                        } else if (isSending) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Filled.Send,
+                                contentDescription = "Kirim",
+                                tint = if (canSend) Color.White else Color.White.copy(alpha = 0.4f),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
     }

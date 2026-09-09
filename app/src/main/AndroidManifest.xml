@@ -3,6 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Buat rekam pesan suara (VN) di Chat Global, khusus user Premium. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Wajib buat nampilin notifikasi pengumuman/update di Android 13+
          (API 33): dialog izin runtime-nya diminta dari MainActivity. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
