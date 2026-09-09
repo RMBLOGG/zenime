@@ -28,6 +28,7 @@ val ZenimeSurfaceVariantLight = Color(0xFF1C222E)
 val ZenimeOnSurfaceLight = Color(0xFFF5F5F7)
 val ZenimeOnSurfaceVariantLight = Color(0xFF9AA0AC)
 
+val ZenimeInfoBlue = Color(0xFF3B82F6) // Tombol pill "Beli Premium" ala referensi
 val StarYellow = Color(0xFFFFC107)
 val StatusOngoing = Color(0xFF10B981)
 val StatusCompleted = Color(0xFF3B82F6)

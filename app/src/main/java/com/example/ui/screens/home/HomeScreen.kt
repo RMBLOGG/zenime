@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -25,6 +26,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
@@ -32,6 +34,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
@@ -40,6 +43,7 @@ import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -88,6 +92,9 @@ import com.example.ui.components.ShimmerHorizontalSection
 import com.example.ui.components.ZenimeHeader
 import com.example.ui.components.ZenimeHeaderActionButton
 import com.example.ui.components.ZenimeLogoTitle
+import com.example.ui.theme.CardOutlineBorder
+import com.example.ui.theme.StarYellow
+import com.example.ui.theme.ZenimeInfoBlue
 import com.example.ui.theme.ZenimePrimary
 import kotlinx.coroutines.delay
 import java.text.NumberFormat
@@ -234,9 +241,16 @@ fun HomeScreen(
                                     onProfileClick = onProfileClick,
                                     onPremiumClick = onPremiumClick,
                                     onCoinClick = onCoinClick,
-                                    modifier = Modifier.padding(top = 54.dp, start = 16.dp, end = 16.dp)
+                                    onSearchClick = onSearchClick,
+                                    modifier = Modifier.padding(top = 54.dp)
                                 )
-                                Spacer(modifier = Modifier.height(20.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
+                                HomePremiumBanner(
+                                    isPremium = profileState.isPremium,
+                                    onPremiumClick = onPremiumClick,
+                                    onNotificationClick = onChatClick
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
                             }
 
                             // "Terakhir Ditonton" -- continue watching row,
@@ -275,8 +289,15 @@ fun HomeScreen(
                                         intervalMs = heroIntervalMs.toLong(),
                                         onAnimeClick = onAnimeClick
                                     )
-                                    Spacer(modifier = Modifier.height(20.dp))
+                                    Spacer(modifier = Modifier.height(16.dp))
                                 }
+                            }
+
+                            // Kartu promo "Diskusi Publik" -- persis di bawah hero
+                            // carousel sesuai referensi, ngajak masuk Chat Global.
+                            item {
+                                HomeDiscussionPromoCard(onChatClick = onChatClick)
+                                Spacer(modifier = Modifier.height(16.dp))
                             }
 
                             // Section donasi SociaBuzz -- diletakkan di bawah hero
@@ -324,9 +345,10 @@ fun HomeScreen(
                                 if (newList.isNotEmpty()) {
                                     item {
                                         AnimeHorizontalSection(
-                                            title = "Baru Ditambahkan",
+                                            title = "New Anime Update",
                                             items = newList,
-                                            onAnimeClick = onAnimeClick
+                                            onAnimeClick = onAnimeClick,
+                                            showNewBadge = true
                                         )
                                     }
                                 }
@@ -416,10 +438,132 @@ fun HomeScreen(
 }
 
 /**
+ * Wrapper "card" generik -- dipakai buat bungkus tiap section Beranda
+ * (header profil, banner premium, hero, promo diskusi, & tiap row anime)
+ * jadi kartu rounded terpisah, sesuai referensi desain baru: layout
+ * "section-section yang dibungkus", bukan konten nempel polos di background.
+ */
+@Composable
+private fun HomeSectionCard(
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    contentPadding: Modifier = Modifier.padding(16.dp),
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, CardOutlineBorder.copy(alpha = 0.5f)),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .let { if (onClick != null) it.clickable(onClick = onClick) else it }
+    ) {
+        Column(modifier = contentPadding, content = content)
+    }
+}
+
+/**
+ * Banner ajakan aktivasi Premium -- kartu terpisah persis di bawah kartu
+ * profil, meniru referensi: ikon lonceng bulat di kiri + tombol pill besar
+ * "AKTIFKAN PREMIUM DI SINI" yang makan sisa lebar kartu.
+ */
+@Composable
+private fun HomePremiumBanner(
+    isPremium: Boolean,
+    onPremiumClick: () -> Unit,
+    onNotificationClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    HomeSectionCard(
+        modifier = modifier,
+        contentPadding = Modifier.padding(10.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .clickable(onClick = onNotificationClick),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Notifications,
+                    contentDescription = "Notifikasi",
+                    tint = ZenimePrimary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = ZenimeInfoBlue,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(44.dp)
+                    .clickable(onClick = onPremiumClick)
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Text(
+                        text = if (isPremium) "KELOLA PREMIUM" else "BELI PREMIUM DI SINI",
+                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Kartu promo "Diskusi Publik" -- ngajak user masuk ke Chat Global, posisinya
+ * di bawah hero carousel sama kayak referensi (bar diskusi di bawah banner).
+ */
+@Composable
+private fun HomeDiscussionPromoCard(
+    onChatClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    HomeSectionCard(
+        modifier = modifier,
+        onClick = onChatClick,
+        contentPadding = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Chat,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = "Diskusi Publik",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = "Buka Chat Global",
+                tint = ZenimePrimary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+/**
  * Kartu profil di paling atas Beranda, terinspirasi tampilan Home AniBiPlay:
  * avatar + username + zenime_code sebagai pengganti "#id", lalu dua chip di
  * bawahnya -- status Premium (gantiin "Level", isinya sisa hari aktif) dan
- * saldo ZCoin (gantiin "Crystal"/"AniGames").
+ * saldo ZCoin (gantiin "Crystal"/"AniGames"). Sekarang dibungkus jadi satu
+ * kartu terpisah (bukan nempel polos di background) sesuai referensi baru.
  */
 @Composable
 private fun HomeProfileHeader(
@@ -427,9 +571,10 @@ private fun HomeProfileHeader(
     onProfileClick: () -> Unit,
     onPremiumClick: () -> Unit,
     onCoinClick: () -> Unit,
+    onSearchClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
+    HomeSectionCard(modifier = modifier) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
@@ -480,9 +625,19 @@ private fun HomeProfileHeader(
                     )
                 }
             }
+
+            IconButton(onClick = onSearchClick, modifier = Modifier.size(38.dp)) {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = "Cari Anime",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(14.dp))
+        HorizontalDivider(color = CardOutlineBorder.copy(alpha = 0.5f))
+        Spacer(modifier = Modifier.height(14.dp))
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -559,6 +714,16 @@ private fun formatZCoinBalance(balance: Long): String {
     return NumberFormat.getInstance(Locale("id", "ID")).format(balance)
 }
 
+/** Format angka mentah (String) jadi label ringkas "24.5K", null kalau kosong/invalid. */
+private fun formatCountLabel(raw: String?): String? {
+    val value = raw?.toLongOrNull() ?: return null
+    return when {
+        value >= 1_000_000 -> "%.1fM".format(value / 1_000_000.0)
+        value >= 1_000 -> "%.1fK".format(value / 1_000.0)
+        else -> value.toString()
+    }
+}
+
 /**
  * Row "Terakhir Ditonton" -- posisinya persis di bawah kartu profil, sama
  * kayak referensi AniBiPlay. Sumbernya riwayat tonton lokal (watch_history),
@@ -568,18 +733,22 @@ private fun formatZCoinBalance(balance: Long): String {
 private fun ContinueWatchingSection(
     items: List<WatchHistoryEntity>,
     onItemClick: (WatchHistoryEntity) -> Unit,
+    onSeeAllClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = "Terakhir Ditonton",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(start = 16.dp, bottom = 10.dp)
+    HomeSectionCard(
+        modifier = modifier,
+        contentPadding = Modifier.padding(vertical = 14.dp)
+    ) {
+        SectionHeader(
+            title = "Terakhir Ditonton",
+            onSeeAllClick = onSeeAllClick,
+            modifier = Modifier.padding(horizontal = 6.dp)
         )
+        Spacer(modifier = Modifier.height(4.dp))
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp)
+            contentPadding = PaddingValues(horizontal = 6.dp)
         ) {
             items(items.take(12), key = { it.animeId }) { history ->
                 ContinueWatchingCard(
@@ -659,12 +828,40 @@ private fun ContinueWatchingCard(
         Spacer(modifier = Modifier.height(6.dp))
 
         Text(
-            text = item.animeTitle,
-            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+            text = if (!item.episodeIndex.isNullOrEmpty()) "Eps ${item.episodeIndex}" else item.animeTitle,
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+        Text(
+            text = item.animeTitle,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        if (item.durationMs > 0) {
+            Text(
+                text = "${formatDuration(item.progressMs)} / ${formatDuration(item.durationMs)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = ZenimeInfoBlue,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+/** Format milidetik jadi "mm:ss" (atau "h:mm:ss" kalau lebih dari 1 jam), ala referensi. */
+private fun formatDuration(ms: Long): String {
+    val totalSeconds = (ms / 1000).coerceAtLeast(0)
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) {
+        "%d:%02d:%02d".format(hours, minutes, seconds)
+    } else {
+        "%02d:%02d".format(minutes, seconds)
     }
 }
 
@@ -690,11 +887,14 @@ fun FullBleedHeroBannerCarousel(
     if (bannerItems.isEmpty()) return
 
     val currentAnime = bannerItems[currentIndex.coerceIn(0, bannerItems.lastIndex)]
+    val heroShape = RoundedCornerShape(20.dp)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .padding(horizontal = 16.dp)
             .height(290.dp)
+            .clip(heroShape)
             .clickable { onAnimeClick(currentAnime.id) }
     ) {
         // Hero Image Cover Full Bleed
@@ -723,6 +923,51 @@ fun FullBleedHeroBannerCarousel(
                     )
                 )
         )
+
+        // Badge views (kiri atas), ala "24.5K views" di referensi.
+        formatCountLabel(currentAnime.views)?.let { viewsLabel ->
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color.Black.copy(alpha = 0.55f),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(12.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "$viewsLabel views",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White
+                    )
+                }
+            }
+        }
+
+        // Badge ranking (#N), posisinya ngambang di atas judul ala referensi.
+        Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = Color.Black.copy(alpha = 0.55f),
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(12.dp)
+        ) {
+            Text(
+                text = "#${currentIndex + 1}",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = StarYellow,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+        }
 
         // Hero Info Overlay
         Column(
@@ -1230,20 +1475,50 @@ fun AnimeHorizontalSection(
     items: List<AnimeItem>,
     onAnimeClick: (String) -> Unit,
     onSeeAllClick: (() -> Unit)? = null,
+    showNewBadge: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier.padding(vertical = 10.dp)) {
-        SectionHeader(title = title, onSeeAllClick = onSeeAllClick)
+    HomeSectionCard(
+        modifier = modifier.padding(vertical = 6.dp),
+        contentPadding = Modifier.padding(vertical = 14.dp)
+    ) {
+        SectionHeader(
+            title = title,
+            onSeeAllClick = onSeeAllClick,
+            modifier = Modifier.padding(horizontal = 6.dp)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
 
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 20.dp),
+            contentPadding = PaddingValues(horizontal = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             items(items, key = { it.id }) { anime ->
-                AnimePosterCard(
-                    anime = anime,
-                    onClick = { onAnimeClick(anime.id) }
-                )
+                Box {
+                    AnimePosterCard(
+                        anime = anime,
+                        onClick = { onAnimeClick(anime.id) }
+                    )
+                    if (showNewBadge) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = ZenimeInfoBlue,
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(6.dp)
+                        ) {
+                            Text(
+                                text = "New",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 9.sp
+                                ),
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -1257,11 +1532,19 @@ fun ComicHorizontalSection(
     onSeeAllClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier.padding(vertical = 10.dp)) {
-        SectionHeader(title = title, onSeeAllClick = onSeeAllClick)
+    HomeSectionCard(
+        modifier = modifier.padding(vertical = 6.dp),
+        contentPadding = Modifier.padding(vertical = 14.dp)
+    ) {
+        SectionHeader(
+            title = title,
+            onSeeAllClick = onSeeAllClick,
+            modifier = Modifier.padding(horizontal = 6.dp)
+        )
+        Spacer(modifier = Modifier.height(4.dp))
 
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 20.dp),
+            contentPadding = PaddingValues(horizontal = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             items(items, key = { it.slug }) { comic ->
