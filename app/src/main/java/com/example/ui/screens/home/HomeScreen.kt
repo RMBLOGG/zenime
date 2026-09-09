@@ -1291,19 +1291,11 @@ fun AnimeHorizontalSection(
     showNewBadge: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    HomeSectionCard(
-        modifier = modifier.padding(vertical = 6.dp),
-        contentPadding = Modifier.padding(vertical = 14.dp)
-    ) {
-        SectionHeader(
-            title = title,
-            onSeeAllClick = onSeeAllClick,
-            modifier = Modifier.padding(horizontal = 6.dp)
-        )
-        Spacer(modifier = Modifier.height(4.dp))
+    Column(modifier = modifier.padding(vertical = 10.dp)) {
+        SectionHeader(title = title, onSeeAllClick = onSeeAllClick)
 
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 6.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             items(items, key = { it.id }) { anime ->
@@ -1345,19 +1337,11 @@ fun ComicHorizontalSection(
     onSeeAllClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    HomeSectionCard(
-        modifier = modifier.padding(vertical = 6.dp),
-        contentPadding = Modifier.padding(vertical = 14.dp)
-    ) {
-        SectionHeader(
-            title = title,
-            onSeeAllClick = onSeeAllClick,
-            modifier = Modifier.padding(horizontal = 6.dp)
-        )
-        Spacer(modifier = Modifier.height(4.dp))
+    Column(modifier = modifier.padding(vertical = 10.dp)) {
+        SectionHeader(title = title, onSeeAllClick = onSeeAllClick)
 
         LazyRow(
-            contentPadding = PaddingValues(horizontal = 6.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             items(items, key = { it.slug }) { comic ->
