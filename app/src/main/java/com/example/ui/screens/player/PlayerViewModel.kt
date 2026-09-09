@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.common.Result
 import com.example.data.local.DownloadStatus
 import com.example.data.local.DownloadedEpisodeEntity
+import com.example.data.model.AnimeItem
 import com.example.data.model.EpisodeDetail
 import com.example.data.model.EpisodeItem
 import com.example.data.model.StreamResponse
@@ -54,6 +55,12 @@ class PlayerViewModel(
 
     private var currentAnimeTitle: String = "Anime"
     private var currentPosterUrl: String? = null
+
+    // Data anime (judul, poster, sinopsis, views, dll) buat section info di
+    // bawah video pas mode portrait -- lihat loadAnimeInfo(). Null selama
+    // masih loading pertama kali.
+    private val _animeInfo = MutableStateFlow<AnimeItem?>(null)
+    val animeInfo: StateFlow<AnimeItem?> = _animeInfo.asStateFlow()
 
     // Posisi terakhir nonton episode INI (bukan episode lain di anime yang
     // sama) -- 0 kalau belum pernah nonton, atau kalau progress lama udah
@@ -176,6 +183,7 @@ class PlayerViewModel(
                 if (result is Result.Success) {
                     currentAnimeTitle = result.data.title ?: "Anime"
                     currentPosterUrl = result.data.image_poster
+                    _animeInfo.value = result.data
                 }
             }
         }

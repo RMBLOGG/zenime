@@ -1,11 +1,15 @@
 package com.example.ui.screens.player
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.content.res.Configuration
 import android.media.AudioManager
 import android.net.Uri
 import android.provider.Settings
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
@@ -24,6 +28,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,7 +46,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -57,7 +64,12 @@ import androidx.compose.material.icons.filled.DownloadDone
 import androidx.compose.material.icons.filled.DownloadForOffline
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPictureAlt
@@ -65,7 +77,9 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PlayCircleFilled
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
@@ -102,6 +116,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -109,6 +125,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -136,11 +153,15 @@ import com.example.ads.AdManager
 import com.example.data.common.Result
 import com.example.data.local.DownloadStatus
 import com.example.data.local.DownloadedEpisodeEntity
+import com.example.data.model.AnimeItem
+import com.example.data.model.EpisodeDetail
 import com.example.data.model.EpisodeItem
 import com.example.ui.components.DownloadQualityPickerDialog
 import com.example.ui.components.ErrorStateView
+import com.example.ui.theme.ZenimePrimary
 import com.example.util.FREE_EPISODE_LIMIT
 import com.example.util.PipController
+import com.example.util.PlayerFullscreenController
 import com.example.util.findActivity
 import com.example.util.isDownloadAllowed
 import com.example.util.isEpisodeLocked
@@ -259,6 +280,36 @@ fun PlayerScreen(
     var showSettingsMenu by remember { mutableStateOf(false) }
 
     val isInPip by PipController.isInPipMode.collectAsState()
+
+    // Mode fullscreen (landscape + immersive) vs portrait biasa (video 16:9
+    // di atas, info + episode list di-scroll di bawah) -- default-nya SELALU
+    // portrait, baru pindah fullscreen kalau user pencet tombol expand atau
+    // device di-rotate ke landscape (lihat LaunchedEffect(configuration)
+    // di bawah). Orientasi & immersive system bar sendiri di-drive dari
+    // NavGraph (baca PlayerFullscreenController juga), BUKAN dari sini.
+    val isFullscreen by PlayerFullscreenController.isFullscreen.collectAsState()
+
+    // Tombol back device: kalau lagi fullscreen, keluar fullscreen dulu
+    // (balik ke portrait) -- BUKAN langsung keluar dari halaman player.
+    // Sama kayak kebiasaan YouTube/Netflix.
+    BackHandler(enabled = isFullscreen) {
+        PlayerFullscreenController.setFullscreen(false)
+    }
+
+    // Auto-masuk fullscreen begitu device fisik di-rotate ke landscape
+    // (selama belum fullscreen). Cuma satu arah -- BUKAN auto-keluar
+    // fullscreen pas dirotate balik ke portrait, soalnya begitu fullscreen
+    // aktif, NavGraph nge-lock orientasinya ke SENSOR_LANDSCAPE (lihat
+    // NavGraph.kt), jadi config di sini gak akan balik ke portrait sampai
+    // user pencet tombol collapse/back secara manual.
+    val configuration = LocalConfiguration.current
+    LaunchedEffect(configuration.orientation) {
+        if (configuration.orientation == Configuration.ORIENTATION_LANDSCAPE && !isFullscreen) {
+            PlayerFullscreenController.setFullscreen(true)
+        }
+    }
+
+    val animeInfo by viewModel.animeInfo.collectAsStateWithLifecycle()
 
     // Gesture kontrol: swipe vertikal kiri = brightness, kanan = volume;
     // double-tap kiri/kanan = mundur/maju 10 detik. State di bawah cuma
@@ -543,9 +594,21 @@ fun PlayerScreen(
                         }
                     }
 
+                    Column(modifier = Modifier.fillMaxSize()) {
                     Box(
-                        modifier = Modifier
-                            .fillMaxSize()
+                        modifier = (
+                            if (isFullscreen) {
+                                Modifier.fillMaxSize()
+                            } else {
+                                // Portrait: video cuma 16:9 di atas, bukan
+                                // ngambil seluruh layar -- sisanya diisi info
+                                // + episode list yang bisa di-scroll di bawah.
+                                Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(16f / 9f)
+                            }
+                            )
+                            .background(Color.Black)
                             .pointerInput(Unit) {
                                 detectTapGestures(
                                     onTap = { isControlsVisible = !isControlsVisible },
@@ -872,6 +935,18 @@ fun PlayerScreen(
                                             }
                                         }
                                     )
+
+                                    Spacer(modifier = Modifier.width(6.dp))
+
+                                    // Toggle fullscreen -- landscape + immersive kalau
+                                    // di-tap, balik portrait kalau di-tap lagi. Lihat
+                                    // PlayerFullscreenController buat detail kenapa
+                                    // state-nya ditaruh di object terpisah.
+                                    PlayerIconButton(
+                                        icon = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                                        contentDescription = if (isFullscreen) "Keluar Fullscreen" else "Fullscreen",
+                                        onClick = { PlayerFullscreenController.setFullscreen(!isFullscreen) }
+                                    )
                                 }
 
                                 // Center Play / Rewind / Forward Controls
@@ -1036,7 +1111,32 @@ fun PlayerScreen(
                             }
                         )
                         } // tutup if (!isInPip)
+                    } // tutup Box video
+
+                    // Section info + episode list -- cuma dirender pas
+                    // PORTRAIT (bukan fullscreen) dan BUKAN lagi PiP. Bisa
+                    // di-scroll, isinya poster+judul+episode, sinopsis,
+                    // tombol donasi Trakteer, tombol aksi, dan daftar
+                    // episode (horizontal, pakai thumbnail).
+                    if (!isFullscreen && !isInPip) {
+                        PlayerDetailsSection(
+                            animeInfo = animeInfo,
+                            epDetail = epDetail,
+                            episodeListState = episodeListState,
+                            currentEpisodeId = viewModel.episodeId,
+                            onQualityClick = { showSettingsMenu = true },
+                            onDownloadClick = {
+                                if (isDownloadAllowed(isPremium)) {
+                                    viewModel.openDownloadQualityPicker()
+                                } else {
+                                    onUpgradeClick()
+                                }
+                            },
+                            onEpisodeClick = { ep -> onNextEpisodeClick(ep.id) },
+                            modifier = Modifier.weight(1f)
+                        )
                     }
+                    } // tutup Column
 
                     // Overlay kunci Premium -- dirender PALING TERAKHIR biar
                     // nutupin semua konten video/kontrol di atasnya (video-nya
@@ -1887,5 +1987,470 @@ private fun formatTime(ms: Long): String {
         String.format("%d:%02d:%02d", hours, minutes, seconds)
     } else {
         String.format("%02d:%02d", minutes, seconds)
+    }
+}
+
+// Link donasi Trakteer -- kalau username-nya beda, tinggal ganti di sini.
+private const val TRAKTEER_URL = "https://trakteer.id/Dayynimee"
+
+/**
+ * Section di bawah video pas mode PORTRAIT (bukan fullscreen): poster +
+ * judul anime + info episode, sinopsis (expandable), tombol donasi
+ * Trakteer, tombol aksi (kualitas/download/lapor/bagikan), dan daftar
+ * episode horizontal yang pakai THUMBNAIL (bukan cuma nomor polos) --
+ * gaya sama kayak [EpisodeHorizontalCard] di DetailScreen.
+ */
+@Composable
+private fun PlayerDetailsSection(
+    animeInfo: AnimeItem?,
+    epDetail: EpisodeDetail?,
+    episodeListState: Result<List<EpisodeItem>>,
+    currentEpisodeId: String,
+    onQualityClick: () -> Unit,
+    onDownloadClick: () -> Unit,
+    onEpisodeClick: (EpisodeItem) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    var isSynopsisExpanded by remember { mutableStateOf(false) }
+
+    LazyColumn(
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(top = 14.dp, bottom = 28.dp)
+    ) {
+        // 1. Poster kecil + judul anime + info episode (index, views, tanggal)
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.Top
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(80.dp)
+                        .aspectRatio(2f / 3f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    val posterUrl = animeInfo?.image_poster ?: animeInfo?.image_cover
+                    if (!posterUrl.isNullOrEmpty()) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(posterUrl)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = animeInfo?.title,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = animeInfo?.title ?: "Memuat...",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    val epTitle = epDetail?.title
+                    Text(
+                        text = "Episode ${epDetail?.index ?: "-"}" +
+                            if (!epTitle.isNullOrBlank()) " • $epTitle" else "",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val viewsLabel = formatViewCount(animeInfo?.views)
+                        if (viewsLabel != null) {
+                            Icon(
+                                imageVector = Icons.Default.Visibility,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = viewsLabel,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        val aired = animeInfo?.aired_start
+                        if (!aired.isNullOrBlank()) {
+                            if (viewsLabel != null) {
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "•",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            Text(
+                                text = aired,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(14.dp))
+        }
+
+        // 2. Sinopsis, expandable -- sama pola-nya kayak DetailScreen.
+        val synopsis = animeInfo?.synopsis
+        if (!synopsis.isNullOrBlank()) {
+            item {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                ) {
+                    Text(
+                        text = synopsis,
+                        style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = if (isSynopsisExpanded) Int.MAX_VALUE else 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = if (isSynopsisExpanded) "Sembunyikan" else "Selengkapnya",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = ZenimePrimary,
+                        modifier = Modifier
+                            .padding(top = 4.dp)
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { MutableInteractionSource() }
+                            ) { isSynopsisExpanded = !isSynopsisExpanded }
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+
+        // 3. Tombol donasi Trakteer -- "Bantu Admin Seikhlasnya".
+        item {
+            TrakteerDonationButton(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // 4. Baris tombol aksi: kualitas, download, lapor, bagikan.
+        item {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                PlayerActionChip(
+                    icon = Icons.Default.HighQuality,
+                    label = "Kualitas",
+                    onClick = onQualityClick
+                )
+                PlayerActionChip(
+                    icon = Icons.Default.DownloadForOffline,
+                    label = "Download",
+                    onClick = onDownloadClick
+                )
+                PlayerActionChip(
+                    icon = Icons.Default.Flag,
+                    label = "Laporkan",
+                    onClick = {
+                        Toast.makeText(context, "Fitur laporkan segera hadir", Toast.LENGTH_SHORT).show()
+                    }
+                )
+                PlayerActionChip(
+                    icon = Icons.Default.Share,
+                    label = "Bagikan",
+                    onClick = {
+                        val title = animeInfo?.title ?: "anime ini"
+                        val epIndex = epDetail?.index
+                        val shareText = if (!epIndex.isNullOrBlank()) {
+                            "Nonton \"$title\" Episode $epIndex di Zenime!"
+                        } else {
+                            "Nonton \"$title\" di Zenime!"
+                        }
+                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, shareText)
+                        }
+                        runCatching { context.startActivity(Intent.createChooser(sendIntent, null)) }
+                    }
+                )
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+        }
+
+        // 5. Header "Episode List"
+        item {
+            Text(
+                text = "Episode List",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        // 6. Daftar episode horizontal, PAKAI THUMBNAIL (bukan cuma nomor).
+        when (episodeListState) {
+            is Result.Loading -> {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 24.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = PlayerAccent, modifier = Modifier.size(28.dp))
+                    }
+                }
+            }
+            is Result.Error -> {
+                item {
+                    Text(
+                        text = "Gagal memuat daftar episode",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+            }
+            is Result.Success -> {
+                val episodes = episodeListState.data
+                if (episodes.isEmpty()) {
+                    item {
+                        Text(
+                            text = "Episode belum tersedia",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                } else {
+                    item {
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            items(episodes, key = { it.id }) { ep ->
+                                PlayerEpisodeThumbCard(
+                                    episode = ep,
+                                    isActive = ep.id == currentEpisodeId,
+                                    onClick = { onEpisodeClick(ep) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Tombol donasi Trakteer, versi native dari "Bantu Admin Seikhlasnya" di
+ * referensi -- buka halaman Trakteer lewat browser/Custom Tab bawaan
+ * device, sama pola-nya kayak [com.example.ui.screens.home.DonationFab]
+ * yang udah ada (bedanya itu SociaBuzz, ini Trakteer).
+ */
+@Composable
+private fun TrakteerDonationButton(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = Color(0xFF29ABE2).copy(alpha = 0.14f),
+        modifier = modifier.clickable(
+            indication = null,
+            interactionSource = remember { MutableInteractionSource() }
+        ) {
+            try {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(TRAKTEER_URL)))
+            } catch (e: ActivityNotFoundException) {
+                Toast.makeText(context, "Tidak ada browser untuk membuka Trakteer", Toast.LENGTH_SHORT).show()
+            }
+        }
+    ) {
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(shape = CircleShape, color = Color(0xFF29ABE2)) {
+                Icon(
+                    imageVector = Icons.Default.Favorite,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier
+                        .padding(10.dp)
+                        .size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = "Bantu Admin Seikhlasnya",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Traktir admin lewat Trakteer, ya!",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+/** Chip kecil buat baris tombol aksi (kualitas/download/lapor/bagikan). */
+@Composable
+private fun PlayerActionChip(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        modifier = modifier.clickable(
+            indication = null,
+            interactionSource = remember { MutableInteractionSource() },
+            onClick = onClick
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/**
+ * Kartu episode buat daftar horizontal di bawah player -- pakai THUMBNAIL
+ * (dari [EpisodeItem.resolvedImageUrl]) + badge "EP N", bukan cuma nomor
+ * polos. Episode yang lagi aktif ditandain border + ikon play.
+ */
+@Composable
+private fun PlayerEpisodeThumbCard(
+    episode: EpisodeItem,
+    isActive: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .width(120.dp)
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() },
+                onClick = onClick
+            )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .border(
+                    width = if (isActive) 2.dp else 0.dp,
+                    color = if (isActive) ZenimePrimary else Color.Transparent,
+                    shape = RoundedCornerShape(10.dp)
+                )
+        ) {
+            val thumbUrl = episode.resolvedImageUrl
+            if (!thumbUrl.isNullOrEmpty()) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(thumbUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = episode.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            if (isActive) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.35f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayCircleFilled,
+                        contentDescription = null,
+                        tint = ZenimePrimary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+            Surface(
+                shape = RoundedCornerShape(bottomEnd = 8.dp, topStart = 8.dp),
+                color = Color.Black.copy(alpha = 0.6f),
+                modifier = Modifier.align(Alignment.TopStart)
+            ) {
+                Text(
+                    text = "EP ${episode.index ?: "-"}",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp
+                    ),
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        val title = episode.title
+        if (!title.isNullOrBlank()) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelSmall,
+                color = if (isActive) ZenimePrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+/** Format angka mentah (String) jadi label ringkas "24.5K", null kalau kosong/invalid. */
+private fun formatViewCount(raw: String?): String? {
+    val value = raw?.toLongOrNull() ?: return null
+    return when {
+        value >= 1_000_000 -> "%.1fM".format(value / 1_000_000.0)
+        value >= 1_000 -> "%.1fK".format(value / 1_000.0)
+        else -> value.toString()
     }
 }

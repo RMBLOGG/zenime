@@ -41,6 +41,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -61,6 +62,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.util.PlayerFullscreenController
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
@@ -276,12 +278,30 @@ fun ZenimeAppNavHost(
     // Dengan nge-cek di sini (satu sumber kebenaran = current route), race
     // itu nggak mungkin kejadian lagi.
     val context = LocalContext.current
-    LaunchedEffect(currentRoute) {
+
+    // Mode fullscreen player (landscape + immersive) vs mode portrait biasa
+    // (video kecil di atas, info + episode list di-scroll di bawah) --
+    // di-drive dari PlayerFullscreenController, di-toggle dari dalam
+    // PlayerScreen (tombol fullscreen / rotasi device). Default-nya SELALU
+    // false tiap kali PlayerScreen dibuka -- lihat reset di branch else di
+    // bawah, biar buka episode baru gak ujug-ujug fullscreen bawaan dari
+    // sesi nonton sebelumnya.
+    val isPlayerFullscreen by PlayerFullscreenController.isFullscreen.collectAsState()
+
+    LaunchedEffect(currentRoute, isPlayerFullscreen) {
         val activity = context.findActivity() ?: return@LaunchedEffect
-        activity.requestedOrientation = if (currentRoute == Screen.Player.route) {
-            ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        } else {
-            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        activity.requestedOrientation = when {
+            currentRoute == Screen.Player.route && isPlayerFullscreen ->
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            currentRoute == Screen.Player.route ->
+                // Portrait biasa, tapi tetep boleh ngikutin sensor device
+                // (bukan di-lock) -- ini juga yang bikin PlayerScreen bisa
+                // otomatis masuk fullscreen pas user rotate device manual.
+                ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            else -> {
+                PlayerFullscreenController.setFullscreen(false)
+                ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            }
         }
     }
 
@@ -295,20 +315,28 @@ fun ZenimeAppNavHost(
     // episode -- status bar yang sempet muncul (misal abis di-swipe) gak
     // ke-hide lagi. navBackStackEntry beda identitas tiap kali navigate(),
     // walau route pattern-nya sama, jadi ini kunci yang lebih aman.
-    LaunchedEffect(navBackStackEntry) {
+    LaunchedEffect(navBackStackEntry, isPlayerFullscreen) {
         val activity = context.findActivity() ?: return@LaunchedEffect
         val window = activity.window
         val isPlayerRoute = currentRoute == Screen.Player.route
 
+        // Keep-screen-on tetep nyala selama nonton, fullscreen atau nggak.
         if (isPlayerRoute) {
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+
+        // Status/nav bar cuma disembunyiin (immersive) pas BENERAN fullscreen.
+        // Mode portrait biasa biarin status bar tetep kelihatan (kayak
+        // referensi: jam & sinyal tetep nampil di atas video).
+        if (isPlayerRoute && isPlayerFullscreen) {
             WindowCompat.setDecorFitsSystemWindows(window, false)
             val insetsController = WindowInsetsControllerCompat(window, window.decorView)
             insetsController.hide(WindowInsetsCompat.Type.systemBars())
             insetsController.systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             WindowCompat.setDecorFitsSystemWindows(window, true)
             val insetsController = WindowInsetsControllerCompat(window, window.decorView)
             insetsController.show(WindowInsetsCompat.Type.systemBars())
