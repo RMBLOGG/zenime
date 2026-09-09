@@ -5,10 +5,14 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.api.RemoteConfigManager
 import com.example.data.common.Result
 import com.example.data.local.DownloadedEpisodeEntity
+import com.example.data.local.WatchHistoryEntity
 import com.example.data.model.BacakomikListItem
 import com.example.data.model.HomeResponse
 import com.example.data.repository.AnimeRepository
+import com.example.data.repository.ChatRepository
+import com.example.data.repository.CoinRepository
 import com.example.data.repository.ComicRepository
+import com.example.data.repository.PremiumRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -16,9 +20,28 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+/**
+ * State buat kartu profil ala AniBiPlay di paling atas Beranda -- avatar,
+ * username, zenime_code (pengganti "#id" di referensi), sisa hari Premium
+ * (pengganti "Level"), dan saldo ZCoin (pengganti "Crystal").
+ */
+data class HomeProfileUiState(
+    val isLoading: Boolean = true,
+    val username: String = "",
+    val avatarUrl: String? = null,
+    val zenimeCode: String? = null,
+    val isPremium: Boolean = false,
+    val premiumDaysLeft: Long? = null,
+    val coinBalance: Long = 0L
+)
+
 class HomeViewModel(
     private val repository: AnimeRepository,
-    private val comicRepository: ComicRepository
+    private val comicRepository: ComicRepository,
+    private val chatRepository: ChatRepository = ChatRepository(),
+    private val premiumRepository: PremiumRepository = PremiumRepository(),
+    private val coinRepository: CoinRepository = CoinRepository(),
+    private val firebaseUid: String? = null
 ) : ViewModel() {
 
     private val _homeState = MutableStateFlow<Result<HomeResponse>>(Result.Loading)
@@ -54,9 +77,55 @@ class HomeViewModel(
     val downloads: StateFlow<List<DownloadedEpisodeEntity>> = repository.allDownloads
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
 
+    // "Terakhir Ditonton" -- riwayat tonton lokal, dipakai buat row continue
+    // watching di paling atas Beranda (persis posisinya di referensi AniBiPlay).
+    val continueWatching: StateFlow<List<WatchHistoryEntity>> = repository.watchHistory
+        .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
+
+    private val _profileState = MutableStateFlow(HomeProfileUiState())
+    val profileState: StateFlow<HomeProfileUiState> = _profileState.asStateFlow()
+
     init {
         loadHome()
         loadComicLatest()
+        loadProfileHeader()
+    }
+
+    /**
+     * Narik data buat kartu profil atas: profil chat (username/avatar),
+     * status Premium (buat hitung sisa hari, gantiin "Level" di referensi),
+     * zenime_code (gantiin "#id"), & saldo ZCoin (gantiin "Crystal").
+     * Kalau lagi belum login (firebaseUid null) langsung skip, biarin
+     * default state kosong.
+     */
+    private fun loadProfileHeader() {
+        val uid = firebaseUid ?: return
+        viewModelScope.launch {
+            _profileState.value = _profileState.value.copy(isLoading = true)
+
+            val chatProfile = try {
+                chatRepository.getProfile(uid)
+            } catch (e: Exception) {
+                null
+            }
+
+            val premiumResult = premiumRepository.checkPremiumStatus(uid)
+            val premiumStatus = premiumResult.getOrNull()
+            val daysLeft = premiumStatus?.expiresAt?.let { computeDaysLeft(it) }
+
+            val codeResult = premiumRepository.getZenimeCode(uid)
+            val balanceResult = coinRepository.getBalance(uid)
+
+            _profileState.value = _profileState.value.copy(
+                isLoading = false,
+                username = chatProfile?.username?.ifBlank { "Pengguna Zenime" } ?: "Pengguna Zenime",
+                avatarUrl = if (premiumStatus?.isPremium == true) chatProfile?.avatarUrl else null,
+                zenimeCode = codeResult.getOrNull(),
+                isPremium = premiumStatus?.isPremium ?: false,
+                premiumDaysLeft = daysLeft,
+                coinBalance = balanceResult.getOrNull() ?: 0L
+            )
+        }
     }
 
     fun loadComicLatest() {
@@ -93,5 +162,16 @@ class HomeViewModel(
                 _homeState.value = result
             }
         }
+    }
+}
+
+/** Sisa hari dari expires_at ISO string; null kalau formatnya gak valid. */
+private fun computeDaysLeft(expiresAtIso: String): Long? {
+    return try {
+        val expiresAt = java.time.Instant.parse(expiresAtIso)
+        val now = java.time.Instant.now()
+        java.time.Duration.between(now, expiresAt).toDays().coerceAtLeast(0)
+    } catch (e: Exception) {
+        null
     }
 }

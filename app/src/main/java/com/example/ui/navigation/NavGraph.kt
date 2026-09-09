@@ -352,8 +352,20 @@ fun ZenimeAppNavHost(
 
             // Home Screen
             composable(Screen.Home.route) {
+                val uid = currentUser?.uid
                 val homeViewModel: HomeViewModel = viewModel(
-                    factory = viewModelFactory { initializer { HomeViewModel(repository, comicRepository) } }
+                    factory = viewModelFactory {
+                        initializer {
+                            HomeViewModel(
+                                repository = repository,
+                                comicRepository = comicRepository,
+                                chatRepository = ChatRepository(),
+                                premiumRepository = PremiumRepository(),
+                                coinRepository = CoinRepository(),
+                                firebaseUid = uid
+                            )
+                        }
+                    }
                 )
                 HomeScreen(
                     viewModel = homeViewModel,
@@ -377,6 +389,15 @@ fun ZenimeAppNavHost(
                     },
                     onSeeAllComicClick = {
                         navController.navigate(Screen.Comic.route)
+                    },
+                    onProfileClick = {
+                        navController.navigate(Screen.Profile.route)
+                    },
+                    onPremiumClick = {
+                        navController.navigate(Screen.Premium.route)
+                    },
+                    onCoinClick = {
+                        navController.navigate(Screen.Coin.route)
                     }
                 )
             }

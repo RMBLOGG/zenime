@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -73,11 +74,13 @@ import com.example.R
 import com.example.data.common.Result
 import com.example.data.local.DownloadStatus
 import com.example.data.local.DownloadedEpisodeEntity
+import com.example.data.local.WatchHistoryEntity
 import com.example.data.model.AnimeItem
 import com.example.data.model.BacakomikListItem
 import com.example.ui.components.AnimePosterCard
 import com.example.ui.components.ComicPosterCard
 import com.example.ui.components.ErrorStateView
+import com.example.ui.components.GeneratedAvatar
 import com.example.ui.components.SectionHeader
 import com.example.ui.components.ShimmerBanner
 import com.example.ui.components.ShimmerHorizontalSection
@@ -86,6 +89,8 @@ import com.example.ui.components.ZenimeHeaderActionButton
 import com.example.ui.components.ZenimeLogoTitle
 import com.example.ui.theme.ZenimePrimary
 import kotlinx.coroutines.delay
+import java.text.NumberFormat
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,11 +103,16 @@ fun HomeScreen(
     onPlayEpisodeClick: (episodeId: String, animeId: String) -> Unit,
     onComicClick: (String) -> Unit = {},
     onSeeAllComicClick: () -> Unit = {},
+    onProfileClick: () -> Unit = {},
+    onPremiumClick: () -> Unit = {},
+    onCoinClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val homeState by viewModel.homeState.collectAsStateWithLifecycle()
     val comicLatestState by viewModel.comicLatestState.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
+    val profileState by viewModel.profileState.collectAsStateWithLifecycle()
+    val continueWatching by viewModel.continueWatching.collectAsStateWithLifecycle()
     val heroStyle by viewModel.heroStyle.collectAsStateWithLifecycle()
     val heroAutoplay by viewModel.heroAutoplay.collectAsStateWithLifecycle()
     val heroIntervalMs by viewModel.heroIntervalMs.collectAsStateWithLifecycle()
@@ -212,6 +222,37 @@ fun HomeScreen(
                             contentPadding = PaddingValues(bottom = 110.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
+                            // Kartu profil ala AniBiPlay -- avatar, username,
+                            // zenime_code, status Premium (sisa hari), & saldo
+                            // ZCoin. Padding atas 54.dp biar gak ketutup
+                            // ZenimeHeader yang statusnya transparan pas di
+                            // paling atas.
+                            item {
+                                HomeProfileHeader(
+                                    state = profileState,
+                                    onProfileClick = onProfileClick,
+                                    onPremiumClick = onPremiumClick,
+                                    onCoinClick = onCoinClick,
+                                    modifier = Modifier.padding(top = 54.dp, start = 16.dp, end = 16.dp)
+                                )
+                                Spacer(modifier = Modifier.height(20.dp))
+                            }
+
+                            // "Terakhir Ditonton" -- continue watching row,
+                            // posisinya sama kayak di referensi AniBiPlay
+                            // (persis di bawah kartu profil).
+                            if (continueWatching.isNotEmpty()) {
+                                item {
+                                    ContinueWatchingSection(
+                                        items = continueWatching,
+                                        onItemClick = { history ->
+                                            onPlayEpisodeClick(history.episodeId, history.animeId)
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.height(20.dp))
+                                }
+                            }
+
                             // Hero Banner Carousel -- sumber & jumlah item
                             // ngikutin preferensi "Sumber Banner" & "Jumlah
                             // Anime di Carousel" dari Pengaturan, fallback ke
@@ -370,6 +411,259 @@ fun HomeScreen(
                 modifier = Modifier.align(Alignment.TopCenter)
             )
         }
+    }
+}
+
+/**
+ * Kartu profil di paling atas Beranda, terinspirasi tampilan Home AniBiPlay:
+ * avatar + username + zenime_code sebagai pengganti "#id", lalu dua chip di
+ * bawahnya -- status Premium (gantiin "Level", isinya sisa hari aktif) dan
+ * saldo ZCoin (gantiin "Crystal"/"AniGames").
+ */
+@Composable
+private fun HomeProfileHeader(
+    state: HomeProfileUiState,
+    onProfileClick: () -> Unit,
+    onPremiumClick: () -> Unit,
+    onCoinClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onProfileClick)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                if (!state.avatarUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(state.avatarUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = state.username,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize().clip(CircleShape)
+                    )
+                } else {
+                    GeneratedAvatar(
+                        seed = state.zenimeCode ?: state.username,
+                        label = state.username,
+                        size = 48.dp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = state.username.ifBlank { "Pengguna Zenime" },
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (!state.zenimeCode.isNullOrBlank()) {
+                    Text(
+                        text = "#${state.zenimeCode}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // Chip status Premium -- gantiin "Lvl. 1" di referensi, isinya
+            // sisa hari aktif kalau lagi Premium, atau ajakan aktivasi kalau belum.
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = if (state.isPremium) ZenimePrimary.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable(onClick = onPremiumClick)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.WorkspacePremium,
+                        contentDescription = null,
+                        tint = if (state.isPremium) ZenimePrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = when {
+                            state.isPremium && state.premiumDaysLeft != null -> "Sisa ${state.premiumDaysLeft} hari"
+                            state.isPremium -> "Premium aktif"
+                            else -> "Aktifkan Premium"
+                        },
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = if (state.isPremium) ZenimePrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            // Chip saldo ZCoin -- gantiin tombol "AniGames" di referensi.
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.clickable(onClick = onCoinClick)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_zcoin_badge),
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = formatZCoinBalance(state.coinBalance),
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.width(2.dp))
+                    Text(
+                        text = "ZCoin",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun formatZCoinBalance(balance: Long): String {
+    return NumberFormat.getInstance(Locale("id", "ID")).format(balance)
+}
+
+/**
+ * Row "Terakhir Ditonton" -- posisinya persis di bawah kartu profil, sama
+ * kayak referensi AniBiPlay. Sumbernya riwayat tonton lokal (watch_history),
+ * masing-masing kartu nampilin progress bar tipis di bawah poster.
+ */
+@Composable
+private fun ContinueWatchingSection(
+    items: List<WatchHistoryEntity>,
+    onItemClick: (WatchHistoryEntity) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            text = "Terakhir Ditonton",
+            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(start = 16.dp, bottom = 10.dp)
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp)
+        ) {
+            items(items.take(12), key = { it.animeId }) { history ->
+                ContinueWatchingCard(
+                    item = history,
+                    onClick = { onItemClick(history) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContinueWatchingCard(
+    item: WatchHistoryEntity,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .width(150.dp)
+            .clickable(onClick = onClick)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(10.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(item.posterUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = item.animeTitle,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            if (!item.episodeIndex.isNullOrEmpty()) {
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = Color.Black.copy(alpha = 0.75f),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                ) {
+                    Text(
+                        text = "EP ${item.episodeIndex}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                    )
+                }
+            }
+
+            // Progress bar tipis nempel di bawah poster, kayak di YouTube/Netflix.
+            if (item.durationMs > 0) {
+                val progress = (item.progressMs.toFloat() / item.durationMs.toFloat()).coerceIn(0f, 1f)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .background(Color.White.copy(alpha = 0.3f))
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(progress)
+                            .fillMaxHeight()
+                            .background(ZenimePrimary)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text(
+            text = item.animeTitle,
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
