@@ -1,0 +1,6 @@
+{
+  "name": "Zenime",
+  "description": "Nonton Anime, Tenang & Modern — Aplikasi streaming anime modern dengan Material 3",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

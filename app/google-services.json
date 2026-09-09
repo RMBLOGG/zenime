@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "936105562787",
+    "project_id": "zenime-609d0",
+    "storage_bucket": "zenime-609d0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:936105562787:android:7e436bc713ca4748976516",
+        "android_client_info": {
+          "package_name": "com.aistudio.zenime.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCZ5gce9Uf1dTi0SnPfnrzwUsHwdH7ciS8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

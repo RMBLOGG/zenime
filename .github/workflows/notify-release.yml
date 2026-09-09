@@ -1,0 +1,55 @@
+name: Notify Release via FCM
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install firebase-admin
+        run: npm install firebase-admin
+
+      - name: Send FCM notification
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          RELEASE_NAME: ${{ github.event.release.name || github.event.release.tag_name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+        run: |
+          node -e '
+            const admin = require("firebase-admin");
+            const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+
+            admin.initializeApp({
+              credential: admin.credential.cert(serviceAccount)
+            });
+
+            let body = (process.env.RELEASE_BODY || "Update baru sudah tersedia!").trim();
+            if (body.length > 200) {
+              body = body.substring(0, 200) + "...";
+            }
+
+            const message = {
+              notification: {
+                title: `🎉 ${process.env.RELEASE_NAME || "Rilis Baru"}`,
+                body: body
+              },
+              topic: "release_updates"
+            };
+
+            admin.messaging().send(message)
+              .then((response) => {
+                console.log("Notifikasi berhasil dikirim:", response);
+                process.exit(0);
+              })
+              .catch((error) => {
+                console.error("Gagal mengirim notifikasi:", error);
+                process.exit(1);
+              });
+          '

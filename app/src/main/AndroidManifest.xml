@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Wajib buat nampilin notifikasi pengumuman/update di Android 13+
+         (API 33): dialog izin runtime-nya diminta dari MainActivity. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Wajib buat pasang APK update yang didownload di dalam app sendiri
+         (lewat PackageInstaller system, dipicu dari ApkDownloader.launchInstall).
+         Ini "special permission", gak muncul dialog runtime kayak kamera/lokasi,
+         tapi PackageInstaller sistem yang bakal nanyain user buat aktifin
+         "Izinkan dari sumber ini" khusus buat app ini kalau belum diaktifin. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-feature
+        android:name="android.software.picture-in-picture"
+        android:required="false" />
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.MyApplication">
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|smallestScreenSize|uiMode"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:supportsPictureInPicture="true"
+            android:theme="@style/Theme.MyApplication">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Kasih akses content:// URI ke file APK yang didownload
+             ApkDownloader ke folder app-specific (getExternalFilesDir),
+             supaya bisa dikasih ke PackageInstaller sistem tanpa file://
+             (file:// URI dari app sendiri ke app lain diblokir StrictMode
+             sejak API 24+, wajib pakai FileProvider). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- Terima push notifikasi pengumuman/update dari FCM: lihat
+             com.example.notifications.ZenimeMessagingService. -->
+        <service
+            android:name="com.example.notifications.ZenimeMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- Channel default kalau ada notif FCM yang dikirim tanpa
+             "android_channel_id" eksplisit di payload-nya. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="announcements" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_announcement" />
+    </application>
+
+</manifest>

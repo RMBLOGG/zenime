@@ -1,0 +1,34 @@
+package com.example.data.api
+
+/**
+ * Kredensial Supabase project Zenime (buat fitur Premium & ZCoin).
+ *
+ * PENTING: SUPABASE_ANON_KEY di sini WAJIB diisi manual sebelum fitur
+ * Premium bisa jalan -- ambil dari Supabase Dashboard > Project Settings >
+ * API > "anon public" key. Ini AMAN ditanam di app (beda dari
+ * service_role key yang gak boleh pernah ada di client), karena anon key
+ * emang didesain buat dipakai dari sisi client dan dibatasi lewat RLS +
+ * Edge Function yang cuma nerima request tertentu.
+ */
+object SupabaseConfig {
+    const val SUPABASE_URL = "https://lryvtlnozwixjnuwfexj.supabase.co"
+    const val SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxyeXZ0bG5vendpeGpudXdmZXhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNTUzMDQsImV4cCI6MjEwMjczMTMwNH0.qMEvt6OGBYqlkMwXZNZmoAdUt0-5hBdcme5DMCR0dxw"
+
+    /** Halaman storefront buat checkout pembayaran premium. */
+    const val STOREFRONT_URL = "https://zenime.biz.id/beli-premium"
+
+    /**
+     * Halaman storefront khusus buat pembeli luar negeri (mis. Malaysia)
+     * yang QRIS Sakurupiah di [STOREFRONT_URL] tidak kebaca e-wallet/bank
+     * mereka -- pakai QRIS pribadi merchant, diverifikasi manual oleh admin.
+     */
+    const val MANUAL_STOREFRONT_URL = "https://zenime.biz.id/bayar-manual"
+
+    /**
+     * Halaman storefront buat checkout top up ZCoin.
+     */
+    const val COIN_STOREFRONT_URL = "https://zenime.biz.id/top-up-coin"
+
+    /** Versi "bayar dari luar negeri" buat top up ZCoin. */
+    const val COIN_MANUAL_STOREFRONT_URL = "https://zenime.biz.id/coin-bayar-manual"
+}

@@ -1,0 +1,264 @@
+package com.example.ui.screens.player
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.data.common.Result
+import com.example.data.local.DownloadStatus
+import com.example.data.local.DownloadedEpisodeEntity
+import com.example.data.model.EpisodeDetail
+import com.example.data.model.EpisodeItem
+import com.example.data.model.StreamResponse
+import com.example.data.model.StreamServer
+import com.example.data.repository.AnimeRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import java.io.File
+
+class PlayerViewModel(
+    private val repository: AnimeRepository,
+    val episodeId: String,
+    val animeId: String
+) : ViewModel() {
+
+    private val _streamState = MutableStateFlow<Result<StreamResponse>>(Result.Loading)
+    val streamState: StateFlow<Result<StreamResponse>> = _streamState.asStateFlow()
+
+    private val _selectedServer = MutableStateFlow<StreamServer?>(null)
+    val selectedServer: StateFlow<StreamServer?> = _selectedServer.asStateFlow()
+
+    val defaultQuality: StateFlow<String> = repository.userPrefs.defaultQualityFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "720p"
+        )
+
+    val autoSkipIntro: StateFlow<Boolean> = repository.userPrefs.autoSkipIntroFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
+    val autoSkipOutro: StateFlow<Boolean> = repository.userPrefs.autoSkipOutroFlow
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
+    private var currentAnimeTitle: String = "Anime"
+    private var currentPosterUrl: String? = null
+
+    // Posisi terakhir nonton episode INI (bukan episode lain di anime yang
+    // sama) -- 0 kalau belum pernah nonton, atau kalau progress lama udah
+    // mepet abis (dianggap "udah kelar" jadi gak perlu resume).
+    private val _resumePositionMs = MutableStateFlow(0L)
+    val resumePositionMs: StateFlow<Long> = _resumePositionMs.asStateFlow()
+
+    // Daftar semua episode anime ini, buat ditampilin di sidebar "Daftar
+    // Episode" di PlayerScreen. Di-load sekali di init, sama kayak
+    // loadAnimeInfo() -- repository udah nge-cache jadi murah dipanggil lagi
+    // kalau user buka-tutup sidebar atau pindah episode dalam anime yang sama.
+    private val _episodeListState = MutableStateFlow<Result<List<EpisodeItem>>>(Result.Loading)
+    val episodeListState: StateFlow<Result<List<EpisodeItem>>> = _episodeListState.asStateFlow()
+
+    // Status download offline episode INI -- null berarti belum pernah
+    // di-download sama sekali. Dipakai PlayerScreen buat nentuin ikon
+    // tombol download (belum ada / lagi jalan berapa persen / selesai / gagal).
+    val downloadEntry: StateFlow<DownloadedEpisodeEntity?> = repository.downloadForEpisode(episodeId)
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    // Pesan error transient buat download (mis. gagal fetch link stream)
+    // -- ditampilin sekali sebagai snackbar/toast lalu di-clear.
+    private val _downloadErrorMessage = MutableStateFlow<String?>(null)
+    val downloadErrorMessage: StateFlow<String?> = _downloadErrorMessage.asStateFlow()
+
+    // Dialog pilih kualitas download -- null berarti dialog tertutup.
+    // options == null (tapi state non-null) berarti masih loading fetch
+    // server list-nya.
+    private val _downloadQualityPicker = MutableStateFlow<DownloadQualityPickerState?>(null)
+    val downloadQualityPicker: StateFlow<DownloadQualityPickerState?> = _downloadQualityPicker.asStateFlow()
+
+    init {
+        loadStream()
+        loadAnimeInfo()
+        loadResumePosition()
+        loadEpisodeList()
+    }
+
+    /** Buka dialog pilih kualitas, fetch daftar server FRESH (bukan cache). */
+    fun openDownloadQualityPicker() {
+        _downloadQualityPicker.value = DownloadQualityPickerState()
+        viewModelScope.launch {
+            when (val result = repository.getDownloadQualityOptions(episodeId)) {
+                is Result.Success -> _downloadQualityPicker.value = DownloadQualityPickerState(options = result.data)
+                is Result.Error -> _downloadQualityPicker.value = DownloadQualityPickerState(errorMessage = result.message)
+                else -> Unit
+            }
+        }
+    }
+
+    fun dismissDownloadQualityPicker() {
+        _downloadQualityPicker.value = null
+    }
+
+    /** User udah milih kualitas di dialog -- mulai download-nya. */
+    fun confirmDownloadQuality(server: StreamServer, episodeTitle: String?, episodeIndex: String?) {
+        _downloadQualityPicker.value = null
+        // Thumbnail episode ITU SENDIRI (bukan poster anime) -- diambil dari
+        // daftar episode yang udah ke-load buat sidebar "Daftar Episode",
+        // dicari yang episodeId-nya cocok sama episode yang lagi diputer ini.
+        val episodeThumbnail = (_episodeListState.value as? Result.Success)
+            ?.data
+            ?.find { it.id == episodeId }
+            ?.resolvedImageUrl
+        viewModelScope.launch {
+            val result = repository.enqueueEpisodeDownload(
+                episodeId = episodeId,
+                animeId = animeId,
+                animeTitle = currentAnimeTitle,
+                posterUrl = currentPosterUrl,
+                episodeTitle = episodeTitle,
+                episodeIndex = episodeIndex,
+                server = server,
+                episodeThumbnailUrl = episodeThumbnail
+            )
+            if (result is Result.Error) {
+                _downloadErrorMessage.value = result.message
+            }
+        }
+    }
+
+    fun deleteDownload() {
+        viewModelScope.launch {
+            repository.deleteEpisodeDownload(episodeId)
+        }
+    }
+
+    fun clearDownloadError() {
+        _downloadErrorMessage.value = null
+    }
+
+    private fun loadEpisodeList() {
+        viewModelScope.launch {
+            repository.getAllEpisodes(animeId).collect { result ->
+                _episodeListState.value = result
+            }
+        }
+    }
+
+    private fun loadResumePosition() {
+        viewModelScope.launch {
+            val history = repository.getHistoryForAnime(animeId).first()
+            if (history != null && history.episodeId == episodeId) {
+                val isNearlyFinished = history.durationMs > 0 &&
+                    history.progressMs >= history.durationMs * 0.95
+                if (!isNearlyFinished && history.progressMs > 5000) {
+                    _resumePositionMs.value = history.progressMs
+                }
+            }
+        }
+    }
+
+    private fun loadAnimeInfo() {
+        viewModelScope.launch {
+            repository.getDetail(animeId).collect { result ->
+                if (result is Result.Success) {
+                    currentAnimeTitle = result.data.title ?: "Anime"
+                    currentPosterUrl = result.data.image_poster
+                }
+            }
+        }
+    }
+
+    fun loadStream() {
+        viewModelScope.launch {
+            _streamState.value = Result.Loading
+            repository.getEpisodeStream(episodeId).collect { result ->
+                // getEpisodeStream SENGAJA gak di-cache (link server = signed
+                // URL, lihat AnimeRepository), jadi selalu butuh internet --
+                // bahkan buat episode yang udah didownload. Kalau ini gagal
+                // (kemungkinan besar offline) TAPI file offline-nya ada &
+                // lengkap, sintesis StreamResponse dari data lokal biar UI
+                // player tetap tampil (servers kosong & episodeNext null itu
+                // fine, PlayerScreen udah nangatasin keduanya dengan graceful
+                // -- next-episode/server-switch cuma disembunyiin, bukan
+                // nge-block seluruh layar). Ini BUKAN nyembunyiin error kalau
+                // memang gak ada file lokal -- di kasus itu tetap Result.Error
+                // seperti biasa.
+                val offlineFallback = (result as? Result.Error)?.let {
+                    val downloaded = repository.downloadForEpisode(episodeId).first()
+                    val localPath = downloaded?.takeIf { d -> d.status == DownloadStatus.COMPLETED }?.localFilePath
+                    if (downloaded != null && localPath != null && File(localPath).exists()) {
+                        Result.Success(
+                            StreamResponse(
+                                episode = EpisodeDetail(
+                                    id = downloaded.episodeId,
+                                    title = downloaded.episodeTitle,
+                                    index = downloaded.episodeIndex
+                                ),
+                                episodeNext = null,
+                                servers = emptyList()
+                            )
+                        )
+                    } else {
+                        null
+                    }
+                }
+
+                val resolved = offlineFallback ?: result
+                _streamState.value = resolved
+                if (resolved is Result.Success) {
+                    val servers = resolved.data.servers ?: emptyList()
+                    // Baca langsung dari DataStore, jangan lewat StateFlow defaultQuality
+                    // (yang WhileSubscribed & belum tentu ke-collect duluan sebelum ini jalan)
+                    val prefQuality = repository.userPrefs.defaultQualityFlow.first()
+                    // Pick server with matching preferred quality or first available
+                    val matchedServer = servers.find { it.quality?.contains(prefQuality) == true }
+                        ?: servers.firstOrNull()
+                    _selectedServer.value = matchedServer
+                }
+            }
+        }
+    }
+
+    fun selectServer(server: StreamServer) {
+        _selectedServer.value = server
+    }
+
+    fun saveProgress(progressMs: Long, durationMs: Long, epTitle: String?, epIndex: String?) {
+        if (progressMs > 0 && durationMs > 0) {
+            viewModelScope.launch {
+                repository.saveWatchProgress(
+                    animeId = animeId,
+                    animeTitle = currentAnimeTitle,
+                    posterUrl = currentPosterUrl,
+                    episodeId = episodeId,
+                    episodeTitle = epTitle ?: "Episode $epIndex",
+                    episodeIndex = epIndex,
+                    progressMs = progressMs,
+                    durationMs = durationMs
+                )
+            }
+        }
+    }
+}
+
+/**
+ * State dialog pilih kualitas download. options == null && errorMessage == null
+ * berarti masih loading; options non-null berarti siap dipilih user.
+ */
+data class DownloadQualityPickerState(
+    val options: List<StreamServer>? = null,
+    val errorMessage: String? = null
+)
