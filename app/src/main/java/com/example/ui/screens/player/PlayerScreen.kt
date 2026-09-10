@@ -589,18 +589,23 @@ fun PlayerScreen(
                     val servers = streamData.servers ?: emptyList()
 
                     // Episode sebelumnya nggak dikasih backend (cuma ada
-                    // episodeNext), jadi dicari manual dari episodeListState:
-                    // ketemu posisi episode yang lagi diputer, terus ambil
-                    // satu sebelumnya di list (list-nya udah urut ascending
-                    // dari AnimeRepository.getAllEpisodes).
+                    // episodeNext), jadi dicari manual dari episodeListState.
+                    // PENTING: jangan asumsiin urutan asli list dari API itu
+                    // ascending -- ternyata dia descending (episode terbaru
+                    // duluan), jadi kalau langsung "index - 1" malah nunjuk
+                    // ke episode yang lebih BARU (ke atas), bukan sebelumnya.
+                    // Makanya di sini di-sort eksplisit pakai field `index`
+                    // (numerik, fallback ke urutan asli kalau gak kebaca)
+                    // biar gak gantung ke urutan mentah dari API.
                     val prevEpId = remember(episodeListState, epDetail?.id) {
                         val episodes = (episodeListState as? Result.Success)?.data
                         val currentId = epDetail?.id
                         if (episodes.isNullOrEmpty() || currentId.isNullOrEmpty()) {
                             null
                         } else {
-                            val currentIndex = episodes.indexOfFirst { it.id == currentId }
-                            episodes.getOrNull(currentIndex - 1)?.id
+                            val sorted = episodes.sortedBy { it.index?.toIntOrNull() ?: Int.MAX_VALUE }
+                            val currentIndex = sorted.indexOfFirst { it.id == currentId }
+                            sorted.getOrNull(currentIndex - 1)?.id
                         }
                     }
 
