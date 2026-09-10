@@ -1,0 +1,31 @@
+name: Check New Episode via FCM
+
+on:
+  schedule:
+    # Tiap 20 menit. Cron GitHub kadang delay beberapa menit di jam sibuk,
+    # itu wajar.
+    - cron: '*/20 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  check-new-episode:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install firebase-admin
+        run: npm install firebase-admin
+
+      - name: Run episode check
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+          SUPABASE_URL: https://lryvtlnozwixjnuwfexj.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/check-new-episode.js
