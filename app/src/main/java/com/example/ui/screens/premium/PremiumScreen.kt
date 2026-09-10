@@ -152,6 +152,7 @@ private fun PremiumBenefitsHeroCard() {
         "Bebas iklan sepenuhnya",
         "Resolusi unlock, dari terendah sampai 1080p",
         "Baca semua komik tanpa batas",
+        "Kirim voice note di chat publik",
         "Badge khusus Premium"
     )
 
