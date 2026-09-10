@@ -1019,6 +1019,21 @@ fun PlayerScreen(
                                         size = 46.dp,
                                         iconSize = 26.dp
                                     )
+
+                                    // Panah "Episode Selanjutnya" nempel di kontrol
+                                    // tengah, gaya YouTube (lingkaran transparan +
+                                    // ikon skip) -- gantiin pill teks yang dulu
+                                    // nangkring sendirian di pojok kanan bawah.
+                                    val nextEpId = nextEpDetail?.id
+                                    if (!nextEpId.isNullOrEmpty()) {
+                                        PlayerIconButton(
+                                            icon = Icons.Default.SkipNext,
+                                            contentDescription = "Episode Selanjutnya",
+                                            onClick = { onNextEpisodeClick(nextEpId) },
+                                            size = 46.dp,
+                                            iconSize = 26.dp
+                                        )
+                                    }
                                 }
 
                                 // Bottom Scrubber + Skip Intro + Next Episode
@@ -1031,13 +1046,11 @@ fun PlayerScreen(
                                         .align(Alignment.BottomCenter)
                                         .padding(horizontal = 16.dp, vertical = 12.dp)
                                 ) {
-                                    val nextEpId = nextEpDetail?.id
                                     val showSkipIntro = currentPosition < INTRO_SKIP_MS &&
                                         duration > MIN_DURATION_FOR_SKIP_MS
-                                    val showNextEpisode = !nextEpId.isNullOrEmpty()
 
                                     androidx.compose.animation.AnimatedVisibility(
-                                        visible = showSkipIntro || showNextEpisode,
+                                        visible = showSkipIntro,
                                         enter = fadeIn(tween(180)) + slideInHorizontally(
                                             animationSpec = tween(180),
                                             initialOffsetX = { it / 4 }
@@ -1052,23 +1065,11 @@ fun PlayerScreen(
                                                 modifier = Modifier.fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.End
                                             ) {
-                                                // Prioritaskan satu pill aja biar minimalis:
-                                                // selama intro, tombol skip intro dulu yang
-                                                // tampil. Begitu intro lewat, baru tombol
-                                                // episode selanjutnya muncul.
-                                                when {
-                                                    showSkipIntro -> PlayerPill(
-                                                        text = "Lewati Intro",
-                                                        icon = Icons.Default.FastForward,
-                                                        onClick = { exoPlayer.seekTo(INTRO_SKIP_MS) }
-                                                    )
-                                                    showNextEpisode -> PlayerPill(
-                                                        text = "Episode Selanjutnya",
-                                                        icon = Icons.Default.SkipNext,
-                                                        filled = true,
-                                                        onClick = { onNextEpisodeClick(nextEpId!!) }
-                                                    )
-                                                }
+                                                PlayerPill(
+                                                    text = "Lewati Intro",
+                                                    icon = Icons.Default.FastForward,
+                                                    onClick = { exoPlayer.seekTo(INTRO_SKIP_MS) }
+                                                )
                                             }
                                             Spacer(modifier = Modifier.height(10.dp))
                                         }
