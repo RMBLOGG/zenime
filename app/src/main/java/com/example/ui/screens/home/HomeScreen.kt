@@ -3,7 +3,6 @@ package com.example.ui.screens.home
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -65,7 +63,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -421,44 +418,6 @@ private fun HomeSectionCard(
 }
 
 /**
- * Kartu promo "Diskusi Publik" -- ngajak user masuk ke Chat Global, posisinya
- * di bawah hero carousel sama kayak referensi (bar diskusi di bawah banner).
- */
-@Composable
-private fun HomeDiscussionPromoCard(
-    onChatClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    HomeSectionCard(
-        modifier = modifier,
-        onClick = onChatClick,
-        contentPadding = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.Chat,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-            Text(
-                text = "Diskusi Publik",
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
-            )
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = "Buka Chat Global",
-                tint = ZenimePrimary,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-    }
-}
-
-/**
  * Banner ajakan aktivasi Premium -- kartu terpisah persis di bawah kartu
  * profil, meniru referensi: ikon lonceng bulat di kiri + tombol pill besar
  * "AKTIFKAN PREMIUM DI SINI" yang makan sisa lebar kartu.
@@ -511,6 +470,44 @@ private fun HomePremiumBanner(
                     )
                 }
             }
+        }
+    }
+}
+
+/**
+ * Kartu promo "Diskusi Publik" -- ngajak user masuk ke Chat Global, posisinya
+ * di bawah hero carousel sama kayak referensi (bar diskusi di bawah banner).
+ */
+@Composable
+private fun HomeDiscussionPromoCard(
+    onChatClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    HomeSectionCard(
+        modifier = modifier,
+        onClick = onChatClick,
+        contentPadding = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Chat,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = "Diskusi Publik",
+                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = "Buka Chat Global",
+                tint = ZenimePrimary,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }
@@ -600,116 +597,46 @@ private fun HomeProfileHeader(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
-            // Chip status Premium -- REDESIGN struktural: bukan cuma pill
-            // sewarna, tapi kartu badge 2 baris (label kecil "STATUS
-            // PREMIUM" di atas + angka hari besar di bawah) dengan ikon
-            // watermark besar transparan di pojok, biar ada kedalaman &
-            // hierarki visual, nggak cuma teks rata tengah polos.
-            val isPremium = state.isPremium
-            Box(
+            // Chip status Premium -- gantiin "Lvl. 1" di referensi, isinya
+            // sisa hari aktif kalau lagi Premium, atau ajakan aktivasi kalau belum.
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = if (state.isPremium) ZenimePrimary.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier
                     .weight(1f)
-                    .height(78.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .then(
-                        if (isPremium) {
-                            Modifier.background(
-                                Brush.horizontalGradient(listOf(ZenimePrimary, Color(0xFFFF7A45)))
-                            )
-                        } else {
-                            Modifier
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .border(1.dp, CardOutlineBorder, RoundedCornerShape(14.dp))
-                        }
-                    )
                     .clickable(onClick = onPremiumClick)
             ) {
-                // Watermark ikon mahkota besar, dipojokkan & diputar dikit,
-                // transparan tipis -- kasih tekstur di belakang teks.
-                Icon(
-                    imageVector = Icons.Filled.WorkspacePremium,
-                    contentDescription = null,
-                    tint = if (isPremium) Color.White.copy(alpha = 0.18f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.10f),
-                    modifier = Modifier
-                        .size(56.dp)
-                        .align(Alignment.BottomEnd)
-                        .offset(x = 12.dp, y = 14.dp)
-                        .graphicsLayer(rotationZ = -18f)
-                )
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
-                    Text(
-                        text = if (isPremium) "STATUS PREMIUM" else "BELUM PREMIUM",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.8.sp
-                        ),
-                        color = if (isPremium) Color.White.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1
+                    Icon(
+                        imageVector = Icons.Filled.WorkspacePremium,
+                        contentDescription = null,
+                        tint = if (state.isPremium) ZenimePrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
                     )
-
-                    when {
-                        isPremium && state.premiumDaysLeft != null -> {
-                            Row(verticalAlignment = Alignment.Bottom) {
-                                Text(
-                                    text = "${state.premiumDaysLeft}",
-                                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Black),
-                                    color = Color.White,
-                                    maxLines = 1
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "hari lagi",
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = Color.White.copy(alpha = 0.85f),
-                                    maxLines = 1
-                                )
-                            }
-                        }
-                        isPremium -> {
-                            Text(
-                                text = "Aktif",
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
-                                color = Color.White
-                            )
-                        }
-                        else -> {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = "Aktifkan",
-                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = ZenimePrimary,
-                                    maxLines = 1
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                                    contentDescription = null,
-                                    tint = ZenimePrimary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                            }
-                        }
-                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = when {
+                            state.isPremium && state.premiumDaysLeft != null -> "Sisa ${state.premiumDaysLeft} hari"
+                            state.isPremium -> "Premium aktif"
+                            else -> "Aktifkan Premium"
+                        },
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = if (state.isPremium) ZenimePrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
 
             // Chip saldo ZCoin -- gantiin tombol "AniGames" di referensi.
-            // (cuma disamain tingginya sama kartu Premium di sebelah biar
-            // rapi sejajar, isi/gaya chip ini sendiri nggak diubah)
             Surface(
                 shape = RoundedCornerShape(10.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier
-                    .height(78.dp)
-                    .clickable(onClick = onCoinClick)
+                modifier = Modifier.clickable(onClick = onCoinClick)
             ) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
@@ -731,7 +658,6 @@ private fun HomeProfileHeader(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
                 }
             }
         }
