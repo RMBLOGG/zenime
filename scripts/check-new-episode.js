@@ -92,14 +92,34 @@ async function upsertSnapshot(rows) {
   }
 }
 
+function isValidImageUrl(url) {
+  if (typeof url !== "string" || url.trim() === "") return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 async function sendEpisodeNotification(anime) {
   const title = anime.title || "Anime";
+  const candidateImage = anime.image_poster || anime.image_cover;
+
+  const notification = {
+    title: title,
+    body: "Episode terbaru sudah rilis, buruan nonton!",
+  };
+
+  // Cuma masukin key imageUrl kalau beneran valid -- kalau key-nya ada
+  // tapi isinya undefined/kosong, Firebase nolak seluruh pesannya
+  // (bukan cuma skip gambarnya doang), jadi mending di-omit total.
+  if (isValidImageUrl(candidateImage)) {
+    notification.imageUrl = candidateImage;
+  }
+
   const message = {
-    notification: {
-      title: title,
-      body: "Episode terbaru sudah rilis, buruan nonton!",
-      imageUrl: anime.image_poster || anime.image_cover || undefined,
-    },
+    notification,
     android: {
       // Route ke channel "new_episode" biar user bisa atur notif ini
       // terpisah dari channel "announcements" di pengaturan Android.
