@@ -109,6 +109,7 @@ fun HomeScreen(
     onProfileClick: () -> Unit = {},
     onPremiumClick: () -> Unit = {},
     onCoinClick: () -> Unit = {},
+    onDonationClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val homeState by viewModel.homeState.collectAsStateWithLifecycle()
@@ -281,6 +282,7 @@ fun HomeScreen(
                             // konten atau nav bar kayak versi floating button.
                             item {
                                 DonationSection(
+                                    onClick = onDonationClick,
                                     modifier = Modifier.padding(horizontal = 16.dp)
                                 )
                                 Spacer(modifier = Modifier.height(20.dp))

@@ -105,6 +105,7 @@ import com.example.ui.screens.player.PlayerScreen
 import com.example.ui.screens.player.PlayerViewModel
 import com.example.ui.screens.player.PremiumGate
 import com.example.ui.screens.coin.CoinScreen
+import com.example.ui.screens.donation.DonationScreen
 import com.example.ui.screens.coin.CoinViewModel
 import com.example.ui.screens.premium.PremiumPromoDialog
 import com.example.ui.screens.premium.PremiumScreen
@@ -142,6 +143,7 @@ sealed class Screen(
 
     data object Premium : Screen("premium")
     data object Coin : Screen("coin")
+    data object Donation : Screen("donation")
 
     data object Chat : Screen("chat")
 
@@ -426,6 +428,9 @@ fun ZenimeAppNavHost(
                     },
                     onCoinClick = {
                         navController.navigate(Screen.Coin.route)
+                    },
+                    onDonationClick = {
+                        navController.navigate(Screen.Donation.route)
                     }
                 )
             }
@@ -583,6 +588,14 @@ fun ZenimeAppNavHost(
                     )
                     CoinScreen(viewModel = coinViewModel)
                 }
+            }
+
+            // Halaman donasi penuh -- QRIS, SociaBuzz, Trakteer, Crypto.
+            // Konsepnya niru halaman "Donators Hall of Fame" Sankanime.
+            composable(Screen.Donation.route) {
+                DonationScreen(
+                    onBackClick = { navController.popBackStack() }
+                )
             }
 
             // Chat Global -- pesan publik antar semua pengguna, polling tiap
