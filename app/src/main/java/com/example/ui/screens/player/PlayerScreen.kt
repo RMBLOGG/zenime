@@ -79,6 +79,7 @@ import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material.icons.filled.VolumeOff
@@ -587,6 +588,22 @@ fun PlayerScreen(
                     val nextEpDetail = streamData.episodeNext
                     val servers = streamData.servers ?: emptyList()
 
+                    // Episode sebelumnya nggak dikasih backend (cuma ada
+                    // episodeNext), jadi dicari manual dari episodeListState:
+                    // ketemu posisi episode yang lagi diputer, terus ambil
+                    // satu sebelumnya di list (list-nya udah urut ascending
+                    // dari AnimeRepository.getAllEpisodes).
+                    val prevEpId = remember(episodeListState, epDetail?.id) {
+                        val episodes = (episodeListState as? Result.Success)?.data
+                        val currentId = epDetail?.id
+                        if (episodes.isNullOrEmpty() || currentId.isNullOrEmpty()) {
+                            null
+                        } else {
+                            val currentIndex = episodes.indexOfFirst { it.id == currentId }
+                            episodes.getOrNull(currentIndex - 1)?.id
+                        }
+                    }
+
                     // Non-premium dibatasin max 480p. Kalau server yang lagi
                     // dipilih (default dari repository.getEpisodeStream) ternyata
                     // di atas itu, otomatis turunin ke server bagus tertinggi yang
@@ -966,6 +983,20 @@ fun PlayerScreen(
                                     horizontalArrangement = Arrangement.spacedBy(36.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    // Panah "Episode Sebelumnya", pasangan simetris
+                                    // dari panah "Episode Selanjutnya" di kanan --
+                                    // sama-sama gaya YouTube (lingkaran transparan
+                                    // + ikon skip).
+                                    if (!prevEpId.isNullOrEmpty()) {
+                                        PlayerIconButton(
+                                            icon = Icons.Default.SkipPrevious,
+                                            contentDescription = "Episode Sebelumnya",
+                                            onClick = { onNextEpisodeClick(prevEpId) },
+                                            size = 46.dp,
+                                            iconSize = 26.dp
+                                        )
+                                    }
+
                                     PlayerIconButton(
                                         icon = Icons.Default.Replay10,
                                         contentDescription = "Mundur 10 Detik",
