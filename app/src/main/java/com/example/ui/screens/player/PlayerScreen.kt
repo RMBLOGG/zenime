@@ -246,11 +246,21 @@ fun PlayerScreen(
     // bisa akses judul/index episode buat metadata download.
     val currentEpisodeDetail = (streamState as? Result.Success)?.data?.episode
 
-    // Episode 1-4 gratis, selebihnya cuma buat Premium (lihat isEpisodeLocked).
-    // null selama streamState masih Loading (currentEpisodeDetail belum ada)
-    // -- dianggap belum terkunci sampai kebukti sebaliknya biar gak salah
-    // block pas masih nunggu data kebaca.
-    val isEpisodeLockedForUser = isEpisodeLocked(currentEpisodeDetail?.index, isPremium)
+    // Episode 1-4 gratis, selebihnya cuma buat Premium (lihat isEpisodeLocked)
+    // -- KECUALI non-premium mau nonton rewarded ad buat buka episode ini
+    // (lihat unlockedViaAdEpisodeId). null selama streamState masih Loading
+    // (currentEpisodeDetail belum ada) -- dianggap belum terkunci sampai
+    // kebukti sebaliknya biar gak salah block pas masih nunggu data kebaca.
+    val isEpisodeLockedByPremium = isEpisodeLocked(currentEpisodeDetail?.index, isPremium)
+
+    // ID episode yang udah "dibeli" pakai nonton rewarded ad. Disimpan per
+    // episodeId (bukan Boolean polos) supaya reset otomatis tiap pindah ke
+    // episode terkunci LAIN -- PlayerScreen memang di-compose ulang dari nol
+    // tiap ganti episode (lihat komentar di atas soal LaunchedEffect(Unit)),
+    // jadi state ini otomatis ke-reset ke null pas layar baru dipasang.
+    var unlockedViaAdEpisodeId by remember { mutableStateOf<String?>(null) }
+    val isEpisodeLockedForUser = isEpisodeLockedByPremium &&
+        unlockedViaAdEpisodeId != currentEpisodeDetail?.id
 
     // Member Premium bebas iklan -- iklan cuma ditampilin kalau isPremium
     // false. Ditunggu sampai currentEpisodeDetail kebaca (bukan langsung
@@ -1229,7 +1239,25 @@ fun PlayerScreen(
                         EpisodeLockedContent(
                             episodeIndex = epDetail?.index,
                             onBackClick = onBackClick,
-                            onUpgradeClick = onUpgradeClick
+                            onUpgradeClick = onUpgradeClick,
+                            onWatchAdToUnlock = {
+                                val activity = context.findActivity()
+                                if (activity == null) {
+                                    Toast.makeText(context, "Gagal membuka iklan, coba lagi", Toast.LENGTH_SHORT).show()
+                                    return@EpisodeLockedContent
+                                }
+                                AdManager.showRewarded(activity) { earned ->
+                                    if (earned) {
+                                        unlockedViaAdEpisodeId = currentEpisodeDetail?.id
+                                    } else {
+                                        Toast.makeText(
+                                            context,
+                                            "Iklan belum selesai ditonton, episode masih terkunci",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                }
+                            }
                         )
                     }
                 }
@@ -1297,8 +1325,19 @@ fun PlayerScreen(
 private fun EpisodeLockedContent(
     episodeIndex: String?,
     onBackClick: () -> Unit,
-    onUpgradeClick: () -> Unit
+    onUpgradeClick: () -> Unit,
+    onWatchAdToUnlock: () -> Unit
 ) {
+    // Polling ringan tiap 1 detik buat status "rewarded ad siap" -- rewarded
+    // ad di-load async di background (lihat AdManager), jadi status ini bisa
+    // berubah dari belum-siap ke siap SELAMA user lagi liat layar ini.
+    var isAdReady by remember { mutableStateOf(AdManager.isRewardedReady()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            isAdReady = AdManager.isRewardedReady()
+            delay(1000)
+        }
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1339,6 +1378,29 @@ private fun EpisodeLockedContent(
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(24.dp))
+            Button(
+                onClick = onWatchAdToUnlock,
+                enabled = isAdReady,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White.copy(alpha = 0.12f),
+                    disabledContainerColor = Color.White.copy(alpha = 0.06f)
+                ),
+                shape = RoundedCornerShape(24.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = if (isAdReady) "Tonton Iklan untuk Buka Episode Ini" else "Menyiapkan iklan...",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
             Button(
                 onClick = onUpgradeClick,
                 colors = ButtonDefaults.buttonColors(containerColor = PlayerAccent),

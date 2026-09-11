@@ -16,6 +16,9 @@ import com.unity3d.mediation.LevelPlayInitListener
 import com.unity3d.mediation.LevelPlayInitRequest
 import com.unity3d.mediation.interstitial.LevelPlayInterstitialAd
 import com.unity3d.mediation.interstitial.LevelPlayInterstitialAdListener
+import com.unity3d.mediation.rewarded.LevelPlayReward
+import com.unity3d.mediation.rewarded.LevelPlayRewardedAd
+import com.unity3d.mediation.rewarded.LevelPlayRewardedAdListener
 
 /**
  * Wrapper tipis di atas Unity LevelPlay SDK buat nampilin interstitial video ad
@@ -35,6 +38,13 @@ object AdManager {
     private var isInitialized = false
     private var interstitialAd: LevelPlayInterstitialAd? = null
     private var isInterstitialLoaded = false
+
+    private var rewardedAd: LevelPlayRewardedAd? = null
+    private var isRewardedLoaded = false
+    private var isRewardedLoadInFlight = false
+    private val rewardedRetryDelaysMs = longArrayOf(10_000L, 30_000L, 60_000L, 120_000L)
+    private var rewardedRetryAttempt = 0
+    private val rewardedRetryHandler = Handler(Looper.getMainLooper())
 
     // Retry load kalau gagal (no-fill, timeout, dll), backoff naik tiap
     // gagal berturut-turut, di-cap biar nggak nunggu kelamaan. Tanpa ini,
@@ -82,6 +92,7 @@ object AdManager {
                     isInitialized = true
                     debugToast("LevelPlay initialized (appKey=${BuildConfig.LEVELPLAY_APP_KEY})")
                     createAndLoadInterstitial()
+                    createAndLoadRewarded()
                     onReady?.invoke()
                 }
 
@@ -177,6 +188,110 @@ object AdManager {
         }
 
         pendingOnAdFinished = onAdFinished
+        ad.showAd(activity)
+    }
+
+    // ---- Rewarded ad (nonton iklan buat buka episode terkunci) ----
+
+    private fun createAndLoadRewarded() {
+        if (rewardedAd == null) {
+            rewardedAd = LevelPlayRewardedAd(BuildConfig.LEVELPLAY_REWARDED_AD_UNIT_ID)
+            rewardedAd?.setListener(object : LevelPlayRewardedAdListener {
+                override fun onAdLoaded(adInfo: LevelPlayAdInfo) {
+                    isRewardedLoadInFlight = false
+                    isRewardedLoaded = true
+                    rewardedRetryAttempt = 0
+                    debugToast("Rewarded berhasil di-load, siap ditampilin")
+                }
+
+                override fun onAdLoadFailed(error: LevelPlayAdError) {
+                    isRewardedLoadInFlight = false
+                    isRewardedLoaded = false
+                    Log.e(TAG, "Gagal load rewarded: $error")
+                    debugToast("Gagal load rewarded: $error")
+                    scheduleRewardedRetry()
+                }
+
+                override fun onAdDisplayed(adInfo: LevelPlayAdInfo) {}
+
+                override fun onAdDisplayFailed(error: LevelPlayAdError, adInfo: LevelPlayAdInfo) {
+                    Log.e(TAG, "Gagal nampilin rewarded: $error")
+                    debugToast("Gagal tampil rewarded: $error")
+                    onRewardedShowFinished(earned = false)
+                }
+
+                override fun onAdClicked(adInfo: LevelPlayAdInfo) {}
+
+                override fun onAdClosed(adInfo: LevelPlayAdInfo) {
+                    // Ditutup TANPA lolos reward callback (user skip sebelum
+                    // selesai) -- anggap gak dikasih reward, kecuali
+                    // onAdRewarded sempat kepanggil duluan (lihat flag pendingRewardedEarned).
+                    onRewardedShowFinished(earned = pendingRewardedEarned)
+                }
+
+                override fun onAdRewarded(adInfo: LevelPlayAdInfo, reward: LevelPlayReward) {
+                    // Iklan udah ditonton sampai selesai -- user berhak dapet
+                    // reward. onAdClosed tetap akan kepanggil setelah ini,
+                    // jadi kita simpan flag-nya dan biarkan onAdClosed yang
+                    // nge-trigger callback final (biar ad benar-benar selesai
+                    // ditutup sebelum kita lanjutin UI).
+                    pendingRewardedEarned = true
+                }
+
+                override fun onAdInfoChanged(adInfo: LevelPlayAdInfo) {}
+            })
+        }
+        loadRewarded()
+    }
+
+    private fun loadRewarded() {
+        if (!isInitialized || isRewardedLoadInFlight) return
+        isRewardedLoadInFlight = true
+        rewardedAd?.loadAd()
+    }
+
+    private fun scheduleRewardedRetry() {
+        val delay = rewardedRetryDelaysMs[rewardedRetryAttempt.coerceAtMost(rewardedRetryDelaysMs.lastIndex)]
+        rewardedRetryAttempt++
+        Log.d(TAG, "Retry load rewarded dalam ${delay / 1000}s (percobaan ke-$rewardedRetryAttempt)")
+        rewardedRetryHandler.postDelayed({ loadRewarded() }, delay)
+    }
+
+    private var pendingRewardedEarned = false
+    private var pendingOnRewardedFinished: ((earned: Boolean) -> Unit)? = null
+
+    private fun onRewardedShowFinished(earned: Boolean) {
+        isRewardedLoaded = false
+        pendingRewardedEarned = false
+        // Siapin rewarded berikutnya buat episode selanjutnya.
+        loadRewarded()
+        val callback = pendingOnRewardedFinished
+        pendingOnRewardedFinished = null
+        callback?.invoke(earned)
+    }
+
+    /** Apakah rewarded ad lagi siap ditampilin sekarang (dipakai buat state tombol UI). */
+    fun isRewardedReady(): Boolean = isInitialized && isRewardedLoaded && rewardedAd?.isAdReady == true
+
+    /**
+     * Tampilin rewarded video ad. [onResult] dipanggil TEPAT SEKALI dengan
+     * `earned = true` cuma kalau user beneran nonton sampai selesai (dapet
+     * reward dari Unity) -- kalau iklan belum siap sama sekali, gagal
+     * tampil, atau user nutup/skip sebelum selesai, `earned = false`.
+     * Konsumen (episode locked screen) bertanggung jawab nge-unlock
+     * episode HANYA kalau earned == true.
+     */
+    fun showRewarded(activity: Activity, onResult: (earned: Boolean) -> Unit) {
+        val ad = rewardedAd
+        if (!isInitialized || !isRewardedLoaded || ad == null || !ad.isAdReady) {
+            Log.d(TAG, "Rewarded belum siap, skip nampilin iklan")
+            debugToast("Skip rewarded: belum siap (initialized=$isInitialized, loaded=$isRewardedLoaded)")
+            if (isInitialized && !isRewardedLoadInFlight) loadRewarded()
+            onResult(false)
+            return
+        }
+
+        pendingOnRewardedFinished = onResult
         ad.showAd(activity)
     }
 }

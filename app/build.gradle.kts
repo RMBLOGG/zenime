@@ -24,6 +24,12 @@ android {
     buildConfigField("String", "LEVELPLAY_APP_KEY", "\"27ed6ea75\"")
     // Ad Unit ID interstitial (LevelPlay > Setup > Ad units > Interstitial_Android).
     buildConfigField("String", "LEVELPLAY_INTERSTITIAL_AD_UNIT_ID", "\"b09dk6m3lkijq4dj\"")
+    // Ad Unit ID rewarded (LevelPlay > Setup > Ad units > buat baru dengan tipe
+    // Rewarded Video, misal nama "Rewarded_Android"). GANTI placeholder di
+    // bawah ini dengan Ad Unit ID asli dari dashboard sebelum build production
+    // -- selama masih placeholder, showRewarded() di AdManager akan selalu
+    // gagal load/no-fill.
+    buildConfigField("String", "LEVELPLAY_REWARDED_AD_UNIT_ID", "\"fwbbvnu68wyr2jkc\"")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
