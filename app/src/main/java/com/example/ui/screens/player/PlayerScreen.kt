@@ -266,11 +266,27 @@ fun PlayerScreen(
     // false. Ditunggu sampai currentEpisodeDetail kebaca (bukan langsung
     // LaunchedEffect(Unit)) biar gak sempat nampilin iklan buat episode yang
     // ternyata terkunci Premium (yang gak akan diputer videonya sama sekali).
+    // Gerbang play video: video BARU boleh mulai muter (playWhenReady) kalau
+    // gate ini true. Tetap false selama iklan interstitial lagi tampil, biar
+    // video-nya nunggu -- bukan langsung jalan bareng iklan di belakang.
+    // Video-nya sendiri tetap boleh disiapin/di-buffer duluan di belakang
+    // layar (lihat LaunchedEffect(selectedServer, ...) di bawah) supaya pas
+    // gate kebuka, video langsung mulus muter tanpa nunggu buffering lagi.
+    var adGateOpen by remember { mutableStateOf(false) }
+
     LaunchedEffect(currentEpisodeDetail?.id) {
-        if (currentEpisodeDetail == null || isPremium || isEpisodeLockedForUser) return@LaunchedEffect
+        if (currentEpisodeDetail == null) return@LaunchedEffect
+        if (isPremium || isEpisodeLockedForUser) {
+            adGateOpen = true
+            return@LaunchedEffect
+        }
         val activity = context.findActivity()
         if (activity != null) {
-            AdManager.showInterstitial(activity) {}
+            AdManager.showInterstitial(activity) {
+                adGateOpen = true
+            }
+        } else {
+            adGateOpen = true
         }
     }
 
@@ -437,7 +453,10 @@ fun PlayerScreen(
             )
 
         ExoPlayer.Builder(context).build().apply {
-            playWhenReady = true
+            // Sengaja false -- video cuma boleh muter kalau adGateOpen true
+            // (lihat LaunchedEffect(adGateOpen) di bawah). Nyiapin/buffer
+            // tetap jalan di belakang layar walau ini false.
+            playWhenReady = false
         }
     }
 
@@ -527,7 +546,17 @@ fun PlayerScreen(
             exoPlayer.seekTo(positionToKeep)
         }
         exoPlayer.prepare()
-        exoPlayer.playWhenReady = true
+        // Buffer duluan di belakang layar; baru beneran muter kalau gate
+        // iklan udah kebuka (lihat LaunchedEffect(adGateOpen) di bawah).
+        exoPlayer.playWhenReady = adGateOpen
+    }
+
+    // Begitu gate iklan kebuka (iklan kelar/di-skip, atau memang gak perlu
+    // iklan sama sekali), baru video-nya boleh mulai muter.
+    LaunchedEffect(adGateOpen) {
+        if (adGateOpen) {
+            exoPlayer.playWhenReady = true
+        }
     }
 
     // ExoPlayer listener
