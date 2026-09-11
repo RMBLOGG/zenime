@@ -229,7 +229,7 @@ object AdManager {
                     onRewardedShowFinished(earned = pendingRewardedEarned)
                 }
 
-                override fun onAdRewarded(adInfo: LevelPlayAdInfo, reward: LevelPlayReward) {
+                override fun onAdRewarded(reward: LevelPlayReward, adInfo: LevelPlayAdInfo) {
                     // Iklan udah ditonton sampai selesai -- user berhak dapet
                     // reward. onAdClosed tetap akan kepanggil setelah ini,
                     // jadi kita simpan flag-nya dan biarkan onAdClosed yang
