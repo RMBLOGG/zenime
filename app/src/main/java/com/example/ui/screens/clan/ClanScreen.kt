@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -61,6 +62,7 @@ private val LeaderBadgeColor = Color(0xFFFFC107)      // kuning, sama kayak refe
 private val CoLeaderBadgeColor = Color(0xFF9C6BE0)     // ungu
 private val MemberBadgeColor = Color(0xFF3A404C)       // abu gelap
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ClanScreen(
     viewModel: ClanViewModel,
