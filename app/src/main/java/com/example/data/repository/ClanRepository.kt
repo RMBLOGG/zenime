@@ -101,6 +101,11 @@ class ClanRepository(
         }.sortedByDescending { it.amountToday }
     }
 
+    /** Daftar semua clan -- dasar buat halaman Browse & Leaderboard (dua-duanya pakai data yang sama, beda urutan/framing aja). */
+    suspend fun browseClans(): Result<List<Clan>> = runCatching {
+        clanApi.browseClans()
+    }
+
     private suspend fun mergeWithProfiles(members: List<ClanMember>): List<ClanMemberDisplay> {
         val profiles = fetchProfiles(members.map { it.firebaseUid })
         return members.map { member ->
@@ -156,6 +161,26 @@ class ClanRepository(
             Unit
         } catch (e: HttpException) {
             throw IllegalStateException(extractErrorMessage(e, "Gagal memproses request join"))
+        }
+    }
+
+    /** Daftar pending join request buat clan ini -- cuma bisa dibaca leader/co-leader (dicek di Edge Function). */
+    suspend fun getPendingJoinRequests(clanId: String): Result<List<com.example.data.model.PendingJoinRequestDisplay>> = runCatching {
+        try {
+            val response = clanApi.getPendingJoinRequests(authHeader(), clanId)
+            val profiles = fetchProfiles(response.requests.map { it.firebaseUid })
+            response.requests.map { item ->
+                val profile = profiles[item.firebaseUid]
+                com.example.data.model.PendingJoinRequestDisplay(
+                    requestId = item.id,
+                    firebaseUid = item.firebaseUid,
+                    username = profile?.username ?: "Pengguna",
+                    avatarUrl = profile?.avatarUrl,
+                    requestedAt = item.requestedAt
+                )
+            }
+        } catch (e: HttpException) {
+            throw IllegalStateException(extractErrorMessage(e, "Gagal ambil daftar request join"))
         }
     }
 

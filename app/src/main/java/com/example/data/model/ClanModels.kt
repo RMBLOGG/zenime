@@ -117,3 +117,12 @@ data class PendingJoinRequestsResponse(
 data class MyJoinRequestStatusResponse(
     @Json(name = "pending") val pending: Boolean = false
 )
+
+/** PendingJoinRequestItem digabung sama chat_profiles, dipakai di layar Kelola Clan. */
+data class PendingJoinRequestDisplay(
+    val requestId: String,
+    val firebaseUid: String,
+    val username: String,
+    val avatarUrl: String?,
+    val requestedAt: String
+)

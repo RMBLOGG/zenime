@@ -103,9 +103,21 @@ fun ClanScreen(
                         onTabSelected = viewModel::onTabSelected,
                         onSearchQueryChange = viewModel::onSearchQueryChange,
                         onRequestJoinClick = viewModel::requestJoin,
-                        onManageClanClick = { onManageClanClick(uiState.clan!!.id) }
+                        onManageClanClick = { onManageClanClick(uiState.clan!!.id) },
+                        onDonateClick = { viewModel.onDonateDialogToggle(true) }
                     )
                 }
+            }
+
+            if (uiState.showDonateDialog) {
+                DonateDialog(
+                    amountInput = uiState.donateAmountInput,
+                    isDonating = uiState.isDonating,
+                    feedback = uiState.donateFeedback,
+                    onAmountChange = viewModel::onDonateAmountChange,
+                    onDismiss = { viewModel.onDonateDialogToggle(false) },
+                    onSubmit = viewModel::submitDonation
+                )
             }
         }
     }
@@ -117,7 +129,8 @@ private fun ClanContent(
     onTabSelected: (ClanTab) -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onRequestJoinClick: () -> Unit,
-    onManageClanClick: () -> Unit
+    onManageClanClick: () -> Unit,
+    onDonateClick: () -> Unit
 ) {
     val clan = uiState.clan ?: return
 
@@ -127,7 +140,8 @@ private fun ClanContent(
             ClanHeaderCard(
                 uiState = uiState,
                 onRequestJoinClick = onRequestJoinClick,
-                onManageClanClick = onManageClanClick
+                onManageClanClick = onManageClanClick,
+                onDonateClick = onDonateClick
             )
 
             Spacer(Modifier.height(16.dp))
@@ -206,7 +220,8 @@ private fun ClanContent(
 private fun ClanHeaderCard(
     uiState: ClanUiState,
     onRequestJoinClick: () -> Unit,
-    onManageClanClick: () -> Unit
+    onManageClanClick: () -> Unit,
+    onDonateClick: () -> Unit
 ) {
     val clan = uiState.clan ?: return
 
@@ -263,6 +278,19 @@ private fun ClanHeaderCard(
             onRequestJoinClick = onRequestJoinClick,
             onManageClanClick = onManageClanClick
         )
+
+        if (uiState.canDonate) {
+            Spacer(Modifier.height(8.dp))
+            androidx.compose.material3.OutlinedButton(
+                onClick = onDonateClick,
+                modifier = Modifier.fillMaxWidth().height(44.dp),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(Icons.Filled.Diamond, contentDescription = null, tint = ZenimePrimary, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Donasi ZCoin", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+            }
+        }
 
         uiState.joinFeedback?.let { feedback ->
             Spacer(Modifier.height(8.dp))
@@ -657,4 +685,58 @@ private fun formatRelativeDate(isoTimestamp: String): String {
     } catch (e: Exception) {
         ""
     }
+}
+
+@Composable
+private fun DonateDialog(
+    amountInput: String,
+    isDonating: Boolean,
+    feedback: String?,
+    onAmountChange: (String) -> Unit,
+    onDismiss: () -> Unit,
+    onSubmit: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { if (!isDonating) onDismiss() },
+        title = { Text("Donasi ZCoin", fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                Text(
+                    "ZCoin yang kamu donasiin bakal masuk ke XP clan (naikin level) dan dicatat sebagai kontribusi kamu.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = amountInput,
+                    onValueChange = onAmountChange,
+                    label = { Text("Jumlah ZCoin") },
+                    singleLine = true,
+                    enabled = !isDonating,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        keyboardType = androidx.compose.ui.text.input.KeyboardType.Number
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                feedback?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onSubmit, enabled = !isDonating) {
+                if (isDonating) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+                } else {
+                    Text("Donasi")
+                }
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss, enabled = !isDonating) {
+                Text("Batal")
+            }
+        }
+    )
 }

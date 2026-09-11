@@ -86,6 +86,12 @@ import com.example.ui.screens.chat.ChatScreen
 import com.example.ui.screens.chat.ChatViewModel
 import com.example.ui.screens.clan.ClanScreen
 import com.example.ui.screens.clan.ClanViewModel
+import com.example.ui.screens.clan.BrowseClansScreen
+import com.example.ui.screens.clan.BrowseClansViewModel
+import com.example.ui.screens.clan.CreateClanScreen
+import com.example.ui.screens.clan.CreateClanViewModel
+import com.example.ui.screens.clan.ManageClanScreen
+import com.example.ui.screens.clan.ManageClanViewModel
 import com.example.ui.screens.profile.ProfileScreen
 import com.example.ui.screens.profile.ProfileViewModel
 import com.example.ui.screens.comic.ComicDetailScreen
@@ -153,6 +159,17 @@ sealed class Screen(
 
     data object ViewClan : Screen("clan/{clanId}") {
         fun createRoute(clanId: String) = "clan/$clanId"
+    }
+
+    data object BrowseClans : Screen("clans")
+
+    // Route dipisah "clan-create" (bukan "clan/create") biar gak ambigu sama
+    // pattern "clan/{clanId}" -- Navigation Compose bisa salah tangkep "create"
+    // dianggap clanId kalau bentuk path-nya mirip.
+    data object CreateClan : Screen("clan-create")
+
+    data object ManageClan : Screen("clan/{clanId}/manage") {
+        fun createRoute(clanId: String) = "clan/$clanId/manage"
     }
 
     data object Detail : Screen("detail/{animeId}") {
@@ -659,7 +676,8 @@ fun ZenimeAppNavHost(
                         onHistoryClick = { history ->
                             navController.navigate(Screen.Player.createRoute(history.episodeId, history.animeId))
                         },
-                        onUpgradeClick = { navController.navigate(Screen.Premium.route) }
+                        onUpgradeClick = { navController.navigate(Screen.Premium.route) },
+                        onClanClick = { navController.navigate(Screen.BrowseClans.route) }
                     )
                 }
             }
@@ -682,7 +700,61 @@ fun ZenimeAppNavHost(
                     ClanScreen(
                         viewModel = clanViewModel,
                         onBackClick = { navController.popBackStack() },
-                        onManageClanClick = { /* TODO: layar Kelola Clan, belum dibikin */ }
+                        onManageClanClick = { navController.navigate(Screen.ManageClan.createRoute(clanId)) }
+                    )
+                }
+            }
+
+            // Browse/Leaderboard Clan -- daftar semua clan (toggle browse vs
+            // leaderboard), titik masuk ke Create Clan & View Clan.
+            composable(Screen.BrowseClans.route) {
+                val browseViewModel: BrowseClansViewModel = viewModel(
+                    factory = viewModelFactory { initializer { BrowseClansViewModel() } }
+                )
+                BrowseClansScreen(
+                    viewModel = browseViewModel,
+                    onBackClick = { navController.popBackStack() },
+                    onClanClick = { clanId -> navController.navigate(Screen.ViewClan.createRoute(clanId)) },
+                    onCreateClanClick = { navController.navigate(Screen.CreateClan.route) }
+                )
+            }
+
+            // Create Clan -- form nama/tag/foto, charge 2500 ZCoin lewat Edge Function.
+            composable(Screen.CreateClan.route) {
+                val uid = currentUser?.uid
+                if (uid != null) {
+                    val createClanViewModel: CreateClanViewModel = viewModel(
+                        factory = viewModelFactory {
+                            initializer { CreateClanViewModel(firebaseUid = uid) }
+                        }
+                    )
+                    CreateClanScreen(
+                        viewModel = createClanViewModel,
+                        onBackClick = { navController.popBackStack() },
+                        onClanCreated = { clanId ->
+                            navController.navigate(Screen.ViewClan.createRoute(clanId)) {
+                                popUpTo(Screen.BrowseClans.route)
+                            }
+                        }
+                    )
+                }
+            }
+
+            // Kelola Clan -- khusus leader: settings, approve/reject join request, kick member.
+            composable(
+                route = Screen.ManageClan.route,
+                arguments = listOf(navArgument("clanId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val clanId = backStackEntry.arguments?.getString("clanId")
+                if (clanId != null) {
+                    val manageClanViewModel: ManageClanViewModel = viewModel(
+                        factory = viewModelFactory {
+                            initializer { ManageClanViewModel(clanId = clanId) }
+                        }
+                    )
+                    ManageClanScreen(
+                        viewModel = manageClanViewModel,
+                        onBackClick = { navController.popBackStack() }
                     )
                 }
             }

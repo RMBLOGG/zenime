@@ -94,6 +94,7 @@ fun ProfileScreen(
     onAnimeClick: (String) -> Unit,
     onHistoryClick: (WatchHistoryEntity) -> Unit,
     onUpgradeClick: () -> Unit,
+    onClanClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -274,6 +275,36 @@ fun ProfileScreen(
                     }
                 }
             }
+
+            // --- Entry point ke fitur Clan ---
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .clickable(onClick = onClanClick),
+                colors = CardDefaults.cardColors(containerColor = ZenimeSurfaceDark),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Gabung atau bikin Clan bareng sesama penonton",
+                        color = Color.White.copy(alpha = 0.85f),
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Lihat",
+                        color = ZenimePrimary,
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
 
             if (!uiState.isPremium) {
                 Card(

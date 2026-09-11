@@ -32,8 +32,15 @@ data class ClanUiState(
     val searchQuery: String = "",
     val cta: ClanMembershipCta = ClanMembershipCta.REQUEST_JOIN,
     val isSubmittingJoin: Boolean = false,
-    val joinFeedback: String? = null
+    val joinFeedback: String? = null,
+    val showDonateDialog: Boolean = false,
+    val donateAmountInput: String = "",
+    val isDonating: Boolean = false,
+    val donateFeedback: String? = null
 ) {
+    val canDonate: Boolean
+        get() = cta == ClanMembershipCta.IS_MEMBER || cta == ClanMembershipCta.IS_LEADER
+
     val leader: ClanMemberDisplay?
         get() = members.find { it.role == "leader" }
 
@@ -137,6 +144,45 @@ class ClanViewModel(
 
     fun clearJoinFeedback() {
         _uiState.value = _uiState.value.copy(joinFeedback = null)
+    }
+
+    fun onDonateDialogToggle(show: Boolean) {
+        _uiState.value = _uiState.value.copy(
+            showDonateDialog = show,
+            donateAmountInput = if (show) "" else _uiState.value.donateAmountInput,
+            donateFeedback = null
+        )
+    }
+
+    fun onDonateAmountChange(value: String) {
+        _uiState.value = _uiState.value.copy(donateAmountInput = value.filter { it.isDigit() }.take(9))
+    }
+
+    fun submitDonation() {
+        val amount = _uiState.value.donateAmountInput.toLongOrNull()
+        if (amount == null || amount <= 0) {
+            _uiState.value = _uiState.value.copy(donateFeedback = "Masukin jumlah ZCoin yang valid")
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isDonating = true, donateFeedback = null)
+            repository.donateToClan(clanId, amount)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        isDonating = false,
+                        showDonateDialog = false,
+                        donateAmountInput = ""
+                    )
+                    loadAll() // refresh level/XP/kontribusi/daftar donasi hari ini
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        isDonating = false,
+                        donateFeedback = e.message ?: "Gagal donasi"
+                    )
+                }
+        }
     }
 
     fun retry() = loadAll()
