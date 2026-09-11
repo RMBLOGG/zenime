@@ -143,11 +143,30 @@ object AdManager {
         loadInterstitial()
     }
 
+    // Watchdog: kalau dalam LOAD_TIMEOUT_MS gak ada callback onAdLoaded/
+    // onAdLoadFailed sama sekali, paksa anggap gagal & retry. Ini jaring
+    // pengaman buat kasus request "ilang" -- misal proses di-kill/activity
+    // hancur pas SDK lagi nunggu respons network, sehingga callback yang
+    // ditunggu gak akan PERNAH kepanggil, dan tanpa ini isLoadInFlight bakal
+    // nyangkut true selamanya (loadInterstitial() nolak jalan lagi terus).
+    private const val LOAD_TIMEOUT_MS = 15_000L
+    private var loadWatchdogToken = 0
+
     /** Preload iklan interstitial supaya siap ditampilin instan pas dibutuhin. */
     private fun loadInterstitial() {
         if (!isInitialized || isLoadInFlight) return
         isLoadInFlight = true
         interstitialAd?.loadAd()
+
+        val myToken = ++loadWatchdogToken
+        retryHandler.postDelayed({
+            if (myToken == loadWatchdogToken && isLoadInFlight) {
+                Log.e(TAG, "Load interstitial timeout, paksa retry")
+                debugToast("Load interstitial timeout, retry")
+                isLoadInFlight = false
+                scheduleRetry()
+            }
+        }, LOAD_TIMEOUT_MS)
     }
 
     private fun scheduleRetry() {
@@ -244,10 +263,22 @@ object AdManager {
         loadRewarded()
     }
 
+    private var rewardedLoadWatchdogToken = 0
+
     private fun loadRewarded() {
         if (!isInitialized || isRewardedLoadInFlight) return
         isRewardedLoadInFlight = true
         rewardedAd?.loadAd()
+
+        val myToken = ++rewardedLoadWatchdogToken
+        rewardedRetryHandler.postDelayed({
+            if (myToken == rewardedLoadWatchdogToken && isRewardedLoadInFlight) {
+                Log.e(TAG, "Load rewarded timeout, paksa retry")
+                debugToast("Load rewarded timeout, retry")
+                isRewardedLoadInFlight = false
+                scheduleRewardedRetry()
+            }
+        }, LOAD_TIMEOUT_MS)
     }
 
     private fun scheduleRewardedRetry() {
