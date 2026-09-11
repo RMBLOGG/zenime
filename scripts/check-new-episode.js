@@ -92,19 +92,27 @@ async function upsertSnapshot(rows) {
   }
 }
 
-function isValidImageUrl(url) {
-  if (typeof url !== "string" || url.trim() === "") return false;
+function normalizeImageUrl(url) {
+  if (typeof url !== "string" || url.trim() === "") return null;
   try {
-    const parsed = new URL(url);
-    return parsed.protocol === "http:" || parsed.protocol === "https:";
+    const parsed = new URL(url.trim());
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return null;
+    }
+    // API sumbernya kadang ngasih path dobel-slash (mis. ".net//assets/..."),
+    // yang valid buat browser tapi ditolak sama validator ketat punya
+    // Firebase (segmen path kosong dianggap invalid). Rapiin di sini.
+    parsed.pathname = parsed.pathname.replace(/\/{2,}/g, "/");
+    return parsed.toString();
   } catch {
-    return false;
+    return null;
   }
 }
 
 async function sendEpisodeNotification(anime) {
   const title = anime.title || "Anime";
   const candidateImage = anime.image_poster || anime.image_cover;
+  const normalizedImage = normalizeImageUrl(candidateImage);
 
   const notification = {
     title: title,
@@ -114,8 +122,8 @@ async function sendEpisodeNotification(anime) {
   // Cuma masukin key imageUrl kalau beneran valid -- kalau key-nya ada
   // tapi isinya undefined/kosong, Firebase nolak seluruh pesannya
   // (bukan cuma skip gambarnya doang), jadi mending di-omit total.
-  if (isValidImageUrl(candidateImage)) {
-    notification.imageUrl = candidateImage;
+  if (normalizedImage) {
+    notification.imageUrl = normalizedImage;
   }
 
   const message = {
