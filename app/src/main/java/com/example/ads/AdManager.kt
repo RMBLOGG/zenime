@@ -59,7 +59,7 @@ object AdManager {
     // (gagal load, gagal tampil, skip karena belum siap), lengkap sama pesan
     // errornya, biar kelihatan langsung di layar HP tanpa perlu adb/logcat.
     // Matiin lagi (set false) begitu udah selesai diagnosa.
-    private const val DEBUG_ADS_TOAST = false
+    private const val DEBUG_ADS_TOAST = true
     private var appContext: Context? = null
 
     private fun debugToast(message: String) {
@@ -229,7 +229,7 @@ object AdManager {
                     onRewardedShowFinished(earned = pendingRewardedEarned)
                 }
 
-                override fun onAdRewarded(adInfo: LevelPlayAdInfo, reward: LevelPlayReward) {
+                override fun onAdRewarded(reward: LevelPlayReward, adInfo: LevelPlayAdInfo) {
                     // Iklan udah ditonton sampai selesai -- user berhak dapet
                     // reward. onAdClosed tetap akan kepanggil setelah ini,
                     // jadi kita simpan flag-nya dan biarkan onAdClosed yang
