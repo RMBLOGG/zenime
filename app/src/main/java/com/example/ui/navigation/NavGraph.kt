@@ -84,6 +84,8 @@ import com.example.data.repository.CoinRepository
 import com.example.data.repository.PremiumRepository
 import com.example.ui.screens.chat.ChatScreen
 import com.example.ui.screens.chat.ChatViewModel
+import com.example.ui.screens.clan.ClanScreen
+import com.example.ui.screens.clan.ClanViewModel
 import com.example.ui.screens.profile.ProfileScreen
 import com.example.ui.screens.profile.ProfileViewModel
 import com.example.ui.screens.comic.ComicDetailScreen
@@ -148,6 +150,10 @@ sealed class Screen(
     data object Chat : Screen("chat")
 
     data object Profile : Screen("profile")
+
+    data object ViewClan : Screen("clan/{clanId}") {
+        fun createRoute(clanId: String) = "clan/$clanId"
+    }
 
     data object Detail : Screen("detail/{animeId}") {
         fun createRoute(animeId: String) = "detail/$animeId"
@@ -654,6 +660,29 @@ fun ZenimeAppNavHost(
                             navController.navigate(Screen.Player.createRoute(history.episodeId, history.animeId))
                         },
                         onUpgradeClick = { navController.navigate(Screen.Premium.route) }
+                    )
+                }
+            }
+
+            // View Clan -- header clan (foto/tag/nama/level/XP/member), tab
+            // Members & Donasi Hari Ini, tombol Request Join yang berubah
+            // sesuai status keanggotaan user sekarang.
+            composable(
+                route = Screen.ViewClan.route,
+                arguments = listOf(navArgument("clanId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val uid = currentUser?.uid
+                val clanId = backStackEntry.arguments?.getString("clanId")
+                if (uid != null && clanId != null) {
+                    val clanViewModel: ClanViewModel = viewModel(
+                        factory = viewModelFactory {
+                            initializer { ClanViewModel(clanId = clanId, firebaseUid = uid) }
+                        }
+                    )
+                    ClanScreen(
+                        viewModel = clanViewModel,
+                        onBackClick = { navController.popBackStack() },
+                        onManageClanClick = { /* TODO: layar Kelola Clan, belum dibikin */ }
                     )
                 }
             }
