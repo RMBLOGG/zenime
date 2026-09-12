@@ -193,7 +193,7 @@ class ChatViewModel(
             val tags = clanRepository.getClanTagsForUids(newUids).getOrDefault(emptyMap())
             newUids.forEach { uid -> clanTagCache[uid] = tags[uid] }
             _uiState.value = _uiState.value.copy(
-                clanTagsByUid = clanTagCache.filterValues { it != null }.mapValues { it!! }
+                clanTagsByUid = clanTagCache.filterValues { it != null }.mapValues { it.value!! }
             )
         }
     }
