@@ -273,6 +273,7 @@ class ChatViewModel(
             )
             checkPremiumForNewSenders(messages)
             checkClanTagsForNewSenders(messages)
+        } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 errorMessage = _uiState.value.errorMessage ?: (friendlyErrorMessage(e, "Gagal memuat chat"))
