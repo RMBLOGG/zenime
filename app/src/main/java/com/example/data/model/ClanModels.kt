@@ -126,3 +126,18 @@ data class PendingJoinRequestDisplay(
     val avatarUrl: String?,
     val requestedAt: String
 )
+
+// --- Buat badge tag clan di Chat Global: manfaatin PostgREST embedding
+// lewat FK clan_members.clan_id -> clans.id, jadi satu request langsung
+// dapet tag-nya tanpa perlu query clans terpisah. ---
+
+@JsonClass(generateAdapter = true)
+data class ClanTagOnly(
+    @Json(name = "tag") val tag: String
+)
+
+@JsonClass(generateAdapter = true)
+data class ClanTagLookupRow(
+    @Json(name = "firebase_uid") val firebaseUid: String,
+    @Json(name = "clans") val clan: ClanTagOnly? = null
+)

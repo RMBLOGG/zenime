@@ -34,7 +34,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
@@ -110,6 +110,7 @@ fun HomeScreen(
     onPremiumClick: () -> Unit = {},
     onCoinClick: () -> Unit = {},
     onDonationClick: () -> Unit = {},
+    onClanClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val homeState by viewModel.homeState.collectAsStateWithLifecycle()
@@ -237,7 +238,7 @@ fun HomeScreen(
                                 HomePremiumBanner(
                                     isPremium = profileState.isPremium,
                                     onPremiumClick = onPremiumClick,
-                                    onNotificationClick = onChatClick
+                                    onNotificationClick = onClanClick
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
                             }
@@ -428,7 +429,7 @@ private fun HomeSectionCard(
 private fun HomePremiumBanner(
     isPremium: Boolean,
     onPremiumClick: () -> Unit,
-    onNotificationClick: () -> Unit,
+    onNotificationClick: () -> Unit, // sekarang dipake buat navigasi ke halaman Clan
     modifier: Modifier = Modifier
 ) {
     HomeSectionCard(
@@ -445,8 +446,8 @@ private fun HomePremiumBanner(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.Notifications,
-                    contentDescription = "Notifikasi",
+                    imageVector = Icons.Default.Shield,
+                    contentDescription = "Clan",
                     tint = ZenimePrimary,
                     modifier = Modifier.size(20.dp)
                 )

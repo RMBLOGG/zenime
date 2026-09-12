@@ -454,6 +454,9 @@ fun ZenimeAppNavHost(
                     },
                     onDonationClick = {
                         navController.navigate(Screen.Donation.route)
+                    },
+                    onClanClick = {
+                        navController.navigate(Screen.BrowseClans.route)
                     }
                 )
             }

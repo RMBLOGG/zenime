@@ -106,6 +106,17 @@ class ClanRepository(
         clanApi.browseClans()
     }
 
+    /** Tag clan buat sekumpulan uid sekaligus -- dipake nge-render badge tag clan di Chat Global. */
+    suspend fun getClanTagsForUids(uids: List<String>): Result<Map<String, String>> = runCatching {
+        val distinctUids = uids.filter { it.isNotBlank() }.distinct()
+        if (distinctUids.isEmpty()) return@runCatching emptyMap()
+
+        val filter = "in.(${distinctUids.joinToString(",")})"
+        clanApi.getClanTagsByUids(firebaseUidIn = filter)
+            .mapNotNull { row -> row.clan?.tag?.let { tag -> row.firebaseUid to tag } }
+            .toMap()
+    }
+
     private suspend fun mergeWithProfiles(members: List<ClanMember>): List<ClanMemberDisplay> {
         val profiles = fetchProfiles(members.map { it.firebaseUid })
         return members.map { member ->
@@ -222,8 +233,13 @@ class ClanRepository(
     /** Narik field "error" dari body JSON response gagal (dikirim Edge Function). */
     private fun extractErrorMessage(e: HttpException, fallback: String): String {
         val raw = e.response()?.errorBody()?.string()
+        // Pakai parser JSON beneran (org.json, bawaan Android), bukan regex --
+        // regex sebelumnya keputus di karakter escape \" yang ada di dalam
+        // pesan error Postgres (misal: column "tabel.kolom" does not exist),
+        // jadi pesannya kepotong gak lengkap.
         val parsed = raw?.let { body ->
-            Regex("\"error\"\\s*:\\s*\"([^\"]*)\"").find(body)?.groupValues?.get(1)
+            runCatching { org.json.JSONObject(body).optString("error").takeIf { it.isNotBlank() } }
+                .getOrNull()
         }
         return parsed ?: fallback
     }

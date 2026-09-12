@@ -5,6 +5,7 @@ import com.example.data.model.ClanIdRequest
 import com.example.data.model.ClanMember
 import com.example.data.model.Clan
 import com.example.data.model.ClanDonationLogRow
+import com.example.data.model.ClanTagLookupRow
 import com.example.data.model.CreateClanRequest
 import com.example.data.model.DonateToClanRequest
 import com.example.data.model.KickMemberRequest
@@ -121,4 +122,16 @@ interface ZenimeClanApi {
         @Query("order") order: String = "created_at.desc",
         @Query("limit") limit: Int = 1000
     ): List<ClanDonationLogRow>
+
+    /**
+     * Tag clan buat sekumpulan uid sekaligus, dipake nge-render badge tag
+     * clan di Chat Global. Manfaatin PostgREST embedding (clan_members.clan_id
+     * -> clans.id, FK-nya emang udah ada) jadi satu request langsung dapet
+     * tag-nya, gak perlu query clans terpisah per uid.
+     */
+    @GET("rest/v1/clan_members")
+    suspend fun getClanTagsByUids(
+        @Query("firebase_uid") firebaseUidIn: String, // format: "in.(uid1,uid2,...)"
+        @Query("select") select: String = "firebase_uid,clans(tag)"
+    ): List<ClanTagLookupRow>
 }

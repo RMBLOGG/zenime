@@ -203,6 +203,7 @@ fun ChatScreen(
                                     message = message,
                                     isOwnMessage = message.firebaseUid == currentFirebaseUid,
                                     isSenderPremium = uiState.premiumUids.contains(message.firebaseUid),
+                                    senderClanTag = uiState.clanTagsByUid[message.firebaseUid],
                                     isDeleting = uiState.deletingMessageId == message.id,
                                     ownAvatarUrl = uiState.displayAvatarUrl,
                                     onReply = { viewModel.setReplyTarget(message) },
@@ -307,6 +308,7 @@ private fun ChatBubble(
     message: ChatMessage,
     isOwnMessage: Boolean,
     isSenderPremium: Boolean,
+    senderClanTag: String?,
     isDeleting: Boolean,
     ownAvatarUrl: String?,
     onReply: () -> Unit,
@@ -332,6 +334,24 @@ private fun ChatBubble(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(bottom = 2.dp, start = 4.dp)
                 ) {
+                    if (senderClanTag != null) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(ZenimePrimary)
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                        ) {
+                            Text(
+                                text = senderClanTag,
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 8.sp
+                                )
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
                     Text(
                         text = message.username,
                         color = ZenimePrimary,

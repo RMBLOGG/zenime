@@ -8,6 +8,7 @@ import com.example.data.model.ChatMessage
 import com.example.data.realtime.ChatRealtimeClient
 import com.example.data.realtime.ChatRealtimeEvent
 import com.example.data.repository.ChatRepository
+import com.example.data.repository.ClanRepository
 import com.example.data.repository.PremiumRepository
 import com.example.util.AvatarUploader
 import com.example.util.VoiceNoteUploader
@@ -62,6 +63,11 @@ data class ChatUiState(
     // nampilin badge Premium di samping username di bubble chat.
     val premiumUids: Set<String> = emptySet(),
 
+    // Tag clan per firebase_uid pengirim (uid -> "ANK") -- dipakai buat
+    // nampilin badge singkat clan di samping username di bubble chat.
+    // Cuma keisi buat pengirim yang emang lagi gabung clan.
+    val clanTagsByUid: Map<String, String> = emptyMap(),
+
     // --- Pesan Suara (VN) -- kirim khusus Premium, dengerin/play terbuka
     // buat semua user (lihat catatan di ChatRepository.sendVoiceMessage).
     val isRecording: Boolean = false,
@@ -92,7 +98,8 @@ class ChatViewModel(
     private val premiumRepository: PremiumRepository,
     private val firebaseUid: String,
     fallbackUsername: String,
-    private val realtimeClient: ChatRealtimeClient = ChatRealtimeClient()
+    private val realtimeClient: ChatRealtimeClient = ChatRealtimeClient(),
+    private val clanRepository: ClanRepository = ClanRepository()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -116,6 +123,12 @@ class ChatViewModel(
     // terus selama sesi chat ini kebuka.
     private val premiumStatusCache = mutableMapOf<String, Boolean>()
     private val checkedUids = mutableSetOf<String>()
+
+    // Sama pola kayak cache premium di atas, tapi buat tag clan. `null` di
+    // value artinya "udah dicek, ternyata gak gabung clan manapun" -- beda
+    // sama "belum pernah dicek sama sekali" (uid gak ada di map ini).
+    private val clanTagCache = mutableMapOf<String, String?>()
+    private val clanCheckedUids = mutableSetOf<String>()
 
     init {
         loadProfileAndPremiumStatus(fallbackUsername)
@@ -162,6 +175,30 @@ class ChatViewModel(
         premiumStatusCache.filterValues { it }.keys.toSet()
 
     /**
+     * Cek tag clan buat pengirim-pengirim baru yang muncul di daftar pesan
+     * (pola persis sama kayak [checkPremiumForNewSenders], cuma buat data
+     * clan). Fetch dilakuin batch sekali jalan (satu request `in.(...)`
+     * buat semua uid baru), bukan satu-satu per uid.
+     */
+    private fun checkClanTagsForNewSenders(messages: List<ChatMessage>) {
+        val newUids = messages
+            .map { it.firebaseUid }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .filterNot { clanCheckedUids.contains(it) }
+        if (newUids.isEmpty()) return
+
+        clanCheckedUids += newUids
+        viewModelScope.launch {
+            val tags = clanRepository.getClanTagsForUids(newUids).getOrDefault(emptyMap())
+            newUids.forEach { uid -> clanTagCache[uid] = tags[uid] }
+            _uiState.value = _uiState.value.copy(
+                clanTagsByUid = clanTagCache.filterValues { it != null }.mapValues { it!! }
+            )
+        }
+    }
+
+    /**
      * Cek status premium buat pengirim-pengirim baru yang muncul di daftar
      * pesan (belum pernah dicek sebelumnya di sesi ini), lalu update
      * `premiumUids` di uiState biar badge Premium muncul di samping
@@ -201,6 +238,7 @@ class ChatViewModel(
                 val updated = (current + event.message).takeLast(200)
                 _uiState.value = _uiState.value.copy(messages = updated, isLoading = false)
                 checkPremiumForNewSenders(listOf(event.message))
+                checkClanTagsForNewSenders(listOf(event.message))
             }
             is ChatRealtimeEvent.Deleted -> {
                 _uiState.value = _uiState.value.copy(
@@ -234,7 +272,7 @@ class ChatViewModel(
                 errorMessage = null
             )
             checkPremiumForNewSenders(messages)
-        } catch (e: Exception) {
+            checkClanTagsForNewSenders(messages)
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 errorMessage = _uiState.value.errorMessage ?: (friendlyErrorMessage(e, "Gagal memuat chat"))
