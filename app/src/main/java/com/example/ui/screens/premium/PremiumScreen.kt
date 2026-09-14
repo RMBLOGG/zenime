@@ -416,34 +416,9 @@ private fun PremiumCheckoutCard(
 
                     Button(
                         onClick = {
-                            // Kirim kode akun + paket yang lagi dipilih lewat query param,
-                            // biar web-nya (beli-premium) langsung ke-prefill -- user gak
-                            // perlu copy-paste kode & pilih paket lagi secara manual.
-                            val storefrontUri = Uri.parse(SupabaseConfig.STOREFRONT_URL)
-                                .buildUpon()
-                                .appendQueryParameter("code", zenimeCode)
-                                .appendQueryParameter("package_id", pkg.id)
-                                .build()
-                            val intent = Intent(Intent.ACTION_VIEW, storefrontUri)
-                            context.startActivity(intent)
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = ZenimePrimary)
-                    ) {
-                        Icon(Icons.Filled.OpenInBrowser, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Bayar Sekarang", fontWeight = FontWeight.Bold)
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    OutlinedButton(
-                        onClick = {
-                            // Sama seperti tombol "Bayar Sekarang", tapi ke halaman
-                            // /bayar-manual (QRIS pribadi + verifikasi manual admin)
-                            // -- buat pembeli luar negeri yang QRIS Sakurupiah-nya
-                            // tidak kebaca e-wallet/bank mereka.
+                            // NONAKTIF SEMENTARA: checkout otomatis Sakurupiah dimatikan,
+                            // tombol ini sekarang langsung ke /bayar-manual (QRIS pribadi +
+                            // verifikasi manual admin) buat semua user, bukan cuma luar negeri.
                             val manualUri = Uri.parse(SupabaseConfig.MANUAL_STOREFRONT_URL)
                                 .buildUpon()
                                 .appendQueryParameter("code", zenimeCode)
@@ -453,9 +428,12 @@ private fun PremiumCheckoutCard(
                             context.startActivity(intent)
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = ZenimePrimary)
                     ) {
-                        Text("Bayar dari Luar Negeri", fontWeight = FontWeight.SemiBold)
+                        Icon(Icons.Filled.OpenInBrowser, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Bayar Sekarang", fontWeight = FontWeight.Bold)
                     }
                 }
             }
