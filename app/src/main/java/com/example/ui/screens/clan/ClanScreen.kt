@@ -551,7 +551,7 @@ private fun DonationListItem(rank: Int, entry: ClanDonationEntry) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.width(36.dp)
         )
-        GeneratedAvatar(seed = entry.firebaseUid, label = entry.username, size = 44.dp)
+        DonationAvatar(entry = entry, size = 44.dp)
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
@@ -628,6 +628,19 @@ private fun MemberAvatar(member: ClanMemberDisplay, size: androidx.compose.ui.un
         )
     } else {
         GeneratedAvatar(seed = member.firebaseUid, label = member.username, size = size)
+    }
+}
+
+@Composable
+private fun DonationAvatar(entry: ClanDonationEntry, size: androidx.compose.ui.unit.Dp) {
+    if (entry.avatarUrl != null) {
+        AsyncImage(
+            model = entry.avatarUrl,
+            contentDescription = entry.username,
+            modifier = Modifier.size(size).clip(CircleShape)
+        )
+    } else {
+        GeneratedAvatar(seed = entry.firebaseUid, label = entry.username, size = size)
     }
 }
 
