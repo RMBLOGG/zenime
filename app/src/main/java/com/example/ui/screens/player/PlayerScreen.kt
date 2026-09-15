@@ -469,14 +469,22 @@ fun PlayerScreen(
     }
 
     // Progress updates & periodic saving to Room
-    LaunchedEffect(exoPlayer, isPlaying) {
+    LaunchedEffect(exoPlayer) {
         // Detik nonton AKTIF yang udah numpuk sejak heartbeat XP terakhir --
         // cuma nambah pas exoPlayer.isPlaying beneran true (video jalan),
         // BUKAN cuma pas layar Player kebuka. Di-reset tiap kali kekirim
-        // biar gak dobel-hitung. Sengaja disimpan lokal di sini (bukan
-        // remember di luar), karena LaunchedEffect ini emang udah restart
-        // total tiap ganti episode -- pas itu counter memang harus mulai
-        // dari 0 lagi.
+        // biar gak dobel-hitung.
+        //
+        // PENTING: key LaunchedEffect ini SENGAJA cuma `exoPlayer` (bukan
+        // `exoPlayer, isPlaying` kayak sebelumnya) -- exoPlayer instance-nya
+        // sendiri udah `remember` sekali di awal (gak pernah ganti selama
+        // PlayerScreen ini hidup), jadi efek ini emang cuma jalan SEKALI dan
+        // while(true)-nya sendiri yang ngecek exoPlayer.isPlaying tiap tick.
+        // Kalau key-nya ikut `isPlaying`, tiap pause/resume ATAU BUFFERING
+        // SEKEJAP DOANG bakal restart seluruh coroutine ini dan balikin
+        // secondsSinceLastHeartbeat ke 0 -- akibatnya heartbeat GAK PERNAH
+        // sempet nyampe 60 detik kalau nontonnya sesekali kesendat buffer,
+        // padahal itu wajar banget di streaming video.
         var secondsSinceLastHeartbeat = 0
         while (true) {
             if (exoPlayer.isPlaying) {
