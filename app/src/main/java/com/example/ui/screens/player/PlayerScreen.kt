@@ -470,10 +470,24 @@ fun PlayerScreen(
 
     // Progress updates & periodic saving to Room
     LaunchedEffect(exoPlayer, isPlaying) {
+        // Detik nonton AKTIF yang udah numpuk sejak heartbeat XP terakhir --
+        // cuma nambah pas exoPlayer.isPlaying beneran true (video jalan),
+        // BUKAN cuma pas layar Player kebuka. Di-reset tiap kali kekirim
+        // biar gak dobel-hitung. Sengaja disimpan lokal di sini (bukan
+        // remember di luar), karena LaunchedEffect ini emang udah restart
+        // total tiap ganti episode -- pas itu counter memang harus mulai
+        // dari 0 lagi.
+        var secondsSinceLastHeartbeat = 0
         while (true) {
             if (exoPlayer.isPlaying) {
                 currentPosition = exoPlayer.currentPosition
                 duration = if (exoPlayer.duration > 0) exoPlayer.duration else 0L
+
+                secondsSinceLastHeartbeat++
+                if (secondsSinceLastHeartbeat >= 60) {
+                    secondsSinceLastHeartbeat = 0
+                    viewModel.sendWatchHeartbeat(minutes = 1)
+                }
 
                 // Save progress to Room watch history every 5s
                 val currentResult = streamState as? Result.Success

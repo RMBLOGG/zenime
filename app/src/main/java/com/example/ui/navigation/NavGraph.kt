@@ -92,6 +92,8 @@ import com.example.ui.screens.clan.CreateClanScreen
 import com.example.ui.screens.clan.CreateClanViewModel
 import com.example.ui.screens.clan.ManageClanScreen
 import com.example.ui.screens.clan.ManageClanViewModel
+import com.example.ui.screens.xp.XpLeaderboardScreen
+import com.example.ui.screens.xp.XpLeaderboardViewModel
 import com.example.ui.screens.profile.ProfileScreen
 import com.example.ui.screens.profile.ProfileViewModel
 import com.example.ui.screens.comic.ComicDetailScreen
@@ -162,6 +164,8 @@ sealed class Screen(
     }
 
     data object BrowseClans : Screen("clans")
+
+    data object XpLeaderboard : Screen("xp-leaderboard")
 
     // Route dipisah "clan-create" (bukan "clan/create") biar gak ambigu sama
     // pattern "clan/{clanId}" -- Navigation Compose bisa salah tangkep "create"
@@ -680,7 +684,8 @@ fun ZenimeAppNavHost(
                             navController.navigate(Screen.Player.createRoute(history.episodeId, history.animeId))
                         },
                         onUpgradeClick = { navController.navigate(Screen.Premium.route) },
-                        onClanClick = { navController.navigate(Screen.BrowseClans.route) }
+                        onClanClick = { navController.navigate(Screen.BrowseClans.route) },
+                        onXpLeaderboardClick = { navController.navigate(Screen.XpLeaderboard.route) }
                     )
                 }
             }
@@ -719,6 +724,18 @@ fun ZenimeAppNavHost(
                     onBackClick = { navController.popBackStack() },
                     onClanClick = { clanId -> navController.navigate(Screen.ViewClan.createRoute(clanId)) },
                     onCreateClanClick = { navController.navigate(Screen.CreateClan.route) }
+                )
+            }
+
+            // Leaderboard XP nonton -- daftar top user berdasar total_xp.
+            composable(Screen.XpLeaderboard.route) {
+                val xpLeaderboardViewModel: XpLeaderboardViewModel = viewModel(
+                    factory = viewModelFactory { initializer { XpLeaderboardViewModel() } }
+                )
+                XpLeaderboardScreen(
+                    viewModel = xpLeaderboardViewModel,
+                    myFirebaseUid = currentUser?.uid,
+                    onBackClick = { navController.popBackStack() }
                 )
             }
 

@@ -11,6 +11,8 @@ import com.example.data.model.EpisodeItem
 import com.example.data.model.StreamResponse
 import com.example.data.model.StreamServer
 import com.example.data.repository.AnimeRepository
+import com.example.data.repository.XpRepository
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +25,8 @@ import java.io.File
 class PlayerViewModel(
     private val repository: AnimeRepository,
     val episodeId: String,
-    val animeId: String
+    val animeId: String,
+    private val xpRepository: XpRepository = XpRepository()
 ) : ViewModel() {
 
     private val _streamState = MutableStateFlow<Result<StreamResponse>>(Result.Loading)
@@ -242,6 +245,21 @@ class PlayerViewModel(
 
     fun selectServer(server: StreamServer) {
         _selectedServer.value = server
+    }
+
+    /**
+     * Dipanggil PlayerScreen tiap kali user udah nonton [minutes] menit
+     * SECARA AKTIF (video playing, bukan pause/buffering/di-background) --
+     * lihat penghitung detik di LaunchedEffect(exoPlayer, isPlaying) pada
+     * PlayerScreen. Silent-fail dengan sengaja: gagal kirim satu heartbeat
+     * (misal lagi offline) gak boleh nge-crash atau ganggu playback,
+     * user cuma kehilangan sedikit XP buat interval itu.
+     */
+    fun sendWatchHeartbeat(minutes: Int = 1) {
+        if (FirebaseAuth.getInstance().currentUser == null) return
+        viewModelScope.launch {
+            xpRepository.sendHeartbeat(minutes)
+        }
     }
 
     fun saveProgress(progressMs: Long, durationMs: Long, epTitle: String?, epIndex: String?) {

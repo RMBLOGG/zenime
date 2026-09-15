@@ -95,6 +95,7 @@ fun ProfileScreen(
     onHistoryClick: (WatchHistoryEntity) -> Unit,
     onUpgradeClick: () -> Unit,
     onClanClick: () -> Unit,
+    onXpLeaderboardClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -275,6 +276,10 @@ fun ProfileScreen(
                     }
                 }
             }
+
+            // --- Entry point ke fitur Level/XP nonton ---
+            MyXpCard(firebaseUid = firebaseUid, onLeaderboardClick = onXpLeaderboardClick)
+            Spacer(modifier = Modifier.height(8.dp))
 
             // --- Entry point ke fitur Clan ---
             Card(
