@@ -69,6 +69,13 @@ interface ZenimeSupabaseApi {
         @Query("limit") limit: Int = 1
     ): List<ChatProfile>
 
+    /** Semua profil user -- basis daftar leaderboard XP biar user yang belum pernah nonton (0 XP) tetap muncul. */
+    @GET("rest/v1/chat_profiles")
+    suspend fun getAllChatProfiles(
+        @Query("select") select: String = "firebase_uid,username,avatar_url,banner_url,updated_at",
+        @Query("limit") limit: Int = 500
+    ): List<ChatProfile>
+
     // on_conflict + Prefer=merge-duplicates -> upsert berdasarkan firebase_uid (primary key).
     @Headers("Prefer: resolution=merge-duplicates,return=representation")
     @POST("rest/v1/chat_profiles")

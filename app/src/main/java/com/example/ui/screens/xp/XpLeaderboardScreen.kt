@@ -35,6 +35,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import com.example.data.model.UserXpDisplay
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
@@ -128,7 +130,18 @@ private fun XpLeaderboardRow(rank: Int, entry: UserXpDisplay, isMe: Boolean) {
             modifier = Modifier.width(40.dp)
         )
 
-        GeneratedAvatar(seed = entry.firebaseUid, label = entry.username, size = 44.dp)
+        if (!entry.avatarUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = entry.avatarUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+            )
+        } else {
+            GeneratedAvatar(seed = entry.firebaseUid, label = entry.username, size = 44.dp)
+        }
 
         Spacer(Modifier.width(12.dp))
 

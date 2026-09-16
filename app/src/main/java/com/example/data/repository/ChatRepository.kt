@@ -94,6 +94,11 @@ class ChatRepository(
         return api.getChatProfile(firebaseUidEq = "eq.$firebaseUid").firstOrNull()
     }
 
+    /** Semua profil user yang tercatat -- dipakai [XpRepository] biar leaderboard nampilin semua user, bukan cuma yang udah punya XP. */
+    suspend fun getAllProfiles(): List<ChatProfile> {
+        return api.getAllChatProfiles()
+    }
+
     /**
      * Simpan/update username, avatar, & banner custom user (upsert berdasarkan
      * firebase_uid). PENTING: upsert ini nge-replace SEMUA kolom yang dikirim,

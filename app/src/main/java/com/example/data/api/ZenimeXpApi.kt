@@ -38,6 +38,13 @@ interface ZenimeXpApi {
         @Query("limit") limit: Int = 1
     ): List<UserXp>
 
+    /** Batch-fetch level buat sekumpulan uid sekaligus -- dipakai badge level di bubble Chat Global. */
+    @GET("rest/v1/user_xp")
+    suspend fun getUserXpBatch(
+        @Query("firebase_uid") firebaseUidIn: String,
+        @Query("select") select: String = "firebase_uid,level"
+    ): List<UserXp>
+
     @GET("rest/v1/user_xp")
     suspend fun getLeaderboard(
         @Query("select") select: String = "*",

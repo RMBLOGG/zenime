@@ -9,6 +9,7 @@ import com.example.data.realtime.ChatRealtimeClient
 import com.example.data.realtime.ChatRealtimeEvent
 import com.example.data.repository.ChatRepository
 import com.example.data.repository.ClanRepository
+import com.example.data.repository.XpRepository
 import com.example.data.repository.PremiumRepository
 import com.example.util.AvatarUploader
 import com.example.util.VoiceNoteUploader
@@ -68,6 +69,12 @@ data class ChatUiState(
     // Cuma keisi buat pengirim yang emang lagi gabung clan.
     val clanTagsByUid: Map<String, String> = emptyMap(),
 
+    // Level XP nonton per firebase_uid pengirim (uid -> 3) -- dipakai buat
+    // nampilin badge "Lv.N" kecil di samping username di bubble chat. Cuma
+    // keisi buat pengirim yang udah pernah dapet XP (punya baris di
+    // user_xp); yang belum pernah nonton gak dikasih badge sama sekali.
+    val xpLevelsByUid: Map<String, Int> = emptyMap(),
+
     // --- Pesan Suara (VN) -- kirim khusus Premium, dengerin/play terbuka
     // buat semua user (lihat catatan di ChatRepository.sendVoiceMessage).
     val isRecording: Boolean = false,
@@ -99,7 +106,8 @@ class ChatViewModel(
     private val firebaseUid: String,
     fallbackUsername: String,
     private val realtimeClient: ChatRealtimeClient = ChatRealtimeClient(),
-    private val clanRepository: ClanRepository = ClanRepository()
+    private val clanRepository: ClanRepository = ClanRepository(),
+    private val xpRepository: XpRepository = XpRepository()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -129,6 +137,10 @@ class ChatViewModel(
     // sama "belum pernah dicek sama sekali" (uid gak ada di map ini).
     private val clanTagCache = mutableMapOf<String, String?>()
     private val clanCheckedUids = mutableSetOf<String>()
+
+    // Sama pola kayak cache clan di atas, tapi buat level XP nonton.
+    private val xpLevelCache = mutableMapOf<String, Int?>()
+    private val xpCheckedUids = mutableSetOf<String>()
 
     init {
         loadProfileAndPremiumStatus(fallbackUsername)
@@ -199,6 +211,29 @@ class ChatViewModel(
     }
 
     /**
+     * Cek level XP buat pengirim-pengirim baru yang muncul di daftar pesan
+     * (pola persis sama kayak [checkClanTagsForNewSenders], cuma buat data
+     * level nonton). Fetch dilakuin batch sekali jalan.
+     */
+    private fun checkXpLevelsForNewSenders(messages: List<ChatMessage>) {
+        val newUids = messages
+            .map { it.firebaseUid }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .filterNot { xpCheckedUids.contains(it) }
+        if (newUids.isEmpty()) return
+
+        xpCheckedUids += newUids
+        viewModelScope.launch {
+            val levels = xpRepository.getLevelsForUids(newUids).getOrDefault(emptyMap())
+            newUids.forEach { uid -> xpLevelCache[uid] = levels[uid] }
+            _uiState.value = _uiState.value.copy(
+                xpLevelsByUid = xpLevelCache.filterValues { it != null }.mapValues { it.value!! }
+            )
+        }
+    }
+
+    /**
      * Cek status premium buat pengirim-pengirim baru yang muncul di daftar
      * pesan (belum pernah dicek sebelumnya di sesi ini), lalu update
      * `premiumUids` di uiState biar badge Premium muncul di samping
@@ -239,6 +274,7 @@ class ChatViewModel(
                 _uiState.value = _uiState.value.copy(messages = updated, isLoading = false)
                 checkPremiumForNewSenders(listOf(event.message))
                 checkClanTagsForNewSenders(listOf(event.message))
+                checkXpLevelsForNewSenders(listOf(event.message))
             }
             is ChatRealtimeEvent.Deleted -> {
                 _uiState.value = _uiState.value.copy(
@@ -273,6 +309,7 @@ class ChatViewModel(
             )
             checkPremiumForNewSenders(messages)
             checkClanTagsForNewSenders(messages)
+            checkXpLevelsForNewSenders(messages)
         } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(
                 isLoading = false,

@@ -53,25 +53,52 @@ class XpRepository(
         xpApi.getUserXp(firebaseUidEq = "eq.$firebaseUid").firstOrNull()
     }
 
+    /**
+     * Batch-fetch level buat sekumpulan uid sekaligus -- dipakai badge level
+     * kecil di bubble Chat Global (pola sama kayak [ClanRepository.getClanTagsForUids]).
+     * User yang belum punya baris di user_xp (belum pernah heartbeat) gak
+     * masuk map ini -- pemanggil anggap itu sebagai "belum level up"/gak usah
+     * ditampilin badge-nya, bukan Level 1 default.
+     */
+    suspend fun getLevelsForUids(uids: List<String>): Result<Map<String, Int>> = runCatching {
+        val distinctUids = uids.filter { it.isNotBlank() }.distinct()
+        if (distinctUids.isEmpty()) return@runCatching emptyMap()
+
+        val filter = "in.(${distinctUids.joinToString(",")})"
+        xpApi.getUserXpBatch(firebaseUidIn = filter)
+            .associate { it.firebaseUid to it.level }
+    }
+
     suspend fun getLeaderboard(): Result<List<UserXp>> = runCatching {
         xpApi.getLeaderboard()
     }
 
-    /** Sama kayak [getLeaderboard], tapi digabung username/avatar dari chat_profiles buat dirender di UI. */
+    /**
+     * Sama kayak [getLeaderboard], tapi digabung username/avatar dari
+     * chat_profiles DAN mencakup SEMUA user yang tercatat di chat_profiles --
+     * bukan cuma yang udah punya baris di user_xp. User yang belum pernah
+     * heartbeat XP (belum nonton lewat fitur ini) otomatis dianggap 0 XP /
+     * Level 1, bukan hilang dari daftar.
+     *
+     * Catatan: "semua user" di sini terbatas ke yang udah tercatat di
+     * chat_profiles (kebentuk begitu user buka Profil/Chat minimal sekali) --
+     * gak ada tabel "semua user terdaftar" tersendiri yang bisa dibaca lewat
+     * PostgREST (daftar user Firebase Auth sendiri gak bisa di-query dari
+     * client), jadi ini proxy terbaik yang ada.
+     */
     suspend fun getLeaderboardDisplay(): Result<List<UserXpDisplay>> = runCatching {
-        val entries = xpApi.getLeaderboard()
-        val profiles = entries.map { it.firebaseUid }.distinct()
-            .mapNotNull { uid -> chatRepository.getProfile(uid)?.let { uid to it } }
-            .toMap()
-        entries.map { entry ->
-            val profile = profiles[entry.firebaseUid]
+        val profiles = chatRepository.getAllProfiles()
+        val xpByUid = xpApi.getLeaderboard().associateBy { it.firebaseUid }
+
+        profiles.map { profile ->
+            val xp = xpByUid[profile.firebaseUid]
             UserXpDisplay(
-                firebaseUid = entry.firebaseUid,
-                totalXp = entry.totalXp,
-                level = entry.level,
-                username = profile?.username ?: "Pengguna",
-                avatarUrl = profile?.avatarUrl
+                firebaseUid = profile.firebaseUid,
+                totalXp = xp?.totalXp ?: 0L,
+                level = xp?.level ?: 1,
+                username = profile.username.ifBlank { "Pengguna" },
+                avatarUrl = profile.avatarUrl
             )
-        }
+        }.sortedByDescending { it.totalXp }
     }
 }

@@ -204,6 +204,7 @@ fun ChatScreen(
                                     isOwnMessage = message.firebaseUid == currentFirebaseUid,
                                     isSenderPremium = uiState.premiumUids.contains(message.firebaseUid),
                                     senderClanTag = uiState.clanTagsByUid[message.firebaseUid],
+                                    senderLevel = uiState.xpLevelsByUid[message.firebaseUid],
                                     isDeleting = uiState.deletingMessageId == message.id,
                                     ownAvatarUrl = uiState.displayAvatarUrl,
                                     onReply = { viewModel.setReplyTarget(message) },
@@ -309,6 +310,7 @@ private fun ChatBubble(
     isOwnMessage: Boolean,
     isSenderPremium: Boolean,
     senderClanTag: String?,
+    senderLevel: Int?,
     isDeleting: Boolean,
     ownAvatarUrl: String?,
     onReply: () -> Unit,
@@ -368,6 +370,24 @@ private fun ChatBubble(
                                 .padding(start = 3.dp)
                                 .size(20.dp)
                         )
+                    }
+                    if (senderLevel != null) {
+                        Box(
+                            modifier = Modifier
+                                .padding(start = 4.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(Color(0xFFB8860B))
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                        ) {
+                            Text(
+                                text = "Lv.$senderLevel",
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 8.sp
+                                )
+                            )
+                        }
                     }
                 }
             }
