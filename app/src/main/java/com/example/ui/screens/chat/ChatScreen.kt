@@ -29,8 +29,17 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
@@ -302,6 +311,92 @@ fun ChatScreen(
     }
 }
 
+/**
+ * Bentuk badge panah/pita (chevron ribbon) — sisi kiri ada takik masuk,
+ * sisi kanan runcing kayak anak panah. Dipakai buat badge clan & level.
+ */
+private val BadgeArrowShape = GenericShape { size, _ ->
+    val tip = size.height * 0.42f
+    moveTo(size.height * 0.28f, 0f)
+    lineTo(size.width - tip, 0f)
+    lineTo(size.width, size.height / 2f)
+    lineTo(size.width - tip, size.height)
+    lineTo(size.height * 0.28f, size.height)
+    lineTo(0f, size.height / 2f)
+    close()
+}
+
+@Composable
+private fun LevelBadge(level: Int, modifier: Modifier = Modifier) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .clip(BadgeArrowShape)
+            .background(
+                Brush.horizontalGradient(
+                    listOf(Color(0xFFFFDE7A), Color(0xFFE8A317), Color(0xFFB8860B))
+                )
+            )
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.ic_zcoin_badge),
+            contentDescription = null,
+            modifier = Modifier.size(11.dp)
+        )
+        Spacer(modifier = Modifier.width(3.dp))
+        Text(
+            text = "Lv.$level",
+            color = Color.White,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 9.sp
+            )
+        )
+    }
+}
+
+@Composable
+private fun ClanRainbowBadge(text: String, modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "clanRainbow")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2500, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "clanRainbowPhase"
+    )
+    val rainbowColors = listOf(
+        Color(0xFFFF3B30), Color(0xFFFF9500), Color(0xFFFFCC00),
+        Color(0xFF34C759), Color(0xFF00C7BE), Color(0xFF30ADE6),
+        Color(0xFF5856D6), Color(0xFFAF52DE), Color(0xFFFF3B30)
+    )
+    val sweep = 260f
+    val startX = -sweep + phase * (sweep * 2f)
+    val brush = Brush.linearGradient(
+        colors = rainbowColors,
+        start = Offset(startX, 0f),
+        end = Offset(startX + sweep, 30f)
+    )
+    Box(
+        modifier = modifier
+            .clip(BadgeArrowShape)
+            .background(brush)
+            .padding(horizontal = 8.dp, vertical = 2.dp)
+    ) {
+        Text(
+            text = text,
+            color = Color.White,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = 9.sp
+            )
+        )
+    }
+}
+
 @Composable
 private fun ChatBubble(
     message: ChatMessage,
@@ -334,24 +429,6 @@ private fun ChatBubble(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(bottom = 2.dp, start = 4.dp)
                 ) {
-                    if (senderClanTag != null) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(ZenimePrimary)
-                                .padding(horizontal = 4.dp, vertical = 1.dp)
-                        ) {
-                            Text(
-                                text = senderClanTag,
-                                color = Color.White,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 8.sp
-                                )
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(4.dp))
-                    }
                     Text(
                         text = message.username,
                         color = ZenimePrimary,
@@ -370,22 +447,16 @@ private fun ChatBubble(
                         )
                     }
                     if (senderLevel != null) {
-                        Box(
-                            modifier = Modifier
-                                .padding(start = 4.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color(0xFFB8860B))
-                                .padding(horizontal = 4.dp, vertical = 1.dp)
-                        ) {
-                            Text(
-                                text = "Lv.$senderLevel",
-                                color = Color.White,
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 8.sp
-                                )
-                            )
-                        }
+                        LevelBadge(
+                            level = senderLevel,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
+                    }
+                    if (senderClanTag != null) {
+                        ClanRainbowBadge(
+                            text = senderClanTag,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
                     }
                 }
             }
