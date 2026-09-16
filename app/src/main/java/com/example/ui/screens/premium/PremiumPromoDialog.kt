@@ -216,7 +216,7 @@ fun PremiumPromoDialog(
 @Composable
 private fun PremiumPromoPackageCard(pkg: PremiumPackage) {
     val benefits = listOf(
-        "Custom foto profile",
+        "Custom banner profil",
         "Download anime buat ditonton offline",
         "Bebas iklan sepenuhnya",
         "Resolusi unlock, dari terendah sampai 1080p",

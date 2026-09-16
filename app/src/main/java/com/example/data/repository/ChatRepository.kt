@@ -100,6 +100,22 @@ class ChatRepository(
     }
 
     /**
+     * Pastiin baris chat_profiles ADA buat user ini -- dipanggil sekali pas
+     * login (lihat [com.example.data.repository.AuthRepository]) biar SEMUA
+     * user ke-track di leaderboard XP/proxy "daftar semua user", bukan cuma
+     * yang kebetulan pernah buka halaman Profil/Chat.
+     *
+     * SENGAJA cek dulu apa udah ada baris-nya -- kalau udah ada, GAK disentuh
+     * sama sekali (biar username/avatar custom yang user set sendiri gak
+     * ketimpa tiap kali mereka login ulang / buka app).
+     */
+    suspend fun ensureProfile(firebaseUid: String, defaultUsername: String, defaultAvatarUrl: String?) {
+        val existing = runCatching { getProfile(firebaseUid) }.getOrNull()
+        if (existing != null) return
+        runCatching { saveProfile(firebaseUid, defaultUsername, defaultAvatarUrl) }
+    }
+
+    /**
      * Simpan/update username, avatar, & banner custom user (upsert berdasarkan
      * firebase_uid). PENTING: upsert ini nge-replace SEMUA kolom yang dikirim,
      * jadi pemanggil WAJIB selalu ikut kirim nilai field yang gak diubah

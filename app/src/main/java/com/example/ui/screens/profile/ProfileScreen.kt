@@ -327,7 +327,7 @@ fun ProfileScreen(
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Text(
-                            text = "Upgrade Premium buat upload foto profil & banner sendiri",
+                            text = "Upgrade Premium buat upload banner profil sendiri",
                             color = Color.White.copy(alpha = 0.85f),
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.weight(1f)
@@ -463,7 +463,6 @@ fun ProfileScreen(
             errorMessage = uiState.editError,
             onPickAvatar = { uri -> viewModel.uploadAvatar(context, uri) },
             onPickBanner = { uri -> viewModel.uploadBanner(context, uri) },
-            onNonPremiumAvatarTap = { viewModel.notifyAvatarRequiresPremium() },
             onNonPremiumBannerTap = { viewModel.notifyBannerRequiresPremium() },
             onSaveUsername = { newName -> viewModel.saveUsername(newName) },
             onDismiss = { viewModel.closeEditDialog() }
@@ -644,7 +643,6 @@ private fun EditProfileDialog(
     errorMessage: String?,
     onPickAvatar: (Uri) -> Unit,
     onPickBanner: (Uri) -> Unit,
-    onNonPremiumAvatarTap: () -> Unit,
     onNonPremiumBannerTap: () -> Unit,
     onSaveUsername: (String) -> Unit,
     onDismiss: () -> Unit
@@ -744,9 +742,7 @@ private fun EditProfileDialog(
                         .clip(CircleShape)
                         .background(ZenimeBackgroundDark)
                         .border(1.dp, CardOutlineBorder, CircleShape)
-                        .clickable {
-                            if (isPremium) avatarPicker.launch("image/*") else onNonPremiumAvatarTap()
-                        },
+                        .clickable { avatarPicker.launch("image/*") },
                     contentAlignment = Alignment.Center
                 ) {
                     if (!currentAvatarUrl.isNullOrBlank()) {
@@ -791,7 +787,7 @@ private fun EditProfileDialog(
 
                 if (!isPremium) {
                     Text(
-                        text = "Upload foto profil & banner khusus member Premium.",
+                        text = "Upload banner profil khusus member Premium.",
                         color = Color.White.copy(alpha = 0.5f),
                         style = MaterialTheme.typography.labelSmall,
                         textAlign = TextAlign.Center

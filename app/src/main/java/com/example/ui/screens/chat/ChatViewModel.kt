@@ -162,10 +162,9 @@ class ChatViewModel(
             val premiumResult = premiumRepository.checkPremiumStatus(firebaseUid)
             val isPremium = premiumResult.getOrNull()?.isPremium ?: false
 
-            // Foto custom (hasil upload) cuma dipasang kalau user-nya masih
-            // premium. Kalau enggak (baik belum pernah upload, maupun udah
-            // expired), avatar dibiarkan null -> tampil avatar generate.
-            val resolvedAvatarUrl = if (isPremium) profile?.avatarUrl else null
+            // Avatar sekarang BEBAS semua user (gak perlu premium) -- selalu
+            // dipasang kalau ada, gak peduli status premium sekarang.
+            val resolvedAvatarUrl = profile?.avatarUrl
 
             // Simpan status premium diri sendiri ke cache juga, biar bubble
             // pesan sendiri (kalau suatu saat ditampilin ke user lain) konsisten
@@ -372,13 +371,6 @@ class ChatViewModel(
         _uiState.value = _uiState.value.copy(isProfileDialogOpen = false, profileError = null)
     }
 
-    /** Dipanggil pas user non-premium coba tap avatar buat ganti foto. */
-    fun notifyAvatarRequiresPremium() {
-        _uiState.value = _uiState.value.copy(
-            profileError = "Upload foto profil khusus buat member Premium"
-        )
-    }
-
     /** Simpan username baru (dibuka semua user, gak peduli premium). */
     fun saveUsername(newUsername: String) {
         val trimmed = newUsername.trim().take(MAX_USERNAME_LENGTH)
@@ -411,18 +403,10 @@ class ChatViewModel(
     }
 
     /**
-     * Upload foto profil baru buat Chat Global. Dipanggil setelah user milih
-     * gambar dari galeri -- pengecekan premium tetap diulang di sini (bukan
-     * cuma di UI) biar gak bisa dilewatin dengan manggil fungsi ini langsung.
+     * Upload foto profil baru buat Chat Global -- BEBAS semua user, gak ada
+     * pengecekan premium lagi (sama kayak avatar di halaman Profil).
      */
     fun uploadAvatar(context: Context, imageUri: Uri) {
-        if (!_uiState.value.isPremium) {
-            _uiState.value = _uiState.value.copy(
-                profileError = "Upload foto profil khusus buat member Premium"
-            )
-            return
-        }
-
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isUploadingAvatar = true, profileError = null)
             try {

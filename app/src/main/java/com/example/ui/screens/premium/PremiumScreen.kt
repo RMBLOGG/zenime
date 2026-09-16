@@ -147,7 +147,7 @@ fun PremiumScreen(
 @Composable
 private fun PremiumBenefitsHeroCard() {
     val benefits = listOf(
-        "Custom foto profile",
+        "Custom banner profil",
         "Download anime buat ditonton offline",
         "Bebas iklan sepenuhnya",
         "Resolusi unlock, dari terendah sampai 1080p",

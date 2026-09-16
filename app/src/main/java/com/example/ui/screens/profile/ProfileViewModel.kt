@@ -41,12 +41,11 @@ data class ProfileUiState(
  * ViewModel buat [ProfileScreen] -- ambil profil (`chat_profiles`, sama tabel
  * yang dipakai fitur Chat Global) + status premium + favorit/riwayat lokal.
  *
- * Upload avatar & banner SAMA-SAMA dibatasi khusus member Premium (banner
- * tambahan baru: bisa upload foto sendiri, sebelumnya cuma auto dari
- * thumbnail bookmark/history pertama). Kalau premium user habis masa
- * aktifnya, banner/avatar custom yang udah diupload tetap ADA di server tapi
- * gak ditampilin lagi (revert ke fallback) -- sama persis kayak perilaku
- * avatar di Chat Global, biar konsisten.
+ * Upload avatar BEBAS buat semua user (gak perlu premium). Upload banner
+ * TETEP dibatasi khusus member Premium. Kalau premium user habis masa
+ * aktifnya, banner custom yang udah diupload tetap ADA di server tapi gak
+ * ditampilin lagi (revert ke fallback) -- avatar custom tetap tampil
+ * kapan pun, gak peduli status premium.
  */
 class ProfileViewModel(
     private val repository: AnimeRepository,
@@ -82,9 +81,10 @@ class ProfileViewModel(
             val premiumResult = premiumRepository.checkPremiumStatus(firebaseUid)
             val isPremium = premiumResult.getOrNull()?.isPremium ?: false
 
-            // Sama kayak avatar di Chat Global: foto custom (avatar & banner)
-            // cuma dipasang kalau user-nya masih premium sekarang.
-            val resolvedAvatarUrl = if (isPremium) profile?.avatarUrl else null
+            // Avatar sekarang BEBAS semua user (gak perlu premium) --
+            // banner tetap premium-only. Foto custom avatar selalu dipasang
+            // kalau ada, gak peduli status premium sekarang.
+            val resolvedAvatarUrl = profile?.avatarUrl
             val resolvedBannerUrl = if (isPremium) profile?.bannerUrl else null
 
             _uiState.value = _uiState.value.copy(
@@ -105,12 +105,6 @@ class ProfileViewModel(
 
     fun closeEditDialog() {
         _uiState.value = _uiState.value.copy(isEditDialogOpen = false, editError = null)
-    }
-
-    fun notifyAvatarRequiresPremium() {
-        _uiState.value = _uiState.value.copy(
-            editError = "Upload foto profil khusus buat member Premium"
-        )
     }
 
     fun notifyBannerRequiresPremium() {
@@ -148,13 +142,8 @@ class ProfileViewModel(
         }
     }
 
-    /** Upload foto profil baru -- pengecekan premium diulang di sini juga, bukan cuma di UI. */
+    /** Upload foto profil baru -- BEBAS semua user, gak ada pengecekan premium lagi. */
     fun uploadAvatar(context: Context, imageUri: Uri) {
-        if (!_uiState.value.isPremium) {
-            notifyAvatarRequiresPremium()
-            return
-        }
-
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isUploadingAvatar = true, editError = null)
             try {

@@ -5,26 +5,39 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
-import com.example.data.api.SupabaseConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.util.concurrent.TimeUnit
 
-private const val AVATAR_BUCKET = "chat-avatars"
+private const val CLOUDINARY_CLOUD_NAME = "jbtwhnrb"
+private const val CLOUDINARY_UPLOAD_PRESET = "Zenime"
+private const val CLOUDINARY_UPLOAD_URL = "https://api.cloudinary.com/v1_1/$CLOUDINARY_CLOUD_NAME/image/upload"
+
 private const val MAX_DIMENSION_PX = 512
 private const val JPEG_QUALITY = 82
 
 /**
- * Upload foto profil buat Chat Global -- khusus user Premium (dicek di UI
- * sebelum manggil ini, lihat ChatViewModel.uploadAvatar). Gambar dikompres
- * dulu ke JPEG max 512px biar hemat kuota & storage, lalu di-PUT langsung
- * ke Supabase Storage lewat REST API (bukan pakai Supabase SDK, biar gak
- * nambah dependency besar cuma buat satu fitur ini).
+ * Upload foto profil -- dipakai buat Profil & Chat Global, BEBAS semua user
+ * (gak perlu Premium; beda sama [BannerUploader] yang tetap khusus Premium).
+ * Gambar dikompres dulu ke JPEG max 512px, lalu diupload ke Cloudinary lewat
+ * unsigned upload preset `Zenime` (pola PERSIS sama kayak [ClanPhotoUploader],
+ * cuma folder public_id-nya beda: "avatars/{firebaseUid}" bukan "clan-photos/...").
+ *
+ * PENTING soal overwrite: public_id-nya FIXED per user (bukan per-upload),
+ * niatnya biar foto lama ketimpa pas user ganti foto. Itu bergantung ke
+ * setting "Overwrite" + "Unique filename" DIMATIKAN di preset `Zenime` pada
+ * dashboard Cloudinary -- kalau preset itu belum diatur begitu, upload tetap
+ * JALAN dan foto tetap kepasang bener (karena selalu pake secure_url yang
+ * baru dari response, bukan nyusun URL manual), cuma file lama bakal numpuk
+ * di storage Cloudinary (buang-buang kuota) daripada bener-bener ketimpa.
  */
 object AvatarUploader {
 
@@ -37,34 +50,47 @@ object AvatarUploader {
     }
 
     /**
-     * @return URL publik avatar yang baru diupload.
+     * @return secure_url (HTTPS) hasil upload dari Cloudinary.
      * @throws Exception kalau baca gambar atau upload-nya gagal.
      */
     suspend fun uploadAvatar(context: Context, imageUri: Uri, firebaseUid: String): String =
         withContext(Dispatchers.IO) {
             val jpegBytes = compressImage(context.contentResolver, imageUri)
-            val path = "$firebaseUid.jpg"
-            val url = "${SupabaseConfig.SUPABASE_URL}/storage/v1/object/$AVATAR_BUCKET/$path"
 
-            val request = Request.Builder()
-                .url(url)
-                .header("apikey", SupabaseConfig.SUPABASE_ANON_KEY)
-                .header("Authorization", "Bearer ${SupabaseConfig.SUPABASE_ANON_KEY}")
-                .header("x-upsert", "true")
-                .post(jpegBytes.toRequestBody("image/jpeg".toMediaType()))
-                .build()
+            // Cloudinary butuh file beneran (bukan cuma byte array) buat multipart,
+            // jadi ditulis dulu ke cache directory sementara.
+            val tempFile = File.createTempFile("avatar", ".jpg", context.cacheDir)
+            tempFile.writeBytes(jpegBytes)
 
-            okHttpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw IllegalStateException(
-                        "Upload avatar gagal (${response.code}): ${response.body?.string()}"
+            try {
+                val requestBody = MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart("upload_preset", CLOUDINARY_UPLOAD_PRESET)
+                    .addFormDataPart("public_id", "avatars/$firebaseUid")
+                    .addFormDataPart(
+                        "file",
+                        "$firebaseUid.jpg",
+                        tempFile.asRequestBody("image/jpeg".toMediaType())
                     )
-                }
-            }
+                    .build()
 
-            // Tambah query param cache-buster (?v=timestamp) biar Coil gak nampilin
-            // avatar lama yang ke-cache pas user ganti foto ke path yang sama.
-            "${SupabaseConfig.SUPABASE_URL}/storage/v1/object/public/$AVATAR_BUCKET/$path?v=${System.currentTimeMillis()}"
+                val request = Request.Builder()
+                    .url(CLOUDINARY_UPLOAD_URL)
+                    .post(requestBody)
+                    .build()
+
+                okHttpClient.newCall(request).execute().use { response ->
+                    val bodyString = response.body?.string()
+                    if (!response.isSuccessful || bodyString == null) {
+                        throw IllegalStateException("Upload avatar gagal (${response.code}): $bodyString")
+                    }
+                    val json = JSONObject(bodyString)
+                    json.optString("secure_url").takeIf { it.isNotBlank() }
+                        ?: throw IllegalStateException("Response Cloudinary gak ada secure_url: $bodyString")
+                }
+            } finally {
+                tempFile.delete()
+            }
         }
 
     private fun compressImage(resolver: ContentResolver, uri: Uri): ByteArray {

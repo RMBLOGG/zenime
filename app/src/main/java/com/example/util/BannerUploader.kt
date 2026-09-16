@@ -5,17 +5,21 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
-import com.example.data.api.SupabaseConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import org.json.JSONObject
 import java.io.ByteArrayOutputStream
+import java.io.File
 import java.util.concurrent.TimeUnit
 
-private const val BANNER_BUCKET = "chat-banners"
+private const val CLOUDINARY_CLOUD_NAME = "jbtwhnrb"
+private const val CLOUDINARY_UPLOAD_PRESET = "Zenime"
+private const val CLOUDINARY_UPLOAD_URL = "https://api.cloudinary.com/v1_1/$CLOUDINARY_CLOUD_NAME/image/upload"
 
 // Banner ditampilin lebar (bukan bulat kayak avatar), jadi dibatasi lewat sisi
 // terpanjang yang lebih besar dari avatar (1280px) biar tetap tajam pas
@@ -26,10 +30,11 @@ private const val JPEG_QUALITY = 82
 /**
  * Upload foto banner profil -- khusus user Premium (dicek di UI sebelum
  * manggil ini, dan diulang lagi di ProfileViewModel.uploadBanner biar gak
- * bisa dilewatin). Sama persis polanya kayak [AvatarUploader]: kompres ke
- * JPEG dulu, lalu PUT langsung ke Supabase Storage lewat REST API (bucket
- * terpisah "chat-banners" -- WAJIB dibikin public dulu di Supabase dashboard,
- * caranya sama kayak waktu bikin bucket "chat-avatars").
+ * bisa dilewatin). Sama persis polanya kayak [AvatarUploader]/[ClanPhotoUploader]:
+ * kompres ke JPEG dulu, lalu upload ke Cloudinary lewat unsigned upload
+ * preset `Zenime`, public_id "banners/{firebaseUid}".
+ *
+ * Catatan overwrite sama kayak [AvatarUploader] -- lihat komentar di situ.
  */
 object BannerUploader {
 
@@ -42,34 +47,45 @@ object BannerUploader {
     }
 
     /**
-     * @return URL publik banner yang baru diupload.
+     * @return secure_url (HTTPS) hasil upload dari Cloudinary.
      * @throws Exception kalau baca gambar atau upload-nya gagal.
      */
     suspend fun uploadBanner(context: Context, imageUri: Uri, firebaseUid: String): String =
         withContext(Dispatchers.IO) {
             val jpegBytes = compressImage(context.contentResolver, imageUri)
-            val path = "$firebaseUid.jpg"
-            val url = "${SupabaseConfig.SUPABASE_URL}/storage/v1/object/$BANNER_BUCKET/$path"
 
-            val request = Request.Builder()
-                .url(url)
-                .header("apikey", SupabaseConfig.SUPABASE_ANON_KEY)
-                .header("Authorization", "Bearer ${SupabaseConfig.SUPABASE_ANON_KEY}")
-                .header("x-upsert", "true")
-                .post(jpegBytes.toRequestBody("image/jpeg".toMediaType()))
-                .build()
+            val tempFile = File.createTempFile("banner", ".jpg", context.cacheDir)
+            tempFile.writeBytes(jpegBytes)
 
-            okHttpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw IllegalStateException(
-                        "Upload banner gagal (${response.code}): ${response.body?.string()}"
+            try {
+                val requestBody = MultipartBody.Builder()
+                    .setType(MultipartBody.FORM)
+                    .addFormDataPart("upload_preset", CLOUDINARY_UPLOAD_PRESET)
+                    .addFormDataPart("public_id", "banners/$firebaseUid")
+                    .addFormDataPart(
+                        "file",
+                        "$firebaseUid.jpg",
+                        tempFile.asRequestBody("image/jpeg".toMediaType())
                     )
-                }
-            }
+                    .build()
 
-            // Cache-buster (?v=timestamp) biar Coil gak nampilin banner lama
-            // yang ke-cache pas user ganti banner ke path yang sama.
-            "${SupabaseConfig.SUPABASE_URL}/storage/v1/object/public/$BANNER_BUCKET/$path?v=${System.currentTimeMillis()}"
+                val request = Request.Builder()
+                    .url(CLOUDINARY_UPLOAD_URL)
+                    .post(requestBody)
+                    .build()
+
+                okHttpClient.newCall(request).execute().use { response ->
+                    val bodyString = response.body?.string()
+                    if (!response.isSuccessful || bodyString == null) {
+                        throw IllegalStateException("Upload banner gagal (${response.code}): $bodyString")
+                    }
+                    val json = JSONObject(bodyString)
+                    json.optString("secure_url").takeIf { it.isNotBlank() }
+                        ?: throw IllegalStateException("Response Cloudinary gak ada secure_url: $bodyString")
+                }
+            } finally {
+                tempFile.delete()
+            }
         }
 
     private fun compressImage(resolver: ContentResolver, uri: Uri): ByteArray {

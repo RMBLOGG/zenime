@@ -9,9 +9,13 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
 /**
@@ -25,16 +29,42 @@ import kotlinx.coroutines.tasks.await
  * kode ini compile tapi signInWithGoogle() bakal selalu gagal di runtime.
  * Lihat catatan setup di README / pesan chat.
  */
-class AuthRepository {
+class AuthRepository(
+    private val chatRepository: ChatRepository = ChatRepository()
+) {
 
     private val firebaseAuth = FirebaseAuth.getInstance()
 
     private val _currentUser = MutableStateFlow(firebaseAuth.currentUser)
     val currentUser: StateFlow<FirebaseUser?> = _currentUser.asStateFlow()
 
+    // Scope umur-panjang khusus buat ensureProfile di listener bawah --
+    // addAuthStateListener BUKAN suspend function, jadi butuh scope sendiri
+    // buat manggil suspend fun ensureProfile. AuthRepository sendiri
+    // di-`remember` sekali di root NavGraph (praktis singleton seumur app),
+    // jadi scope ini juga aman idup selama itu.
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     init {
         firebaseAuth.addAuthStateListener { auth ->
             _currentUser.value = auth.currentUser
+            val user = auth.currentUser
+            if (user != null) {
+                // Pastiin baris chat_profiles ADA dari saat ini juga (login),
+                // BUKAN nunggu user buka Profil/Chat sendiri -- biar leaderboard
+                // XP (yang basis-nya chat_profiles) nyakup SEMUA user yang
+                // pernah login, gak cuma yang aktif di Profil/Chat.
+                val defaultUsername = user.displayName?.takeIf { it.isNotBlank() }
+                    ?: user.email?.substringBefore("@")?.takeIf { it.isNotBlank() }
+                    ?: "User${user.uid.take(6)}"
+                scope.launch {
+                    chatRepository.ensureProfile(
+                        firebaseUid = user.uid,
+                        defaultUsername = defaultUsername,
+                        defaultAvatarUrl = user.photoUrl?.toString()
+                    )
+                }
+            }
         }
     }
 

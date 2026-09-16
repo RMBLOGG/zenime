@@ -265,12 +265,10 @@ fun ChatScreen(
             currentUsername = uiState.displayUsername,
             currentAvatarUrl = uiState.displayAvatarUrl,
             avatarSeed = currentFirebaseUid,
-            isPremium = uiState.isPremium,
             isSaving = uiState.isSavingProfile,
             isUploadingAvatar = uiState.isUploadingAvatar,
             errorMessage = uiState.profileError,
             onPickAvatar = { uri -> viewModel.uploadAvatar(context, uri) },
-            onNonPremiumAvatarTap = { viewModel.notifyAvatarRequiresPremium() },
             onSaveUsername = { newName -> viewModel.saveUsername(newName) },
             onDismiss = { viewModel.closeProfileDialog() }
         )
@@ -881,12 +879,10 @@ private fun EditProfileDialog(
     currentUsername: String,
     currentAvatarUrl: String?,
     avatarSeed: String,
-    isPremium: Boolean,
     isSaving: Boolean,
     isUploadingAvatar: Boolean,
     errorMessage: String?,
     onPickAvatar: (Uri) -> Unit,
-    onNonPremiumAvatarTap: () -> Unit,
     onSaveUsername: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -925,13 +921,7 @@ private fun EditProfileDialog(
                         .clip(CircleShape)
                         .background(ZenimeBackgroundDark)
                         .border(1.dp, CardOutlineBorder, CircleShape)
-                        .clickable {
-                            if (isPremium) {
-                                imagePicker.launch("image/*")
-                            } else {
-                                onNonPremiumAvatarTap()
-                            }
-                        },
+                        .clickable { imagePicker.launch("image/*") },
                     contentAlignment = Alignment.Center
                 ) {
                     if (!currentAvatarUrl.isNullOrBlank()) {
@@ -978,15 +968,6 @@ private fun EditProfileDialog(
                             )
                         }
                     }
-                }
-
-                if (!isPremium) {
-                    Text(
-                        text = "Upload foto profil khusus member Premium. Kamu tetap bisa pakai foto akun Google.",
-                        color = Color.White.copy(alpha = 0.5f),
-                        style = MaterialTheme.typography.labelSmall,
-                        textAlign = TextAlign.Center
-                    )
                 }
 
                 OutlinedTextField(
