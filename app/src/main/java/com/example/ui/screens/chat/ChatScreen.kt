@@ -356,17 +356,53 @@ private fun LevelBadge(level: Int, modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * Bentuk badge clan — heksagon pita runcing di dua sisi (kiri & kanan),
+ * lebih "gamer rank" dibanding badge level yang cuma runcing sebelah.
+ */
+private val BadgeHexShape = GenericShape { size, _ ->
+    val tip = size.height * 0.5f
+    moveTo(tip, 0f)
+    lineTo(size.width - tip, 0f)
+    lineTo(size.width, size.height / 2f)
+    lineTo(size.width - tip, size.height)
+    lineTo(tip, size.height)
+    lineTo(0f, size.height / 2f)
+    close()
+}
+
 @Composable
 private fun ClanRainbowBadge(text: String, modifier: Modifier = Modifier) {
     val transition = rememberInfiniteTransition(label = "clanRainbow")
+    // Warna gradient rainbow yang geser terus-terusan (efek holografik)
     val phase by transition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 2500, easing = LinearEasing),
+            animation = tween(durationMillis = 2600, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "clanRainbowPhase"
+    )
+    // Border luar yang berdenyut (glow pulse) biar makin "hidup"
+    val glowAlpha by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.95f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "clanGlowPulse"
+    )
+    // Kilau diagonal yang lewat dari kiri ke kanan tiap beberapa detik
+    val shinePhase by transition.animateFloat(
+        initialValue = -0.4f,
+        targetValue = 1.4f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "clanShine"
     )
     val rainbowColors = listOf(
         Color(0xFFFF3B30), Color(0xFFFF9500), Color(0xFFFFCC00),
@@ -375,25 +411,52 @@ private fun ClanRainbowBadge(text: String, modifier: Modifier = Modifier) {
     )
     val sweep = 260f
     val startX = -sweep + phase * (sweep * 2f)
-    val brush = Brush.linearGradient(
+    val fillBrush = Brush.linearGradient(
         colors = rainbowColors,
         start = Offset(startX, 0f),
         end = Offset(startX + sweep, 30f)
     )
+    val shineBrush = Brush.linearGradient(
+        colors = listOf(
+            Color.White.copy(alpha = 0f),
+            Color.White.copy(alpha = 0.55f),
+            Color.White.copy(alpha = 0f)
+        ),
+        start = Offset(shinePhase * 200f - 60f, 0f),
+        end = Offset(shinePhase * 200f + 60f, 26f)
+    )
     Box(
         modifier = modifier
-            .clip(BadgeArrowShape)
-            .background(brush)
-            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .clip(BadgeHexShape)
+            .background(fillBrush)
+            .background(shineBrush)
+            .border(width = 1.dp, color = Color.White.copy(alpha = glowAlpha), shape = BadgeHexShape)
+            .padding(horizontal = 10.dp, vertical = 2.5.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = text,
-            color = Color.White,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 9.sp
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "✦",
+                color = Color.White.copy(alpha = 0.85f),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 7.sp)
             )
-        )
+            Spacer(modifier = Modifier.width(3.dp))
+            Text(
+                text = text.uppercase(),
+                color = Color.White,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 9.sp,
+                    letterSpacing = 0.6.sp
+                )
+            )
+            Spacer(modifier = Modifier.width(3.dp))
+            Text(
+                text = "✦",
+                color = Color.White.copy(alpha = 0.85f),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 7.sp)
+            )
+        }
     }
 }
 
