@@ -24,7 +24,8 @@ import kotlinx.coroutines.tasks.await
  */
 class XpRepository(
     private val xpApi: ZenimeXpApi = SupabaseNetworkModule.xpApi,
-    private val chatRepository: ChatRepository = ChatRepository()
+    private val chatRepository: ChatRepository = ChatRepository(),
+    private val clanRepository: ClanRepository = ClanRepository()
 ) {
 
     private suspend fun authHeader(): String {
@@ -74,11 +75,11 @@ class XpRepository(
     }
 
     /**
-     * Sama kayak [getLeaderboard], tapi digabung username/avatar dari
-     * chat_profiles DAN mencakup SEMUA user yang tercatat di chat_profiles --
-     * bukan cuma yang udah punya baris di user_xp. User yang belum pernah
-     * heartbeat XP (belum nonton lewat fitur ini) otomatis dianggap 0 XP /
-     * Level 1, bukan hilang dari daftar.
+     * Leaderboard HARIAN (reset tiap hari, lihat view `user_xp_daily_leaderboard`
+     * di SQL) -- digabung username/avatar dari chat_profiles DAN tag clan,
+     * mencakup SEMUA user yang tercatat di chat_profiles (bukan cuma yang
+     * udah punya baris di user_xp). User yang belum pernah nonton HARI INI
+     * otomatis 0 XP harian dan nangkring di bawah, bukan hilang dari daftar.
      *
      * Catatan: "semua user" di sini terbatas ke yang udah tercatat di
      * chat_profiles (kebentuk begitu user buka Profil/Chat minimal sekali) --
@@ -86,9 +87,11 @@ class XpRepository(
      * PostgREST (daftar user Firebase Auth sendiri gak bisa di-query dari
      * client), jadi ini proxy terbaik yang ada.
      */
-    suspend fun getLeaderboardDisplay(): Result<List<UserXpDisplay>> = runCatching {
+    suspend fun getDailyLeaderboardDisplay(): Result<List<UserXpDisplay>> = runCatching {
         val profiles = chatRepository.getAllProfiles()
-        val xpByUid = xpApi.getLeaderboard().associateBy { it.firebaseUid }
+        val xpByUid = xpApi.getDailyLeaderboard().associateBy { it.firebaseUid }
+        val clanTags = clanRepository.getClanTagsForUids(profiles.map { it.firebaseUid })
+            .getOrDefault(emptyMap())
 
         profiles.map { profile ->
             val xp = xpByUid[profile.firebaseUid]
@@ -96,9 +99,11 @@ class XpRepository(
                 firebaseUid = profile.firebaseUid,
                 totalXp = xp?.totalXp ?: 0L,
                 level = xp?.level ?: 1,
+                dailyXp = xp?.dailyXp ?: 0L,
                 username = profile.username.ifBlank { "Pengguna" },
-                avatarUrl = profile.avatarUrl
+                avatarUrl = profile.avatarUrl,
+                clanTag = clanTags[profile.firebaseUid]
             )
-        }.sortedByDescending { it.totalXp }
+        }.sortedByDescending { it.dailyXp }
     }
 }

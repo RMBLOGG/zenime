@@ -9,16 +9,19 @@ data class UserXp(
     @Json(name = "firebase_uid") val firebaseUid: String,
     @Json(name = "total_xp") val totalXp: Long = 0,
     @Json(name = "level") val level: Int = 1,
+    @Json(name = "daily_xp") val dailyXp: Long = 0,
     @Json(name = "updated_at") val updatedAt: String? = null
 )
 
-/** user_xp digabung sama chat_profiles (username/avatar) buat dirender di leaderboard. */
+/** user_xp digabung sama chat_profiles (username/avatar) + tag clan buat dirender di leaderboard harian. */
 data class UserXpDisplay(
     val firebaseUid: String,
     val totalXp: Long,
     val level: Int,
+    val dailyXp: Long,
     val username: String,
-    val avatarUrl: String?
+    val avatarUrl: String?,
+    val clanTag: String?
 )
 
 /** Body ke Edge Function watch-xp-heartbeat. firebase_uid TIDAK dikirim di sini

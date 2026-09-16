@@ -29,7 +29,7 @@ class XpLeaderboardViewModel(
     fun load() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            repository.getLeaderboardDisplay()
+            repository.getDailyLeaderboardDisplay()
                 .onSuccess { entries ->
                     _uiState.value = _uiState.value.copy(isLoading = false, entries = entries)
                 }

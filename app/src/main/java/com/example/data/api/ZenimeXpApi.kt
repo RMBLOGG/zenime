@@ -51,4 +51,12 @@ interface ZenimeXpApi {
         @Query("order") order: String = "total_xp.desc",
         @Query("limit") limit: Int = 100
     ): List<UserXp>
+
+    /** Leaderboard HARIAN -- baca dari view yang udah nge-handle reset harian di sisi server. */
+    @GET("rest/v1/user_xp_daily_leaderboard")
+    suspend fun getDailyLeaderboard(
+        @Query("select") select: String = "*",
+        @Query("order") order: String = "daily_xp.desc",
+        @Query("limit") limit: Int = 100
+    ): List<UserXp>
 }
