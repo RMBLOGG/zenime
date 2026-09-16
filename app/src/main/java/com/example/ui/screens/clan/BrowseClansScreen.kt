@@ -106,6 +106,12 @@ fun BrowseClansScreen(
                 uiState.error != null -> {
                     ErrorStateView(message = uiState.error!!, onRetry = viewModel::retry)
                 }
+                uiState.displayedClans.isEmpty() && uiState.mode == BrowseClanMode.MY_CLAN -> {
+                    EmptyStateView(
+                        title = "Belum Gabung Clan",
+                        description = "Kamu belum jadi member clan manapun. Cari atau bikin clan dulu, yuk!"
+                    )
+                }
                 uiState.displayedClans.isEmpty() -> {
                     EmptyStateView(
                         title = "Belum Ada Clan",
@@ -147,6 +153,9 @@ private fun ModeToggle(mode: BrowseClanMode, onModeChange: (BrowseClanMode) -> U
         }
         ModeChip(text = "Leaderboard", selected = mode == BrowseClanMode.LEADERBOARD, modifier = Modifier.weight(1f)) {
             onModeChange(BrowseClanMode.LEADERBOARD)
+        }
+        ModeChip(text = "Clan Saya", selected = mode == BrowseClanMode.MY_CLAN, modifier = Modifier.weight(1f)) {
+            onModeChange(BrowseClanMode.MY_CLAN)
         }
     }
 }

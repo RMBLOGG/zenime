@@ -4,22 +4,28 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.Clan
 import com.example.data.repository.ClanRepository
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-enum class BrowseClanMode { ALL, LEADERBOARD }
+enum class BrowseClanMode { ALL, LEADERBOARD, MY_CLAN }
 
 data class BrowseClansUiState(
     val isLoading: Boolean = true,
     val error: String? = null,
     val clans: List<Clan> = emptyList(),
     val mode: BrowseClanMode = BrowseClanMode.ALL,
-    val searchQuery: String = ""
+    val searchQuery: String = "",
+    /** Clan tempat user sekarang jadi member (null kalau belum gabung clan manapun). */
+    val myClanId: String? = null
 ) {
     val displayedClans: List<Clan>
         get() {
+            if (mode == BrowseClanMode.MY_CLAN) {
+                return clans.filter { it.id == myClanId }
+            }
             val filtered = if (mode == BrowseClanMode.ALL && searchQuery.isNotBlank()) {
                 clans.filter {
                     it.name.contains(searchQuery, ignoreCase = true) ||
@@ -60,7 +66,17 @@ class BrowseClansViewModel(
                         error = e.message ?: "Gagal ambil daftar clan"
                     )
                 }
+            loadMyMembership()
         }
+    }
+
+    /** Cek clan tempat user sekarang jadi member, buat tab "Clan Saya". Gagal diam-diam kalau belum login. */
+    private suspend fun loadMyMembership() {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        repository.getMyMembership(uid)
+            .onSuccess { member ->
+                _uiState.value = _uiState.value.copy(myClanId = member?.clanId)
+            }
     }
 
     fun onModeChange(mode: BrowseClanMode) {
