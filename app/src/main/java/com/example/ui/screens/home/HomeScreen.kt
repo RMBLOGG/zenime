@@ -59,6 +59,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -96,6 +97,7 @@ import com.example.ui.theme.StarYellow
 import com.example.ui.theme.ZenimeInfoBlue
 import com.example.ui.theme.ZenimePrimary
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -887,30 +889,41 @@ fun FullBleedHeroBannerCarousel(
 
         // Pager dots -- dipindah di bawah gambar (bukan numpuk di atas
         // gambar kayak versi lama) soalnya sekarang ada slide leaderboard
-        // yang gak punya judul buat naronya.
+        // yang gak punya judul buat naronya. Tombol switch anime/leaderboard
+        // nempel di ujung kanan baris yang sama.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.Start,
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            repeat(pageCount) { index ->
-                val isLeaderboardDot = showLeaderboard && index == pageCount - 1
-                Box(
-                    modifier = Modifier
-                        .padding(end = 6.dp)
-                        .height(6.dp)
-                        .width(if (index == pagerState.currentPage) 20.dp else 6.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(
-                            when {
-                                index == pagerState.currentPage && isLeaderboardDot -> StarYellow
-                                index == pagerState.currentPage -> ZenimePrimary
-                                isLeaderboardDot -> StarYellow.copy(alpha = 0.45f)
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-                            }
-                        )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                repeat(pageCount) { index ->
+                    val isLeaderboardDot = showLeaderboard && index == pageCount - 1
+                    Box(
+                        modifier = Modifier
+                            .padding(end = 6.dp)
+                            .height(6.dp)
+                            .width(if (index == pagerState.currentPage) 20.dp else 6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(
+                                when {
+                                    index == pagerState.currentPage && isLeaderboardDot -> StarYellow
+                                    index == pagerState.currentPage -> ZenimePrimary
+                                    isLeaderboardDot -> StarYellow.copy(alpha = 0.45f)
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                                }
+                            )
+                    )
+                }
+            }
+            if (showLeaderboard) {
+                val scope = rememberCoroutineScope()
+                HeroCarouselModeSwitch(
+                    isLeaderboard = pagerState.currentPage == pageCount - 1,
+                    onAnimeClick = { scope.launch { pagerState.animateScrollToPage(0) } },
+                    onLeaderboardClick = { scope.launch { pagerState.animateScrollToPage(pageCount - 1) } }
                 )
             }
         }
@@ -1130,24 +1143,35 @@ fun CrunchyrollHeroCarousel(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.Start
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            repeat(pageCount) { index ->
-                val isLeaderboardDot = showLeaderboard && index == pageCount - 1
-                Box(
-                    modifier = Modifier
-                        .padding(end = 5.dp)
-                        .height(5.dp)
-                        .width(if (index == pagerState.currentPage) 22.dp else 5.dp)
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(
-                            when {
-                                index == pagerState.currentPage && isLeaderboardDot -> StarYellow
-                                index == pagerState.currentPage -> ZenimePrimary
-                                isLeaderboardDot -> StarYellow.copy(alpha = 0.45f)
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
-                            }
-                        )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                repeat(pageCount) { index ->
+                    val isLeaderboardDot = showLeaderboard && index == pageCount - 1
+                    Box(
+                        modifier = Modifier
+                            .padding(end = 5.dp)
+                            .height(5.dp)
+                            .width(if (index == pagerState.currentPage) 22.dp else 5.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(
+                                when {
+                                    index == pagerState.currentPage && isLeaderboardDot -> StarYellow
+                                    index == pagerState.currentPage -> ZenimePrimary
+                                    isLeaderboardDot -> StarYellow.copy(alpha = 0.45f)
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
+                                }
+                            )
+                    )
+                }
+            }
+            if (showLeaderboard) {
+                val scope = rememberCoroutineScope()
+                HeroCarouselModeSwitch(
+                    isLeaderboard = pagerState.currentPage == pageCount - 1,
+                    onAnimeClick = { scope.launch { pagerState.animateScrollToPage(0) } },
+                    onLeaderboardClick = { scope.launch { pagerState.animateScrollToPage(pageCount - 1) } }
                 )
             }
         }
@@ -1275,26 +1299,40 @@ fun DayynimeHeroCarousel(
         Spacer(modifier = Modifier.height(10.dp))
 
         // Dot indicator BULAT KECIL -- bukan bar panjang, sesuai referensi asli.
+        // Tombol switch anime/leaderboard nempel di ujung kanan.
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.Center
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            repeat(pageCount) { index ->
-                val active = index == pagerState.currentPage
-                val isLeaderboardDot = showLeaderboard && index == pageCount - 1
-                Box(
-                    modifier = Modifier
-                        .padding(horizontal = 3.dp)
-                        .size(if (active) 8.dp else 6.dp)
-                        .clip(CircleShape)
-                        .background(
-                            when {
-                                active && isLeaderboardDot -> StarYellow
-                                active -> ZenimePrimary
-                                isLeaderboardDot -> StarYellow.copy(alpha = 0.4f)
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                            }
-                        )
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                repeat(pageCount) { index ->
+                    val active = index == pagerState.currentPage
+                    val isLeaderboardDot = showLeaderboard && index == pageCount - 1
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 3.dp)
+                            .size(if (active) 8.dp else 6.dp)
+                            .clip(CircleShape)
+                            .background(
+                                when {
+                                    active && isLeaderboardDot -> StarYellow
+                                    active -> ZenimePrimary
+                                    isLeaderboardDot -> StarYellow.copy(alpha = 0.4f)
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                                }
+                            )
+                    )
+                }
+            }
+            if (showLeaderboard) {
+                val scope = rememberCoroutineScope()
+                HeroCarouselModeSwitch(
+                    isLeaderboard = pagerState.currentPage == pageCount - 1,
+                    onAnimeClick = { scope.launch { pagerState.animateScrollToPage(0) } },
+                    onLeaderboardClick = { scope.launch { pagerState.animateScrollToPage(pageCount - 1) } }
                 )
             }
         }
@@ -1337,6 +1375,59 @@ private fun DayynimeMetaChip(icon: androidx.compose.ui.graphics.vector.ImageVect
  * kolom dipisah garis vertikal, avatar + rank + angka). Tap header kolom buat
  * ke halaman leaderboard lengkap, tap card kosong gak ngapa-ngapain.
  */
+/**
+ * Tombol switch kecil (pill 2 segmen) buat lompat langsung antara halaman
+ * anime & slide leaderboard di Hero Carousel, tanpa harus swipe manual.
+ */
+@Composable
+private fun HeroCarouselModeSwitch(
+    isLeaderboard: Boolean,
+    onAnimeClick: () -> Unit,
+    onLeaderboardClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color.Black.copy(alpha = 0.45f))
+            .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(50))
+            .padding(3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(if (!isLeaderboard) ZenimePrimary else Color.Transparent)
+                .clickable(enabled = isLeaderboard, onClick = onAnimeClick)
+                .padding(horizontal = 8.dp, vertical = 5.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Movie,
+                contentDescription = "Anime",
+                tint = Color.White,
+                modifier = Modifier.size(13.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(2.dp))
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(if (isLeaderboard) StarYellow else Color.Transparent)
+                .clickable(enabled = !isLeaderboard, onClick = onLeaderboardClick)
+                .padding(horizontal = 8.dp, vertical = 5.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.EmojiEvents,
+                contentDescription = "Leaderboard",
+                tint = if (isLeaderboard) Color(0xFF15213B) else Color.White,
+                modifier = Modifier.size(13.dp)
+            )
+        }
+    }
+}
+
 @Composable
 private fun HeroLeaderboardSlide(
     leaderboard: HeroLeaderboardUiState,
