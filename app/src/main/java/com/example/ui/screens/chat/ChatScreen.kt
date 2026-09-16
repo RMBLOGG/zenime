@@ -522,6 +522,41 @@ private fun ChatBubble(
                         )
                     }
                 }
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End,
+                    modifier = Modifier.padding(bottom = 2.dp, end = 4.dp)
+                ) {
+                    if (senderClanTag != null) {
+                        ClanRainbowBadge(
+                            text = senderClanTag,
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                    }
+                    if (senderLevel != null) {
+                        LevelBadge(
+                            level = senderLevel,
+                            modifier = Modifier.padding(end = 4.dp)
+                        )
+                    }
+                    if (isSenderPremium) {
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_premium_badge),
+                            contentDescription = "Premium",
+                            modifier = Modifier
+                                .padding(end = 3.dp)
+                                .size(20.dp)
+                        )
+                    }
+                    Text(
+                        text = message.username,
+                        color = ZenimePrimary,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
 
             Box(
