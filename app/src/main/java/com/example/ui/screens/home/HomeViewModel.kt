@@ -7,12 +7,16 @@ import com.example.data.common.Result
 import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.local.WatchHistoryEntity
 import com.example.data.model.BacakomikListItem
+import com.example.data.model.Clan
 import com.example.data.model.HomeResponse
+import com.example.data.model.UserXpDisplay
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.ChatRepository
+import com.example.data.repository.ClanRepository
 import com.example.data.repository.CoinRepository
 import com.example.data.repository.ComicRepository
 import com.example.data.repository.PremiumRepository
+import com.example.data.repository.XpRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -41,6 +45,8 @@ class HomeViewModel(
     private val chatRepository: ChatRepository = ChatRepository(),
     private val premiumRepository: PremiumRepository = PremiumRepository(),
     private val coinRepository: CoinRepository = CoinRepository(),
+    private val xpRepository: XpRepository = XpRepository(),
+    private val clanRepository: ClanRepository = ClanRepository(),
     private val firebaseUid: String? = null
 ) : ViewModel() {
 
@@ -85,10 +91,17 @@ class HomeViewModel(
     private val _profileState = MutableStateFlow(HomeProfileUiState())
     val profileState: StateFlow<HomeProfileUiState> = _profileState.asStateFlow()
 
+    // Data ringkas buat slide "Top Leaderboard" di dalem Hero Carousel --
+    // top 4 XP nonton & top 4 Clan, biar bisa di-swipe langsung dari hero
+    // tanpa user perlu ke Pengaturan atau buka halaman leaderboard dulu.
+    private val _heroLeaderboard = MutableStateFlow(HeroLeaderboardUiState())
+    val heroLeaderboard: StateFlow<HeroLeaderboardUiState> = _heroLeaderboard.asStateFlow()
+
     init {
         loadHome()
         loadComicLatest()
         loadProfileHeader()
+        loadHeroLeaderboard()
     }
 
     /**
@@ -163,7 +176,37 @@ class HomeViewModel(
             }
         }
     }
+
+    /** Narik top 4 XP & top 4 Clan buat slide leaderboard di Hero Carousel. */
+    private fun loadHeroLeaderboard() {
+        viewModelScope.launch {
+            val topXp = xpRepository.getLeaderboardDisplay()
+                .getOrNull()
+                ?.sortedByDescending { it.totalXp }
+                ?.take(4)
+                ?: emptyList()
+
+            val topClans = clanRepository.browseClans()
+                .getOrNull()
+                ?.sortedWith(compareByDescending<Clan> { it.level }.thenByDescending { it.totalXp })
+                ?.take(4)
+                ?: emptyList()
+
+            _heroLeaderboard.value = HeroLeaderboardUiState(
+                isLoading = false,
+                topXp = topXp,
+                topClans = topClans
+            )
+        }
+    }
 }
+
+/** State buat slide "Top Leaderboard" (Top XP + Top Clan) di Hero Carousel. */
+data class HeroLeaderboardUiState(
+    val isLoading: Boolean = true,
+    val topXp: List<UserXpDisplay> = emptyList(),
+    val topClans: List<Clan> = emptyList()
+)
 
 /** Sisa hari dari expires_at ISO string; null kalau formatnya gak valid. */
 private fun computeDaysLeft(expiresAtIso: String): Long? {

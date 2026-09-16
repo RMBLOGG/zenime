@@ -461,6 +461,9 @@ fun ZenimeAppNavHost(
                     },
                     onClanClick = {
                         navController.navigate(Screen.BrowseClans.route)
+                    },
+                    onXpLeaderboardClick = {
+                        navController.navigate(Screen.XpLeaderboard.route)
                     }
                 )
             }

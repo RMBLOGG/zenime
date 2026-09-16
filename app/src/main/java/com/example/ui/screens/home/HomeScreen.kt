@@ -28,9 +28,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Movie
@@ -54,7 +56,6 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -80,6 +81,8 @@ import com.example.data.local.DownloadStatus
 import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.model.AnimeItem
 import com.example.data.model.BacakomikListItem
+import com.example.data.model.Clan
+import com.example.data.model.UserXpDisplay
 import com.example.ui.components.AnimePosterCard
 import com.example.ui.components.ComicPosterCard
 import com.example.ui.components.ErrorStateView
@@ -111,6 +114,7 @@ fun HomeScreen(
     onCoinClick: () -> Unit = {},
     onDonationClick: () -> Unit = {},
     onClanClick: () -> Unit = {},
+    onXpLeaderboardClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val homeState by viewModel.homeState.collectAsStateWithLifecycle()
@@ -122,6 +126,7 @@ fun HomeScreen(
     val heroIntervalMs by viewModel.heroIntervalMs.collectAsStateWithLifecycle()
     val heroItemCount by viewModel.heroItemCount.collectAsStateWithLifecycle()
     val heroSource by viewModel.heroSource.collectAsStateWithLifecycle()
+    val heroLeaderboard by viewModel.heroLeaderboard.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
 
     Scaffold(
@@ -265,7 +270,10 @@ fun HomeScreen(
                                         style = heroStyle,
                                         autoplay = heroAutoplay,
                                         intervalMs = heroIntervalMs.toLong(),
-                                        onAnimeClick = onAnimeClick
+                                        onAnimeClick = onAnimeClick,
+                                        leaderboard = heroLeaderboard,
+                                        onXpLeaderboardClick = onXpLeaderboardClick,
+                                        onClanLeaderboardClick = onClanClick
                                     )
                                     Spacer(modifier = Modifier.height(16.dp))
                                 }
@@ -681,194 +689,227 @@ private fun formatCountLabel(raw: String?): String? {
     }
 }
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun FullBleedHeroBannerCarousel(
     bannerItems: List<AnimeItem>,
     onAnimeClick: (String) -> Unit,
     modifier: Modifier = Modifier,
     autoplay: Boolean = true,
-    intervalMs: Long = 4500L
+    intervalMs: Long = 4500L,
+    leaderboard: HeroLeaderboardUiState? = null,
+    onXpLeaderboardClick: () -> Unit = {},
+    onClanLeaderboardClick: () -> Unit = {}
 ) {
-    var currentIndex by remember { mutableIntStateOf(0) }
+    if (bannerItems.isEmpty()) return
 
-    LaunchedEffect(bannerItems, autoplay, intervalMs) {
-        if (autoplay && bannerItems.size > 1) {
+    // Slide leaderboard ditambahin sebagai page TERAKHIR di pager yang sama,
+    // jadi tinggal di-swipe dari banner biasa -- gak perlu ke Pengaturan.
+    val showLeaderboard = leaderboard != null && (leaderboard.topXp.isNotEmpty() || leaderboard.topClans.isNotEmpty())
+    val pageCount = bannerItems.size + if (showLeaderboard) 1 else 0
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { pageCount })
+
+    LaunchedEffect(pageCount, autoplay, intervalMs) {
+        if (autoplay && pageCount > 1) {
             while (true) {
                 delay(intervalMs)
-                currentIndex = (currentIndex + 1) % bannerItems.size
+                val next = (pagerState.currentPage + 1) % pageCount
+                pagerState.animateScrollToPage(next)
             }
         }
     }
 
-    if (bannerItems.isEmpty()) return
-
-    val currentAnime = bannerItems[currentIndex.coerceIn(0, bannerItems.lastIndex)]
     val heroShape = RoundedCornerShape(20.dp)
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp)
-            .height(290.dp)
-            .clip(heroShape)
-            .clickable { onAnimeClick(currentAnime.id) }
-    ) {
-        // Hero Image Cover Full Bleed
-        AsyncImage(
-            model = ImageRequest.Builder(LocalContext.current)
-                .data(currentAnime.image_cover ?: currentAnime.image_poster)
-                .crossfade(true)
-                .build(),
-            contentDescription = currentAnime.title ?: "Hero Banner",
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
-        )
-
-        // Gradient overlay vertically fading into #0B0E14
-        Box(
+    Column(modifier = modifier.fillMaxWidth()) {
+        androidx.compose.foundation.pager.HorizontalPager(
+            state = pagerState,
             modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color(0xFF0B0E14).copy(alpha = 0.3f),
-                            Color(0xFF0B0E14).copy(alpha = 0.85f),
-                            Color(0xFF0B0E14)
-                        )
-                    )
-                )
-        )
-
-        // Badge views (kiri atas), ala "24.5K views" di referensi.
-        formatCountLabel(currentAnime.views)?.let { viewsLabel ->
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = Color.Black.copy(alpha = 0.55f),
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(12.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .height(290.dp)
+        ) { page ->
+            if (page < bannerItems.size) {
+                val currentAnime = bannerItems[page]
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(heroShape)
+                        .clickable { onAnimeClick(currentAnime.id) }
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(12.dp)
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(currentAnime.image_cover ?: currentAnime.image_poster)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = currentAnime.title ?: "Hero Banner",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
                     )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "$viewsLabel views",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White
-                    )
-                }
-            }
-        }
 
-        // Badge ranking (#N), posisinya ngambang di atas judul ala referensi.
-        Surface(
-            shape = RoundedCornerShape(6.dp),
-            color = Color.Black.copy(alpha = 0.55f),
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(12.dp)
-        ) {
-            Text(
-                text = "#${currentIndex + 1}",
-                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                color = StarYellow,
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-            )
-        }
-
-        // Hero Info Overlay
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(horizontal = 20.dp, vertical = 16.dp)
-                .fillMaxWidth(0.72f)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = ZenimePrimary
-                ) {
-                    Text(
-                        text = "TRENDING 🔥",
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                    )
-                }
-                currentAnime.type?.let { type ->
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = type,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                        color = Color.White.copy(alpha = 0.85f)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = currentAnime.title ?: "Tanpa Judul",
-                style = MaterialTheme.typography.titleLarge.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 22.sp,
-                    lineHeight = 28.sp
-                ),
-                color = Color.White,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            // Pager dots
-            Spacer(modifier = Modifier.height(10.dp))
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                bannerItems.indices.forEach { index ->
                     Box(
                         modifier = Modifier
-                            .height(6.dp)
-                            .width(if (index == currentIndex) 20.dp else 6.dp)
-                            .clip(RoundedCornerShape(3.dp))
+                            .fillMaxSize()
                             .background(
-                                if (index == currentIndex) ZenimePrimary
-                                else Color.White.copy(alpha = 0.35f)
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color(0xFF0B0E14).copy(alpha = 0.3f),
+                                        Color(0xFF0B0E14).copy(alpha = 0.85f),
+                                        Color(0xFF0B0E14)
+                                    )
+                                )
                             )
                     )
+
+                    formatCountLabel(currentAnime.views)?.let { viewsLabel ->
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color.Black.copy(alpha = 0.55f),
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(12.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "$viewsLabel views",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.White
+                                )
+                            }
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color.Black.copy(alpha = 0.55f),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = "#${page + 1}",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = StarYellow,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(horizontal = 20.dp, vertical = 16.dp)
+                            .fillMaxWidth(0.72f)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = ZenimePrimary
+                            ) {
+                                Text(
+                                    text = "TRENDING \uD83D\uDD25",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
+                            }
+                            currentAnime.type?.let { type ->
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = type,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                                    color = Color.White.copy(alpha = 0.85f)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Text(
+                            text = currentAnime.title ?: "Tanpa Judul",
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 22.sp,
+                                lineHeight = 28.sp
+                            ),
+                            color = Color.White,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
+                    Surface(
+                        shape = CircleShape,
+                        color = ZenimePrimary,
+                        shadowElevation = 12.dp,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 20.dp, bottom = 16.dp)
+                            .size(56.dp)
+                            .clickable { onAnimeClick(currentAnime.id) }
+                    ) {
+                        Box(
+                            contentAlignment = Alignment.Center,
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "Mainkan Anime",
+                                tint = Color.White,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                    }
                 }
+            } else {
+                HeroLeaderboardSlide(
+                    leaderboard = leaderboard ?: HeroLeaderboardUiState(isLoading = false),
+                    shape = heroShape,
+                    modifier = Modifier.fillMaxSize(),
+                    onXpLeaderboardClick = onXpLeaderboardClick,
+                    onClanLeaderboardClick = onClanLeaderboardClick
+                )
             }
         }
 
-        // Large Floating Circular Crimson Play Button on bottom right
-        Surface(
-            shape = CircleShape,
-            color = ZenimePrimary,
-            shadowElevation = 12.dp,
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Pager dots -- dipindah di bawah gambar (bukan numpuk di atas
+        // gambar kayak versi lama) soalnya sekarang ada slide leaderboard
+        // yang gak punya judul buat naronya.
+        Row(
             modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 20.dp, bottom = 16.dp)
-                .size(56.dp)
-                .clickable { onAnimeClick(currentAnime.id) }
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.Start,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "Mainkan Anime",
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp)
+            repeat(pageCount) { index ->
+                val isLeaderboardDot = showLeaderboard && index == pageCount - 1
+                Box(
+                    modifier = Modifier
+                        .padding(end = 6.dp)
+                        .height(6.dp)
+                        .width(if (index == pagerState.currentPage) 20.dp else 6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(
+                            when {
+                                index == pagerState.currentPage && isLeaderboardDot -> StarYellow
+                                index == pagerState.currentPage -> ZenimePrimary
+                                isLeaderboardDot -> StarYellow.copy(alpha = 0.45f)
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                            }
+                        )
                 )
             }
         }
@@ -882,204 +923,231 @@ fun FullBleedHeroBannerCarousel(
  * atas transisi ke background solid di bawah (bukan gradient nutupin
  * gambar doang), teks & tombol duduk di area solid itu biar kebaca jelas.
  */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun CrunchyrollHeroCarousel(
     bannerItems: List<AnimeItem>,
     onAnimeClick: (String) -> Unit,
     modifier: Modifier = Modifier,
     autoplay: Boolean = true,
-    intervalMs: Long = 4500L
+    intervalMs: Long = 4500L,
+    leaderboard: HeroLeaderboardUiState? = null,
+    onXpLeaderboardClick: () -> Unit = {},
+    onClanLeaderboardClick: () -> Unit = {}
 ) {
     if (bannerItems.isEmpty()) return
 
-    var currentIndex by remember { mutableIntStateOf(0) }
+    val showLeaderboard = leaderboard != null && (leaderboard.topXp.isNotEmpty() || leaderboard.topClans.isNotEmpty())
+    val pageCount = bannerItems.size + if (showLeaderboard) 1 else 0
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { pageCount })
 
-    LaunchedEffect(bannerItems, autoplay, intervalMs) {
-        if (autoplay && bannerItems.size > 1) {
+    LaunchedEffect(pageCount, autoplay, intervalMs) {
+        if (autoplay && pageCount > 1) {
             while (true) {
                 delay(intervalMs)
-                currentIndex = (currentIndex + 1) % bannerItems.size
+                val next = (pagerState.currentPage + 1) % pageCount
+                pagerState.animateScrollToPage(next)
             }
         }
     }
-
-    val anime = bannerItems[currentIndex.coerceIn(0, bannerItems.lastIndex)]
-    var isBookmarked by remember(anime.id) { mutableStateOf(false) }
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        Box(
+        androidx.compose.foundation.pager.HorizontalPager(
+            state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(340.dp)
-                .clickable { onAnimeClick(anime.id) }
-        ) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(anime.image_cover ?: anime.image_poster)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = anime.title ?: "Hero Banner",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-            // Gradient nyambungin gambar ke background solid di bawah,
-            // bukan sekedar gelapin gambar -- biar transisinya mulus kayak
-            // referensi Crunchyroll.
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Transparent,
-                                MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
-                                MaterialTheme.colorScheme.background
-                            ),
-                            startY = 0f
-                        )
-                    )
-            )
-        }
+                .height(if (showLeaderboard && pagerState.currentPage == pageCount - 1) 300.dp else 450.dp)
+        ) { page ->
+            if (page < bannerItems.size) {
+                val anime = bannerItems[page]
+                var isBookmarked by remember(anime.id) { mutableStateOf(false) }
 
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-        ) {
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = anime.title ?: "Tanpa Judul",
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 22.sp
-                ),
-                color = MaterialTheme.colorScheme.onBackground,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Baris badge: status + tipe + genre pertama, dipisah titik --
-            // persis pola "12+ • Sulih Suara | Takarir • Romansa, Fantasi"
-            // di referensi, tapi pakai data yang beneran ada.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                anime.status?.let { status ->
-                    Surface(
-                        shape = RoundedCornerShape(5.dp),
-                        color = ZenimePrimary.copy(alpha = 0.16f)
-                    ) {
-                        Text(
-                            text = status,
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = ZenimePrimary,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
-                val metaLine = listOfNotNull(anime.type, anime.genre).joinToString(" • ")
-                if (metaLine.isNotEmpty()) {
-                    Text(
-                        text = metaLine,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            anime.synopsis?.let { synopsis ->
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = synopsis,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // CTA row: tombol pill besar "Mulai Menonton" + tombol bookmark
-            // bulat outline di sampingnya, sama kayak referensi.
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = ZenimePrimary,
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(52.dp)
-                        .clickable { onAnimeClick(anime.id) }
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Mulai Menonton",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = Color.White
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Surface(
-                    shape = CircleShape,
-                    color = Color.Transparent,
-                    border = BorderStroke(1.5.dp, ZenimePrimary),
-                    modifier = Modifier
-                        .size(52.dp)
-                        .clickable { isBookmarked = !isBookmarked }
-                ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Icon(
-                            imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                            contentDescription = "Simpan ke Daftar",
-                            tint = ZenimePrimary,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Start
-            ) {
-                bannerItems.indices.forEach { index ->
+                Column(modifier = Modifier.fillMaxSize()) {
                     Box(
                         modifier = Modifier
-                            .padding(end = 5.dp)
-                            .height(5.dp)
-                            .width(if (index == currentIndex) 22.dp else 5.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(
-                                if (index == currentIndex) ZenimePrimary
-                                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
+                            .fillMaxWidth()
+                            .height(340.dp)
+                            .clickable { onAnimeClick(anime.id) }
+                    ) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(anime.image_cover ?: anime.image_poster)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = anime.title ?: "Hero Banner",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        colors = listOf(
+                                            Color.Transparent,
+                                            Color.Transparent,
+                                            MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
+                                            MaterialTheme.colorScheme.background
+                                        ),
+                                        startY = 0f
+                                    )
+                                )
+                        )
+                    }
+
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp)
+                    ) {
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Text(
+                            text = anime.title ?: "Tanpa Judul",
+                            style = MaterialTheme.typography.headlineSmall.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 22.sp
+                            ),
+                            color = MaterialTheme.colorScheme.onBackground,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            anime.status?.let { status ->
+                                Surface(
+                                    shape = RoundedCornerShape(5.dp),
+                                    color = ZenimePrimary.copy(alpha = 0.16f)
+                                ) {
+                                    Text(
+                                        text = status,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = ZenimePrimary,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                            }
+                            val metaLine = listOfNotNull(anime.type, anime.genre).joinToString(" • ")
+                            if (metaLine.isNotEmpty()) {
+                                Text(
+                                    text = metaLine,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        anime.synopsis?.let { synopsis ->
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text(
+                                text = synopsis,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis
                             )
-                    )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = ZenimePrimary,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(52.dp)
+                                    .clickable { onAnimeClick(anime.id) }
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxSize(),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Mulai Menonton",
+                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = Color.White
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Surface(
+                                shape = CircleShape,
+                                color = Color.Transparent,
+                                border = BorderStroke(1.5.dp, ZenimePrimary),
+                                modifier = Modifier
+                                    .size(52.dp)
+                                    .clickable { isBookmarked = !isBookmarked }
+                            ) {
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                                    Icon(
+                                        imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                                        contentDescription = "Simpan ke Daftar",
+                                        tint = ZenimePrimary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
+            } else {
+                HeroLeaderboardSlide(
+                    leaderboard = leaderboard ?: HeroLeaderboardUiState(isLoading = false),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 20.dp, vertical = 6.dp),
+                    onXpLeaderboardClick = onXpLeaderboardClick,
+                    onClanLeaderboardClick = onClanLeaderboardClick
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.Start
+        ) {
+            repeat(pageCount) { index ->
+                val isLeaderboardDot = showLeaderboard && index == pageCount - 1
+                Box(
+                    modifier = Modifier
+                        .padding(end = 5.dp)
+                        .height(5.dp)
+                        .width(if (index == pagerState.currentPage) 22.dp else 5.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(
+                            when {
+                                index == pagerState.currentPage && isLeaderboardDot -> StarYellow
+                                index == pagerState.currentPage -> ZenimePrimary
+                                isLeaderboardDot -> StarYellow.copy(alpha = 0.45f)
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
+                            }
+                        )
+                )
             }
         }
     }
@@ -1097,17 +1165,22 @@ fun DayynimeHeroCarousel(
     onAnimeClick: (String) -> Unit,
     modifier: Modifier = Modifier,
     autoplay: Boolean = true,
-    intervalMs: Long = 4500L
+    intervalMs: Long = 4500L,
+    leaderboard: HeroLeaderboardUiState? = null,
+    onXpLeaderboardClick: () -> Unit = {},
+    onClanLeaderboardClick: () -> Unit = {}
 ) {
     if (bannerItems.isEmpty()) return
 
-    val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { bannerItems.size })
+    val showLeaderboard = leaderboard != null && (leaderboard.topXp.isNotEmpty() || leaderboard.topClans.isNotEmpty())
+    val pageCount = bannerItems.size + if (showLeaderboard) 1 else 0
+    val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { pageCount })
 
-    LaunchedEffect(bannerItems, autoplay, intervalMs) {
-        if (autoplay && bannerItems.size > 1) {
+    LaunchedEffect(pageCount, autoplay, intervalMs) {
+        if (autoplay && pageCount > 1) {
             while (true) {
                 delay(intervalMs)
-                val next = (pagerState.currentPage + 1) % bannerItems.size
+                val next = (pagerState.currentPage + 1) % pageCount
                 pagerState.animateScrollToPage(next)
             }
         }
@@ -1125,70 +1198,76 @@ fun DayynimeHeroCarousel(
                 .fillMaxWidth()
                 .height(230.dp)
         ) { page ->
-            val anime = bannerItems[page]
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(14.dp))
-                    .clickable { onAnimeClick(anime.id) }
-            ) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(anime.image_cover ?: anime.image_poster)
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = anime.title ?: "Hero Banner",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
+            if (page < bannerItems.size) {
+                val anime = bannerItems[page]
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.25f),
-                                    Color.Black.copy(alpha = 0.88f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable { onAnimeClick(anime.id) }
+                ) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(anime.image_cover ?: anime.image_poster)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = anime.title ?: "Hero Banner",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colors = listOf(
+                                        Color.Transparent,
+                                        Color.Black.copy(alpha = 0.25f),
+                                        Color.Black.copy(alpha = 0.88f)
+                                    )
                                 )
                             )
-                        )
-                )
-
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(14.dp)
-                ) {
-                    Text(
-                        text = anime.title ?: "Tanpa Judul",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 17.sp
-                        ),
-                        color = Color.White,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
                     )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(14.dp)
+                    ) {
+                        Text(
+                            text = anime.title ?: "Tanpa Judul",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 17.sp
+                            ),
+                            color = Color.White,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
 
-                    // Baris chip meta info (ikon + teks) -- persis pola
-                    // "Episode X Episodes | 24 min | TV" di referensi, tapi
-                    // pakai field yang emang tersedia dari API (type, time,
-                    // status) daripada ngarang angka episode.
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        anime.type?.let { type ->
-                            DayynimeMetaChip(icon = Icons.Default.Tv, text = type)
-                        }
-                        anime.time?.let { time ->
-                            DayynimeMetaChip(icon = Icons.Default.Schedule, text = time)
-                        }
-                        anime.status?.let { status ->
-                            DayynimeMetaChip(icon = Icons.Default.FiberManualRecord, text = status)
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            anime.type?.let { type ->
+                                DayynimeMetaChip(icon = Icons.Default.Tv, text = type)
+                            }
+                            anime.time?.let { time ->
+                                DayynimeMetaChip(icon = Icons.Default.Schedule, text = time)
+                            }
+                            anime.status?.let { status ->
+                                DayynimeMetaChip(icon = Icons.Default.FiberManualRecord, text = status)
+                            }
                         }
                     }
                 }
+            } else {
+                HeroLeaderboardSlide(
+                    leaderboard = leaderboard ?: HeroLeaderboardUiState(isLoading = false),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    onXpLeaderboardClick = onXpLeaderboardClick,
+                    onClanLeaderboardClick = onClanLeaderboardClick
+                )
             }
         }
 
@@ -1199,16 +1278,21 @@ fun DayynimeHeroCarousel(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             horizontalArrangement = Arrangement.Center
         ) {
-            bannerItems.indices.forEach { index ->
+            repeat(pageCount) { index ->
                 val active = index == pagerState.currentPage
+                val isLeaderboardDot = showLeaderboard && index == pageCount - 1
                 Box(
                     modifier = Modifier
                         .padding(horizontal = 3.dp)
                         .size(if (active) 8.dp else 6.dp)
                         .clip(CircleShape)
                         .background(
-                            if (active) ZenimePrimary
-                            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                            when {
+                                active && isLeaderboardDot -> StarYellow
+                                active -> ZenimePrimary
+                                isLeaderboardDot -> StarYellow.copy(alpha = 0.4f)
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                            }
                         )
                 )
             }
@@ -1247,9 +1331,257 @@ private fun DayynimeMetaChip(icon: androidx.compose.ui.graphics.vector.ImageVect
 }
 
 /**
+ * Slide "TOP LEADERBOARD" yang nempel jadi page terakhir di Hero Carousel --
+ * dua kolom: TOP XP (nonton) & TOP CLAN, nyontek layout referensi (card navy,
+ * kolom dipisah garis vertikal, avatar + rank + angka). Tap header kolom buat
+ * ke halaman leaderboard lengkap, tap card kosong gak ngapa-ngapain.
+ */
+@Composable
+private fun HeroLeaderboardSlide(
+    leaderboard: HeroLeaderboardUiState,
+    shape: androidx.compose.ui.graphics.Shape,
+    modifier: Modifier = Modifier,
+    onXpLeaderboardClick: () -> Unit = {},
+    onClanLeaderboardClick: () -> Unit = {}
+) {
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0xFF15213B), Color(0xFF0C1526))
+                )
+            )
+            .border(width = 1.dp, color = Color.White.copy(alpha = 0.08f), shape = shape)
+    ) {
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.EmojiEvents,
+                    contentDescription = null,
+                    tint = StarYellow,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "TOP LEADERBOARD",
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.6.sp
+                    ),
+                    color = StarYellow
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            if (leaderboard.isLoading) {
+                Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = "Memuat leaderboard...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.5f)
+                    )
+                }
+            } else {
+                Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    // Kolom kiri: TOP XP
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable(onClick = onXpLeaderboardClick)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Bolt,
+                                contentDescription = null,
+                                tint = ZenimeInfoBlue,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "TOP XP",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = ZenimeInfoBlue
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        if (leaderboard.topXp.isEmpty()) {
+                            Text(
+                                text = "Belum ada data",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White.copy(alpha = 0.4f)
+                            )
+                        } else {
+                            leaderboard.topXp.take(4).forEachIndexed { index, entry ->
+                                HeroLeaderboardXpRow(rank = index + 1, entry = entry)
+                                if (index != leaderboard.topXp.lastIndex) {
+                                    Spacer(modifier = Modifier.height(7.dp))
+                                }
+                            }
+                        }
+                    }
+
+                    // Garis pemisah vertikal antar kolom, persis referensi.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(1.dp)
+                            .padding(vertical = 2.dp)
+                            .background(Color.White.copy(alpha = 0.1f))
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    // Kolom kanan: TOP CLAN
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable(onClick = onClanLeaderboardClick)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Shield,
+                                contentDescription = null,
+                                tint = Color(0xFFAF52DE),
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = "TOP CLAN",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = Color(0xFFAF52DE)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        if (leaderboard.topClans.isEmpty()) {
+                            Text(
+                                text = "Belum ada data",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White.copy(alpha = 0.4f)
+                            )
+                        } else {
+                            leaderboard.topClans.take(4).forEachIndexed { index, clan ->
+                                HeroLeaderboardClanRow(rank = index + 1, clan = clan)
+                                if (index != leaderboard.topClans.lastIndex) {
+                                    Spacer(modifier = Modifier.height(7.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Satu baris kolom TOP XP: rank bulat, avatar generated, username, total XP. */
+@Composable
+private fun HeroLeaderboardXpRow(rank: Int, entry: UserXpDisplay) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        HeroLeaderboardRankBadge(rank = rank)
+        Spacer(modifier = Modifier.width(5.dp))
+        if (!entry.avatarUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(entry.avatarUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(18.dp)
+                    .clip(CircleShape)
+            )
+        } else {
+            GeneratedAvatar(seed = entry.firebaseUid, label = entry.username, size = 18.dp)
+        }
+        Spacer(modifier = Modifier.width(5.dp))
+        Text(
+            text = entry.username,
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White.copy(alpha = 0.9f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = formatCountLabel(entry.totalXp.toString()) ?: entry.totalXp.toString(),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+            color = StarYellow,
+            maxLines = 1
+        )
+    }
+}
+
+/** Satu baris kolom TOP CLAN: rank bulat, foto/inisial clan, tag, level. */
+@Composable
+private fun HeroLeaderboardClanRow(rank: Int, clan: Clan) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        HeroLeaderboardRankBadge(rank = rank)
+        Spacer(modifier = Modifier.width(5.dp))
+        if (clan.photoUrl != null) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(clan.photoUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .size(18.dp)
+                    .clip(CircleShape)
+            )
+        } else {
+            GeneratedAvatar(seed = clan.id, label = clan.tag, size = 18.dp)
+        }
+        Spacer(modifier = Modifier.width(5.dp))
+        Text(
+            text = clan.tag,
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White.copy(alpha = 0.9f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = "Lv${clan.level}",
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+            color = StarYellow,
+            maxLines = 1
+        )
+    }
+}
+
+/** Bulatan angka rank (1-4) buat baris leaderboard di Hero Carousel. */
+@Composable
+private fun HeroLeaderboardRankBadge(rank: Int) {
+    val bg = when (rank) {
+        1 -> Color(0xFFFFD54A)
+        2 -> Color(0xFFC7CDD8)
+        3 -> Color(0xFFCE8946)
+        else -> Color.White.copy(alpha = 0.12f)
+    }
+    val fg = if (rank <= 3) Color(0xFF15213B) else Color.White.copy(alpha = 0.7f)
+    Box(
+        modifier = Modifier
+            .size(14.dp)
+            .clip(CircleShape)
+            .background(bg),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = rank.toString(),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, fontSize = 8.sp),
+            color = fg
+        )
+    }
+}
+
+/**
  * Switcher gaya Hero Carousel -- baca preferensi "Gaya Tampilan" dari
  * Pengaturan (FULL_BLEED / CRUNCHYROLL / DAYYNIME) dan render composable
- * yang sesuai. Satu titik masuk, dipanggil dari HomeScreen.
+ * yang sesuai. Satu titik masuk, dipanggil dari HomeScreen. Slide
+ * "Top Leaderboard" (Top XP + Top Clan) nempel di page terakhir di
+ * ketiga gaya, jadi bisa langsung di-swipe dari hero -- gak harus ke
+ * Pengaturan atau buka halaman leaderboard dulu.
  */
 @Composable
 fun HeroBannerCarousel(
@@ -1258,7 +1590,10 @@ fun HeroBannerCarousel(
     autoplay: Boolean,
     intervalMs: Long,
     onAnimeClick: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    leaderboard: HeroLeaderboardUiState? = null,
+    onXpLeaderboardClick: () -> Unit = {},
+    onClanLeaderboardClick: () -> Unit = {}
 ) {
     when (style) {
         "CRUNCHYROLL" -> CrunchyrollHeroCarousel(
@@ -1266,24 +1601,34 @@ fun HeroBannerCarousel(
             onAnimeClick = onAnimeClick,
             modifier = modifier,
             autoplay = autoplay,
-            intervalMs = intervalMs
+            intervalMs = intervalMs,
+            leaderboard = leaderboard,
+            onXpLeaderboardClick = onXpLeaderboardClick,
+            onClanLeaderboardClick = onClanLeaderboardClick
         )
         "DAYYNIME" -> DayynimeHeroCarousel(
             bannerItems = bannerItems,
             onAnimeClick = onAnimeClick,
             modifier = modifier,
             autoplay = autoplay,
-            intervalMs = intervalMs
+            intervalMs = intervalMs,
+            leaderboard = leaderboard,
+            onXpLeaderboardClick = onXpLeaderboardClick,
+            onClanLeaderboardClick = onClanLeaderboardClick
         )
         else -> FullBleedHeroBannerCarousel(
             bannerItems = bannerItems,
             onAnimeClick = onAnimeClick,
             modifier = modifier,
             autoplay = autoplay,
-            intervalMs = intervalMs
+            intervalMs = intervalMs,
+            leaderboard = leaderboard,
+            onXpLeaderboardClick = onXpLeaderboardClick,
+            onClanLeaderboardClick = onClanLeaderboardClick
         )
     }
 }
+
 
 @Composable
 fun AnimeHorizontalSection(
