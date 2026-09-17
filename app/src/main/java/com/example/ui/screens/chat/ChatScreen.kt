@@ -49,7 +49,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Stop
@@ -179,7 +179,7 @@ fun ChatScreen(
                 actions = {
                     IconButton(onClick = { viewModel.openProfileDialog() }) {
                         Icon(
-                            imageVector = Icons.Filled.Person,
+                            imageVector = Icons.Filled.Settings,
                             contentDescription = "Edit Profil",
                             tint = Color.White
                         )
@@ -943,7 +943,16 @@ private val UsernameColorPresets = listOf(
     "#14B8A6", // teal
     "#EAB308", // kuning
     "#6366F1", // indigo
-    "#FFFFFF"  // putih
+    "#FFFFFF", // putih
+    // --- versi muda/pastel ---
+    "#FCA5A5", // merah muda
+    "#93C5FD", // biru muda
+    "#86EFAC", // hijau muda
+    "#FCD34D", // kuning muda
+    "#D8B4FE", // ungu muda
+    "#F9A8D4", // pink muda
+    "#5EEAD4", // teal muda
+    "#FDBA74"  // oranye muda
 )
 
 @Composable
