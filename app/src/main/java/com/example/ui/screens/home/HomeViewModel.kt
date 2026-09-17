@@ -36,7 +36,8 @@ data class HomeProfileUiState(
     val zenimeCode: String? = null,
     val isPremium: Boolean = false,
     val premiumDaysLeft: Long? = null,
-    val coinBalance: Long = 0L
+    val coinBalance: Long = 0L,
+    val level: Int = 1
 )
 
 class HomeViewModel(
@@ -128,15 +129,19 @@ class HomeViewModel(
 
             val codeResult = premiumRepository.getZenimeCode(uid)
             val balanceResult = coinRepository.getBalance(uid)
+            val myXp = xpRepository.getMyXp(uid).getOrNull()
 
             _profileState.value = _profileState.value.copy(
                 isLoading = false,
                 username = chatProfile?.username?.ifBlank { "Pengguna Zenime" } ?: "Pengguna Zenime",
-                avatarUrl = if (premiumStatus?.isPremium == true) chatProfile?.avatarUrl else null,
+                // Foto profil sekarang bebas buat semua user (bukan lagi benefit
+                // Premium) -- selalu dipasang kalau ada, sama kayak di ChatViewModel.
+                avatarUrl = chatProfile?.avatarUrl,
                 zenimeCode = codeResult.getOrNull(),
                 isPremium = premiumStatus?.isPremium ?: false,
                 premiumDaysLeft = daysLeft,
-                coinBalance = balanceResult.getOrNull() ?: 0L
+                coinBalance = balanceResult.getOrNull() ?: 0L,
+                level = myXp?.level ?: 1
             )
         }
     }

@@ -51,6 +51,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import com.example.R
@@ -354,12 +355,13 @@ private fun ChatBubble(
                         modifier = Modifier.weight(weight = 1f, fill = false)
                     )
                     if (isSenderPremium) {
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_premium_badge),
+                        Icon(
+                            imageVector = Icons.Filled.Verified,
                             contentDescription = "Premium",
+                            tint = Color(0xFF3897F0),
                             modifier = Modifier
                                 .padding(start = 3.dp)
-                                .size(20.dp)
+                                .size(16.dp)
                         )
                     }
                     if (senderLevel != null) {
@@ -394,12 +396,13 @@ private fun ChatBubble(
                         )
                     }
                     if (isSenderPremium) {
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_premium_badge),
+                        Icon(
+                            imageVector = Icons.Filled.Verified,
                             contentDescription = "Premium",
+                            tint = Color(0xFF3897F0),
                             modifier = Modifier
                                 .padding(end = 3.dp)
-                                .size(20.dp)
+                                .size(16.dp)
                         )
                     }
                     Text(

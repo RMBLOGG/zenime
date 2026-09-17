@@ -65,6 +65,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -90,6 +91,7 @@ import com.example.ui.components.AnimePosterCard
 import com.example.ui.components.ComicPosterCard
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.GeneratedAvatar
+import com.example.ui.components.LevelBadge
 import com.example.ui.components.SectionHeader
 import com.example.ui.components.ShimmerBanner
 import com.example.ui.components.ShimmerHorizontalSection
@@ -543,136 +545,203 @@ private fun HomeProfileHeader(
     onSearchClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    HomeSectionCard(modifier = modifier) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
+    val cardShape = RoundedCornerShape(22.dp)
+    Surface(
+        shape = cardShape,
+        color = Color.Transparent,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .shadow(elevation = 10.dp, shape = cardShape, ambientColor = ZenimePrimary.copy(alpha = 0.25f))
+    ) {
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onProfileClick)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                if (!state.avatarUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(state.avatarUrl)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = state.username,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize().clip(CircleShape)
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.surface,
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.92f)
+                        )
                     )
-                } else {
-                    GeneratedAvatar(
-                        seed = state.zenimeCode ?: state.username,
-                        label = state.username,
-                        size = 48.dp
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = state.username.ifBlank { "Pengguna Zenime" },
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
                 )
-                if (!state.zenimeCode.isNullOrBlank()) {
-                    Text(
-                        text = "#${state.zenimeCode}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            IconButton(onClick = onSearchClick, modifier = Modifier.size(38.dp)) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = "Cari Anime",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(14.dp))
-        HorizontalDivider(color = CardOutlineBorder.copy(alpha = 0.5f))
-        Spacer(modifier = Modifier.height(14.dp))
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxWidth()
+                .border(1.dp, ZenimePrimary.copy(alpha = 0.18f), cardShape)
+                .padding(16.dp)
         ) {
-            // Chip status Premium -- gantiin "Lvl. 1" di referensi, isinya
-            // sisa hari aktif kalau lagi Premium, atau ajakan aktivasi kalau belum.
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = if (state.isPremium) ZenimePrimary.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
-                    .weight(1f)
-                    .clickable(onClick = onPremiumClick)
+                    .fillMaxWidth()
+                    .clickable(onClick = onProfileClick)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .border(
+                            width = 2.dp,
+                            brush = Brush.sweepGradient(
+                                listOf(ZenimePrimary, StarYellow, ZenimePrimary)
+                            ),
+                            shape = CircleShape
+                        )
+                        .padding(2.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.WorkspacePremium,
-                        contentDescription = null,
-                        tint = if (state.isPremium) ZenimePrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = when {
-                            state.isPremium && state.premiumDaysLeft != null -> "Sisa ${state.premiumDaysLeft} hari"
-                            state.isPremium -> "Premium aktif"
-                            else -> "Aktifkan Premium"
-                        },
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = if (state.isPremium) ZenimePrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    if (!state.avatarUrl.isNullOrBlank()) {
+                        AsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current)
+                                .data(state.avatarUrl)
+                                .crossfade(true)
+                                .build(),
+                            contentDescription = state.username,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize().clip(CircleShape)
+                        )
+                    } else {
+                        GeneratedAvatar(
+                            seed = state.zenimeCode ?: state.username,
+                            label = state.username,
+                            size = 48.dp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = state.username.ifBlank { "Pengguna Zenime" },
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                        if (!state.zenimeCode.isNullOrBlank()) {
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "#${state.zenimeCode}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(5.dp))
+                    LevelBadge(level = state.level)
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    IconButton(onClick = onSearchClick, modifier = Modifier.size(38.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Cari Anime",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
 
-            // Chip saldo ZCoin -- gantiin tombol "AniGames" di referensi.
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.clickable(onClick = onCoinClick)
+            Spacer(modifier = Modifier.height(14.dp))
+            HorizontalDivider(color = CardOutlineBorder.copy(alpha = 0.5f))
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                // Chip status Premium -- gantiin "Lvl. 1" di referensi, isinya
+                // sisa hari aktif kalau lagi Premium, atau ajakan aktivasi kalau belum.
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = if (state.isPremium) ZenimePrimary.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(onClick = onPremiumClick)
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_zcoin_badge),
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = formatZCoinBalance(state.coinBalance),
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.width(2.dp))
-                    Text(
-                        text = "ZCoin",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (state.isPremium) ZenimePrimary.copy(alpha = 0.22f)
+                                    else Color.White.copy(alpha = 0.08f)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.WorkspacePremium,
+                                contentDescription = null,
+                                tint = if (state.isPremium) ZenimePrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = when {
+                                state.isPremium && state.premiumDaysLeft != null -> "Sisa ${state.premiumDaysLeft} hari"
+                                state.isPremium -> "Premium aktif"
+                                else -> "Aktifkan Premium"
+                            },
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = if (state.isPremium) ZenimePrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                // Chip saldo ZCoin -- gantiin tombol "AniGames" di referensi.
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    modifier = Modifier.clickable(onClick = onCoinClick)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clip(CircleShape)
+                                .background(StarYellow.copy(alpha = 0.18f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_zcoin_badge),
+                                contentDescription = null,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = formatZCoinBalance(state.coinBalance),
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text(
+                            text = "ZCoin",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
