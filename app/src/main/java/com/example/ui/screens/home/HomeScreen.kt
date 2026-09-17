@@ -690,7 +690,7 @@ private fun HomeProfileHeader(
                                 else -> "Aktifkan Premium"
                             },
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = if (state.isPremium) ZenimePrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (state.isPremium) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
