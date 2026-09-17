@@ -127,16 +127,33 @@ class ChatRepository(
         firebaseUid: String,
         username: String,
         avatarUrl: String?,
-        bannerUrl: String? = null
+        bannerUrl: String? = null,
+        usernameColor: String? = null
     ): ChatProfile {
         val result = api.upsertChatProfile(
             body = ChatProfileUpsert(
                 firebaseUid = firebaseUid,
                 username = username,
                 avatarUrl = avatarUrl,
-                bannerUrl = bannerUrl
+                bannerUrl = bannerUrl,
+                usernameColor = usernameColor
             )
         )
         return result.first()
+    }
+
+    /**
+     * Warna username custom (hex) buat sekumpulan uid sekaligus -- dipake
+     * nge-render warna nama di bubble Chat Global (pola sama kayak
+     * [ClanRepository.getClanTagsForUids]/[XpRepository.getLevelsForUids]).
+     */
+    suspend fun getUsernameColorsForUids(uids: List<String>): Map<String, String> {
+        val distinctUids = uids.filter { it.isNotBlank() }.distinct()
+        if (distinctUids.isEmpty()) return emptyMap()
+
+        val filter = "in.(${distinctUids.joinToString(",")})"
+        return api.getChatProfilesByUids(firebaseUidIn = filter)
+            .mapNotNull { profile -> profile.usernameColor?.let { color -> profile.firebaseUid to color } }
+            .toMap()
     }
 }

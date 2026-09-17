@@ -25,6 +25,10 @@ data class ProfileUiState(
     val username: String = "",
     val avatarUrl: String? = null,
     val bannerUrl: String? = null,
+    // Warna custom username (hex) -- disimpen di sini juga biar saveUsername/
+    // uploadAvatar/uploadBanner dari halaman Profil ini gak nge-null-in warna
+    // yang udah di-set user lewat dialog "Edit Profil" di Chat Global.
+    val usernameColor: String? = null,
     val isPremium: Boolean = false,
     val favorites: List<FavoriteEntity> = emptyList(),
     val history: List<WatchHistoryEntity> = emptyList(),
@@ -92,6 +96,7 @@ class ProfileViewModel(
                 username = profile?.username?.ifBlank { fallbackUsername } ?: fallbackUsername,
                 avatarUrl = resolvedAvatarUrl,
                 bannerUrl = resolvedBannerUrl,
+                usernameColor = profile?.usernameColor,
                 isPremium = isPremium
             )
         }
@@ -127,7 +132,8 @@ class ProfileViewModel(
                     firebaseUid = firebaseUid,
                     username = trimmed,
                     avatarUrl = _uiState.value.avatarUrl,
-                    bannerUrl = _uiState.value.bannerUrl
+                    bannerUrl = _uiState.value.bannerUrl,
+                    usernameColor = _uiState.value.usernameColor
                 )
                 _uiState.value = _uiState.value.copy(
                     isSavingUsername = false,
@@ -152,7 +158,8 @@ class ProfileViewModel(
                     firebaseUid = firebaseUid,
                     username = _uiState.value.username,
                     avatarUrl = url,
-                    bannerUrl = _uiState.value.bannerUrl
+                    bannerUrl = _uiState.value.bannerUrl,
+                    usernameColor = _uiState.value.usernameColor
                 )
                 _uiState.value = _uiState.value.copy(
                     isUploadingAvatar = false,
@@ -182,7 +189,8 @@ class ProfileViewModel(
                     firebaseUid = firebaseUid,
                     username = _uiState.value.username,
                     avatarUrl = _uiState.value.avatarUrl,
-                    bannerUrl = url
+                    bannerUrl = url,
+                    usernameColor = _uiState.value.usernameColor
                 )
                 _uiState.value = _uiState.value.copy(
                     isUploadingBanner = false,

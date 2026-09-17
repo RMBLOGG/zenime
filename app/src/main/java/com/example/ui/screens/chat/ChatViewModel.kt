@@ -43,6 +43,9 @@ data class ChatUiState(
     // Profil (nama & avatar) yang lagi dipakai buat kirim pesan.
     val displayUsername: String = "",
     val displayAvatarUrl: String? = null,
+    // Warna custom username sendiri (hex) -- null = pakai warna default
+    // (ZenimePrimary). Dipilih lewat dialog "Edit Profil".
+    val displayUsernameColor: String? = null,
     // Banner profil (buat ProfileScreen) -- disimpen di sini juga biar tiap
     // saveProfile() dari dialog Chat gak nge-null-in banner yang udah diupload
     // lewat ProfileScreen. Gak dipakai buat tampilan di dalam Chat sendiri.
@@ -74,6 +77,12 @@ data class ChatUiState(
     // keisi buat pengirim yang udah pernah dapet XP (punya baris di
     // user_xp); yang belum pernah nonton gak dikasih badge sama sekali.
     val xpLevelsByUid: Map<String, Int> = emptyMap(),
+
+    // Warna custom username per firebase_uid pengirim (uid -> "#FF5733") --
+    // dipakai buat ngewarnain nama pengirim di bubble chat. Uid yang gak
+    // ada di map ini (belum pernah set warna) bakal jatuh ke warna default
+    // (ZenimePrimary) pas dirender.
+    val usernameColorsByUid: Map<String, String> = emptyMap(),
 
     // --- Pesan Suara (VN) -- kirim khusus Premium, dengerin/play terbuka
     // buat semua user (lihat catatan di ChatRepository.sendVoiceMessage).
@@ -142,6 +151,10 @@ class ChatViewModel(
     private val xpLevelCache = mutableMapOf<String, Int?>()
     private val xpCheckedUids = mutableSetOf<String>()
 
+    // Sama pola kayak cache clan/xp di atas, tapi buat warna username custom.
+    private val usernameColorCache = mutableMapOf<String, String?>()
+    private val usernameColorCheckedUids = mutableSetOf<String>()
+
     init {
         loadProfileAndPremiumStatus(fallbackUsername)
         // Full load sekali di awal (isi riwayat pesan), abis itu pesan baru
@@ -172,12 +185,20 @@ class ChatViewModel(
             checkedUids += firebaseUid
             premiumStatusCache[firebaseUid] = isPremium
 
+            // Sama juga buat warna username sendiri -- langsung di-seed ke
+            // cache/uiState biar bubble sendiri langsung kepake warnanya
+            // tanpa nunggu round-trip checkUsernameColorsForNewSenders().
+            usernameColorCheckedUids += firebaseUid
+            usernameColorCache[firebaseUid] = profile?.usernameColor
+
             _uiState.value = _uiState.value.copy(
                 displayUsername = profile?.username?.ifBlank { fallbackUsername } ?: fallbackUsername,
                 displayAvatarUrl = resolvedAvatarUrl,
                 displayBannerUrl = profile?.bannerUrl,
+                displayUsernameColor = profile?.usernameColor,
                 isPremium = isPremium,
-                premiumUids = premiumUidsSnapshot()
+                premiumUids = premiumUidsSnapshot(),
+                usernameColorsByUid = usernameColorCache.filterValues { it != null }.mapValues { it.value!! }
             )
         }
     }
@@ -256,6 +277,29 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * Cek warna username custom buat pengirim-pengirim baru yang muncul di
+     * daftar pesan (pola persis sama kayak [checkClanTagsForNewSenders],
+     * cuma buat warna nama). Fetch dilakuin batch sekali jalan.
+     */
+    private fun checkUsernameColorsForNewSenders(messages: List<ChatMessage>) {
+        val newUids = messages
+            .map { it.firebaseUid }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .filterNot { usernameColorCheckedUids.contains(it) }
+        if (newUids.isEmpty()) return
+
+        usernameColorCheckedUids += newUids
+        viewModelScope.launch {
+            val colors = runCatching { repository.getUsernameColorsForUids(newUids) }.getOrDefault(emptyMap())
+            newUids.forEach { uid -> usernameColorCache[uid] = colors[uid] }
+            _uiState.value = _uiState.value.copy(
+                usernameColorsByUid = usernameColorCache.filterValues { it != null }.mapValues { it.value!! }
+            )
+        }
+    }
+
     /** Subscribe ke Supabase Realtime -- gantiin polling PostgREST tiap 3 detik. */
     private fun startRealtime() {
         realtimeJob?.cancel()
@@ -274,6 +318,7 @@ class ChatViewModel(
                 checkPremiumForNewSenders(listOf(event.message))
                 checkClanTagsForNewSenders(listOf(event.message))
                 checkXpLevelsForNewSenders(listOf(event.message))
+                checkUsernameColorsForNewSenders(listOf(event.message))
             }
             is ChatRealtimeEvent.Deleted -> {
                 _uiState.value = _uiState.value.copy(
@@ -309,6 +354,7 @@ class ChatViewModel(
             checkPremiumForNewSenders(messages)
             checkClanTagsForNewSenders(messages)
             checkXpLevelsForNewSenders(messages)
+            checkUsernameColorsForNewSenders(messages)
         } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
@@ -371,8 +417,8 @@ class ChatViewModel(
         _uiState.value = _uiState.value.copy(isProfileDialogOpen = false, profileError = null)
     }
 
-    /** Simpan username baru (dibuka semua user, gak peduli premium). */
-    fun saveUsername(newUsername: String) {
+    /** Simpan username baru & warna username (dibuka semua user, gak peduli premium). */
+    fun saveUsername(newUsername: String, usernameColor: String?) {
         val trimmed = newUsername.trim().take(MAX_USERNAME_LENGTH)
         if (trimmed.isEmpty()) {
             _uiState.value = _uiState.value.copy(profileError = "Username gak boleh kosong")
@@ -386,12 +432,16 @@ class ChatViewModel(
                     firebaseUid = firebaseUid,
                     username = trimmed,
                     avatarUrl = _uiState.value.displayAvatarUrl,
-                    bannerUrl = _uiState.value.displayBannerUrl
+                    bannerUrl = _uiState.value.displayBannerUrl,
+                    usernameColor = usernameColor
                 )
+                usernameColorCache[firebaseUid] = saved.usernameColor
                 _uiState.value = _uiState.value.copy(
                     isSavingProfile = false,
                     displayUsername = saved.username,
-                    isProfileDialogOpen = false
+                    displayUsernameColor = saved.usernameColor,
+                    isProfileDialogOpen = false,
+                    usernameColorsByUid = usernameColorCache.filterValues { it != null }.mapValues { it.value!! }
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(
@@ -415,7 +465,8 @@ class ChatViewModel(
                     firebaseUid = firebaseUid,
                     username = _uiState.value.displayUsername,
                     avatarUrl = url,
-                    bannerUrl = _uiState.value.displayBannerUrl
+                    bannerUrl = _uiState.value.displayBannerUrl,
+                    usernameColor = _uiState.value.displayUsernameColor
                 )
                 _uiState.value = _uiState.value.copy(
                     isUploadingAvatar = false,

@@ -16,6 +16,11 @@ data class ChatProfile(
     @Json(name = "username") val username: String = "",
     @Json(name = "avatar_url") val avatarUrl: String? = null,
     @Json(name = "banner_url") val bannerUrl: String? = null,
+    // Warna custom username (hex, misal "#FF5733") -- null berarti pakai
+    // warna default aplikasi (ZenimePrimary). Dipilih user sendiri lewat
+    // dialog "Edit Profil" di Chat Global, dan kepake di SEMUA bubble chat
+    // dia (punya sendiri maupun yang dilihat orang lain).
+    @Json(name = "username_color") val usernameColor: String? = null,
     @Json(name = "updated_at") val updatedAt: String? = null
 )
 
@@ -25,5 +30,6 @@ data class ChatProfileUpsert(
     @Json(name = "firebase_uid") val firebaseUid: String,
     @Json(name = "username") val username: String,
     @Json(name = "avatar_url") val avatarUrl: String?,
-    @Json(name = "banner_url") val bannerUrl: String? = null
+    @Json(name = "banner_url") val bannerUrl: String? = null,
+    @Json(name = "username_color") val usernameColor: String? = null
 )

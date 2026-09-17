@@ -11,6 +11,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,6 +44,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Mic
@@ -76,6 +78,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -140,10 +143,18 @@ fun ChatScreen(
         }
     }
 
-    // Auto-scroll ke pesan paling bawah tiap ada pesan baru masuk.
+    // Scroll ke pesan paling bawah. Pas PERTAMA kali room ini kebuka,
+    // langsung lompat instan (tanpa animasi). Setelah itu, pesan baru yang
+    // masuk tetap di-scroll dengan animasi biar smooth.
+    var hasDoneInitialScroll by remember { mutableStateOf(false) }
     LaunchedEffect(uiState.messages.size) {
         if (uiState.messages.isNotEmpty()) {
-            listState.animateScrollToItem(uiState.messages.size - 1)
+            if (!hasDoneInitialScroll) {
+                listState.scrollToItem(uiState.messages.size - 1)
+                hasDoneInitialScroll = true
+            } else {
+                listState.animateScrollToItem(uiState.messages.size - 1)
+            }
         }
     }
 
@@ -217,6 +228,7 @@ fun ChatScreen(
                                     isSenderPremium = uiState.premiumUids.contains(message.firebaseUid),
                                     senderClanTag = uiState.clanTagsByUid[message.firebaseUid],
                                     senderLevel = uiState.xpLevelsByUid[message.firebaseUid],
+                                    senderUsernameColor = uiState.usernameColorsByUid[message.firebaseUid],
                                     isDeleting = uiState.deletingMessageId == message.id,
                                     ownAvatarUrl = uiState.displayAvatarUrl,
                                     onReply = { viewModel.setReplyTarget(message) },
@@ -276,12 +288,13 @@ fun ChatScreen(
         EditProfileDialog(
             currentUsername = uiState.displayUsername,
             currentAvatarUrl = uiState.displayAvatarUrl,
+            currentUsernameColor = uiState.displayUsernameColor,
             avatarSeed = currentFirebaseUid,
             isSaving = uiState.isSavingProfile,
             isUploadingAvatar = uiState.isUploadingAvatar,
             errorMessage = uiState.profileError,
             onPickAvatar = { uri -> viewModel.uploadAvatar(context, uri) },
-            onSaveUsername = { newName -> viewModel.saveUsername(newName) },
+            onSave = { newName, colorHex -> viewModel.saveUsername(newName, colorHex) },
             onDismiss = { viewModel.closeProfileDialog() }
         )
     }
@@ -321,6 +334,7 @@ private fun ChatBubble(
     isSenderPremium: Boolean,
     senderClanTag: String?,
     senderLevel: Int?,
+    senderUsernameColor: String?,
     isDeleting: Boolean,
     ownAvatarUrl: String?,
     onReply: () -> Unit,
@@ -328,6 +342,7 @@ private fun ChatBubble(
     onOwnAvatarClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val usernameColor = parseUsernameColor(senderUsernameColor)
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = if (isOwnMessage) Arrangement.End else Arrangement.Start
@@ -387,7 +402,7 @@ private fun ChatBubble(
                             }
                             Text(
                                 text = message.username,
-                                color = ZenimePrimary,
+                                color = usernameColor,
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
@@ -395,7 +410,7 @@ private fun ChatBubble(
                         } else {
                             Text(
                                 text = message.username,
-                                color = ZenimePrimary,
+                                color = usernameColor,
                                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -902,19 +917,50 @@ private fun formatChatTime(isoTimestamp: String): String {
     }
 }
 
+/**
+ * Ubah hex warna username custom ("#RRGGBB") jadi [Color]. Kalau null atau
+ * gagal di-parse (misal format rusak), jatuh ke warna default aplikasi
+ * (ZenimePrimary) -- jadi user yang belum pernah set warna custom tetap
+ * kelihatan normal kayak sebelumnya.
+ */
+private fun parseUsernameColor(hex: String?): Color {
+    if (hex.isNullOrBlank()) return ZenimePrimary
+    return try {
+        Color(android.graphics.Color.parseColor(hex))
+    } catch (e: Exception) {
+        ZenimePrimary
+    }
+}
+
+/** Palet warna preset yang bisa dipilih user buat warna username-nya sendiri. */
+private val UsernameColorPresets = listOf(
+    "#E4344A", // merah default Zenime
+    "#3897F0", // biru
+    "#22C55E", // hijau
+    "#F59E0B", // oranye
+    "#A855F7", // ungu
+    "#EC4899", // pink
+    "#14B8A6", // teal
+    "#EAB308", // kuning
+    "#6366F1", // indigo
+    "#FFFFFF"  // putih
+)
+
 @Composable
 private fun EditProfileDialog(
     currentUsername: String,
     currentAvatarUrl: String?,
+    currentUsernameColor: String?,
     avatarSeed: String,
     isSaving: Boolean,
     isUploadingAvatar: Boolean,
     errorMessage: String?,
     onPickAvatar: (Uri) -> Unit,
-    onSaveUsername: (String) -> Unit,
+    onSave: (String, String?) -> Unit,
     onDismiss: () -> Unit
 ) {
     var usernameInput by remember { mutableStateOf(currentUsername) }
+    var selectedColor by remember { mutableStateOf(currentUsernameColor) }
 
     val imagePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -1013,6 +1059,52 @@ private fun EditProfileDialog(
                     )
                 )
 
+                // Pilihan warna custom buat username -- kepake di SEMUA bubble
+                // chat dia (punya sendiri maupun yang dilihat orang lain).
+                Column(
+                    horizontalAlignment = Alignment.Start,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Warna Username",
+                        color = Color.White.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                    ) {
+                        UsernameColorPresets.forEach { hex ->
+                            val isSelected = selectedColor == hex
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(CircleShape)
+                                    .background(parseUsernameColor(hex))
+                                    .border(
+                                        width = if (isSelected) 2.dp else 1.dp,
+                                        color = if (isSelected) Color.White else CardOutlineBorder,
+                                        shape = CircleShape
+                                    )
+                                    .clickable { selectedColor = hex },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Check,
+                                        contentDescription = "Terpilih",
+                                        tint = if (hex == "#FFFFFF") Color.Black else Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 errorMessage?.let {
                     Text(
                         text = it,
@@ -1035,7 +1127,7 @@ private fun EditProfileDialog(
                         Text("Batal")
                     }
                     Button(
-                        onClick = { onSaveUsername(usernameInput) },
+                        onClick = { onSave(usernameInput, selectedColor) },
                         modifier = Modifier.weight(1f),
                         enabled = !isSaving,
                         colors = ButtonDefaults.buttonColors(containerColor = ZenimePrimary)

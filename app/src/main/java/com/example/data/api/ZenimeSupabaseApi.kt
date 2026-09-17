@@ -65,15 +65,22 @@ interface ZenimeSupabaseApi {
     @GET("rest/v1/chat_profiles")
     suspend fun getChatProfile(
         @Query("firebase_uid") firebaseUidEq: String,
-        @Query("select") select: String = "firebase_uid,username,avatar_url,banner_url,updated_at",
+        @Query("select") select: String = "firebase_uid,username,avatar_url,banner_url,username_color,updated_at",
         @Query("limit") limit: Int = 1
     ): List<ChatProfile>
 
     /** Semua profil user -- basis daftar leaderboard XP biar user yang belum pernah nonton (0 XP) tetap muncul. */
     @GET("rest/v1/chat_profiles")
     suspend fun getAllChatProfiles(
-        @Query("select") select: String = "firebase_uid,username,avatar_url,banner_url,updated_at",
+        @Query("select") select: String = "firebase_uid,username,avatar_url,banner_url,username_color,updated_at",
         @Query("limit") limit: Int = 500
+    ): List<ChatProfile>
+
+    /** Batch-fetch warna username buat sekumpulan uid sekaligus -- dipake ngerender warna custom di bubble Chat Global. */
+    @GET("rest/v1/chat_profiles")
+    suspend fun getChatProfilesByUids(
+        @Query("firebase_uid") firebaseUidIn: String,
+        @Query("select") select: String = "firebase_uid,username_color"
     ): List<ChatProfile>
 
     // on_conflict + Prefer=merge-duplicates -> upsert berdasarkan firebase_uid (primary key).
