@@ -47,9 +47,11 @@ import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.data.model.UserXpDisplay
+import com.example.ui.components.ClanRainbowBadge
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.GeneratedAvatar
+import com.example.ui.components.LevelBadge
 import com.example.ui.theme.ZenimePrimary
 import com.example.ui.theme.ZenimeSurfaceDark
 
@@ -258,8 +260,8 @@ private fun PodiumCard(
             textAlign = TextAlign.Center
         )
         if (entry.clanTag != null) {
-            Spacer(Modifier.height(2.dp))
-            ClanTagChip(entry.clanTag)
+            Spacer(Modifier.height(4.dp))
+            ClanRainbowBadge(text = entry.clanTag)
         }
         Spacer(Modifier.height(4.dp))
         Text(
@@ -267,25 +269,6 @@ private fun PodiumCard(
             color = ringColor,
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.labelMedium
-        )
-    }
-}
-
-@Composable
-private fun ClanTagChip(tag: String) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(ZenimePrimary)
-            .padding(horizontal = 5.dp, vertical = 1.dp)
-    ) {
-        Text(
-            text = tag,
-            color = Color.White,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontWeight = FontWeight.Bold,
-                fontSize = TextUnit(9f, TextUnitType.Sp)
-            )
         )
     }
 }
@@ -328,26 +311,12 @@ private fun XpLeaderboardRow(rank: Int, entry: UserXpDisplay, isMe: Boolean) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(Modifier.height(3.dp))
+            Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
+                LevelBadge(level = entry.level)
                 if (entry.clanTag != null) {
-                    ClanTagChip(entry.clanTag)
                     Spacer(Modifier.width(6.dp))
-                }
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color(0xFF1F6F4A))
-                        .padding(horizontal = 6.dp, vertical = 1.dp)
-                ) {
-                    Text(
-                        text = "Lvl ${entry.level}",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = TextUnit(9f, TextUnitType.Sp)
-                        )
-                    )
+                    ClanRainbowBadge(text = entry.clanTag)
                 }
             }
         }

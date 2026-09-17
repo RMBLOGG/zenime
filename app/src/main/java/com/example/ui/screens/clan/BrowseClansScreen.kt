@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.Clan
+import com.example.ui.components.ClanRainbowBadge
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
 import com.example.ui.theme.ZenimePrimary
@@ -221,14 +222,7 @@ private fun ClanListRow(clan: Clan, rank: Int?, onClick: () -> Unit) {
 
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(ZenimePrimary)
-                        .padding(horizontal = 6.dp, vertical = 1.dp)
-                ) {
-                    Text(clan.tag, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 9.sp)
-                }
+                ClanRainbowBadge(text = clan.tag)
                 Spacer(Modifier.width(6.dp))
                 Text(
                     text = clan.name,
