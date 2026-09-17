@@ -32,6 +32,7 @@ import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.FiberManualRecord
@@ -1446,26 +1447,27 @@ private fun HeroLeaderboardSlide(
             )
             .border(width = 1.dp, color = Color.White.copy(alpha = 0.08f), shape = shape)
     ) {
-        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Column(modifier = Modifier.fillMaxSize().padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Default.EmojiEvents,
                     contentDescription = null,
                     tint = StarYellow,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(20.dp)
                 )
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(7.dp))
                 Text(
                     text = "TOP LEADERBOARD",
-                    style = MaterialTheme.typography.labelMedium.copy(
+                    style = MaterialTheme.typography.titleSmall.copy(
                         fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 0.6.sp
+                        letterSpacing = 0.6.sp,
+                        fontSize = 14.sp
                     ),
                     color = StarYellow
                 )
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             if (leaderboard.isLoading) {
                 Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
@@ -1479,24 +1481,13 @@ private fun HeroLeaderboardSlide(
                 Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
                     // Kolom kiri: TOP XP
                     Column(modifier = Modifier.weight(1f)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.clickable(onClick = onXpLeaderboardClick)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Bolt,
-                                contentDescription = null,
-                                tint = ZenimeInfoBlue,
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text(
-                                text = "TOP XP",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = ZenimeInfoBlue
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
+                        LeaderboardColumnHeader(
+                            icon = Icons.Default.Bolt,
+                            label = "TOP XP",
+                            color = ZenimeInfoBlue,
+                            onClick = onXpLeaderboardClick
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
                         if (leaderboard.topXp.isEmpty()) {
                             Text(
                                 text = "Belum ada data",
@@ -1507,7 +1498,7 @@ private fun HeroLeaderboardSlide(
                             leaderboard.topXp.take(4).forEachIndexed { index, entry ->
                                 HeroLeaderboardXpRow(rank = index + 1, entry = entry)
                                 if (index != leaderboard.topXp.lastIndex) {
-                                    Spacer(modifier = Modifier.height(7.dp))
+                                    Spacer(modifier = Modifier.height(9.dp))
                                 }
                             }
                         }
@@ -1521,28 +1512,17 @@ private fun HeroLeaderboardSlide(
                             .padding(vertical = 2.dp)
                             .background(Color.White.copy(alpha = 0.1f))
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(14.dp))
 
                     // Kolom kanan: TOP CLAN
                     Column(modifier = Modifier.weight(1f)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.clickable(onClick = onClanLeaderboardClick)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Shield,
-                                contentDescription = null,
-                                tint = Color(0xFFAF52DE),
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text(
-                                text = "TOP CLAN",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                color = Color(0xFFAF52DE)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
+                        LeaderboardColumnHeader(
+                            icon = Icons.Default.Shield,
+                            label = "TOP CLAN",
+                            color = Color(0xFFAF52DE),
+                            onClick = onClanLeaderboardClick
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
                         if (leaderboard.topClans.isEmpty()) {
                             Text(
                                 text = "Belum ada data",
@@ -1553,7 +1533,7 @@ private fun HeroLeaderboardSlide(
                             leaderboard.topClans.take(4).forEachIndexed { index, clan ->
                                 HeroLeaderboardClanRow(rank = index + 1, clan = clan)
                                 if (index != leaderboard.topClans.lastIndex) {
-                                    Spacer(modifier = Modifier.height(7.dp))
+                                    Spacer(modifier = Modifier.height(9.dp))
                                 }
                             }
                         }
@@ -1564,12 +1544,56 @@ private fun HeroLeaderboardSlide(
     }
 }
 
+/**
+ * Header satu kolom leaderboard (mis. "TOP XP" / "TOP CLAN") -- icon + label
+ * di kiri, chevron ">" nempel di ujung kanan kolom persis referensi, nandain
+ * kalau kolom ini bisa di-tap buat ke halaman leaderboard lengkap.
+ */
+@Composable
+private fun LeaderboardColumnHeader(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    color: Color,
+    onClick: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp))
+            .clickable(onClick = onClick)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(13.dp)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.3.sp
+            ),
+            color = color,
+            modifier = Modifier.weight(1f)
+        )
+        Icon(
+            imageVector = Icons.Default.ChevronRight,
+            contentDescription = "Lihat leaderboard $label",
+            tint = color.copy(alpha = 0.65f),
+            modifier = Modifier.size(15.dp)
+        )
+    }
+}
+
 /** Satu baris kolom TOP XP: rank bulat, avatar generated, username, total XP. */
 @Composable
 private fun HeroLeaderboardXpRow(rank: Int, entry: UserXpDisplay) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         HeroLeaderboardRankBadge(rank = rank)
-        Spacer(modifier = Modifier.width(5.dp))
+        Spacer(modifier = Modifier.width(6.dp))
         if (!entry.avatarUrl.isNullOrBlank()) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
@@ -1579,24 +1603,26 @@ private fun HeroLeaderboardXpRow(rank: Int, entry: UserXpDisplay) {
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(18.dp)
+                    .size(22.dp)
                     .clip(CircleShape)
+                    .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
             )
         } else {
-            GeneratedAvatar(seed = entry.firebaseUid, label = entry.username, size = 18.dp)
+            GeneratedAvatar(seed = entry.firebaseUid, label = entry.username, size = 22.dp)
         }
-        Spacer(modifier = Modifier.width(5.dp))
+        Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = entry.username,
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.White.copy(alpha = 0.9f),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+            color = Color.White.copy(alpha = 0.92f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
         )
+        Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = formatCountLabel(entry.totalXp.toString()) ?: entry.totalXp.toString(),
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
             color = StarYellow,
             maxLines = 1
         )
@@ -1608,7 +1634,7 @@ private fun HeroLeaderboardXpRow(rank: Int, entry: UserXpDisplay) {
 private fun HeroLeaderboardClanRow(rank: Int, clan: Clan) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         HeroLeaderboardRankBadge(rank = rank)
-        Spacer(modifier = Modifier.width(5.dp))
+        Spacer(modifier = Modifier.width(6.dp))
         if (clan.photoUrl != null) {
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
@@ -1618,24 +1644,26 @@ private fun HeroLeaderboardClanRow(rank: Int, clan: Clan) {
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
-                    .size(18.dp)
+                    .size(22.dp)
                     .clip(CircleShape)
+                    .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
             )
         } else {
-            GeneratedAvatar(seed = clan.id, label = clan.tag, size = 18.dp)
+            GeneratedAvatar(seed = clan.id, label = clan.tag, size = 22.dp)
         }
-        Spacer(modifier = Modifier.width(5.dp))
+        Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = clan.tag,
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.White.copy(alpha = 0.9f),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+            color = Color.White.copy(alpha = 0.92f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
         )
+        Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = "Lv${clan.level}",
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 9.sp),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
             color = StarYellow,
             maxLines = 1
         )
@@ -1654,14 +1682,14 @@ private fun HeroLeaderboardRankBadge(rank: Int) {
     val fg = if (rank <= 3) Color(0xFF15213B) else Color.White.copy(alpha = 0.7f)
     Box(
         modifier = Modifier
-            .size(14.dp)
+            .size(16.dp)
             .clip(CircleShape)
             .background(bg),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = rank.toString(),
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, fontSize = 8.sp),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, fontSize = 9.sp),
             color = fg
         )
     }
