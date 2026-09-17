@@ -354,10 +354,10 @@ private fun ChatBubble(
                             bottomEnd = if (isOwnMessage) 2.dp else 14.dp
                         )
                     )
-                    .background(if (isOwnMessage) ZenimePrimary else ZenimeSurfaceDark)
+                    .background(ZenimeSurfaceDark)
                     .border(
                         width = 1.dp,
-                        color = if (isOwnMessage) Color.Transparent else CardOutlineBorder,
+                        color = CardOutlineBorder,
                         shape = RoundedCornerShape(
                             topStart = 14.dp,
                             topEnd = 14.dp,
@@ -382,13 +382,13 @@ private fun ChatBubble(
                                     tint = Color(0xFF3897F0),
                                     modifier = Modifier
                                         .padding(end = 3.dp)
-                                        .size(15.dp)
+                                        .size(17.dp)
                                 )
                             }
                             Text(
                                 text = message.username,
-                                color = Color.White,
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = ZenimePrimary,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -396,7 +396,7 @@ private fun ChatBubble(
                             Text(
                                 text = message.username,
                                 color = ZenimePrimary,
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(weight = 1f, fill = false)
@@ -408,7 +408,7 @@ private fun ChatBubble(
                                     tint = Color(0xFF3897F0),
                                     modifier = Modifier
                                         .padding(start = 3.dp)
-                                        .size(15.dp)
+                                        .size(17.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.weight(1f, fill = true))
