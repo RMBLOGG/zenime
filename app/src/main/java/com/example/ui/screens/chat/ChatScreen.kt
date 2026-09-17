@@ -339,82 +339,11 @@ private fun ChatBubble(
 
         Column(
             horizontalAlignment = if (isOwnMessage) Alignment.End else Alignment.Start,
-            modifier = Modifier.widthIn(max = 260.dp)
+            modifier = Modifier.widthIn(max = 270.dp)
         ) {
-            if (!isOwnMessage) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(bottom = 2.dp, start = 4.dp)
-                ) {
-                    Text(
-                        text = message.username,
-                        color = ZenimePrimary,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(weight = 1f, fill = false)
-                    )
-                    if (isSenderPremium) {
-                        Icon(
-                            imageVector = Icons.Filled.Verified,
-                            contentDescription = "Premium",
-                            tint = Color(0xFF3897F0),
-                            modifier = Modifier
-                                .padding(start = 3.dp)
-                                .size(16.dp)
-                        )
-                    }
-                    if (senderLevel != null) {
-                        LevelBadge(
-                            level = senderLevel,
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
-                    }
-                    if (senderClanTag != null) {
-                        ClanRainbowBadge(
-                            text = senderClanTag,
-                            modifier = Modifier.padding(start = 4.dp)
-                        )
-                    }
-                }
-            } else {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.End,
-                    modifier = Modifier.padding(bottom = 2.dp, end = 4.dp)
-                ) {
-                    if (senderClanTag != null) {
-                        ClanRainbowBadge(
-                            text = senderClanTag,
-                            modifier = Modifier.padding(end = 4.dp)
-                        )
-                    }
-                    if (senderLevel != null) {
-                        LevelBadge(
-                            level = senderLevel,
-                            modifier = Modifier.padding(end = 4.dp)
-                        )
-                    }
-                    if (isSenderPremium) {
-                        Icon(
-                            imageVector = Icons.Filled.Verified,
-                            contentDescription = "Premium",
-                            tint = Color(0xFF3897F0),
-                            modifier = Modifier
-                                .padding(end = 3.dp)
-                                .size(16.dp)
-                        )
-                    }
-                    Text(
-                        text = message.username,
-                        color = ZenimePrimary,
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
+            // Satu kartu bungkus semuanya: username + badge premium di baris
+            // atas, badge level/clan di baris bawahnya, lalu reply-quote &
+            // isi pesan -- semua nyatu di dalam satu bubble.
             Box(
                 modifier = Modifier
                     .clip(
@@ -438,10 +367,80 @@ private fun ChatBubble(
                     )
                     .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
-                Column {
+                Column(horizontalAlignment = if (isOwnMessage) Alignment.End else Alignment.Start) {
+                    // Baris 1: username + badge premium (checklist) di sampingnya.
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (isOwnMessage) {
+                            Spacer(modifier = Modifier.weight(1f, fill = true))
+                            if (isSenderPremium) {
+                                Icon(
+                                    imageVector = Icons.Filled.Verified,
+                                    contentDescription = "Premium",
+                                    tint = Color(0xFF3897F0),
+                                    modifier = Modifier
+                                        .padding(end = 3.dp)
+                                        .size(15.dp)
+                                )
+                            }
+                            Text(
+                                text = message.username,
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        } else {
+                            Text(
+                                text = message.username,
+                                color = ZenimePrimary,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(weight = 1f, fill = false)
+                            )
+                            if (isSenderPremium) {
+                                Icon(
+                                    imageVector = Icons.Filled.Verified,
+                                    contentDescription = "Premium",
+                                    tint = Color(0xFF3897F0),
+                                    modifier = Modifier
+                                        .padding(start = 3.dp)
+                                        .size(15.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.weight(1f, fill = true))
+                        }
+                    }
+
+                    // Baris 2: badge level & clan, tampil di bawah username.
+                    if (senderLevel != null || senderClanTag != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 3.dp)
+                        ) {
+                            if (isOwnMessage) Spacer(modifier = Modifier.weight(1f, fill = true))
+                            if (senderClanTag != null) {
+                                ClanRainbowBadge(text = senderClanTag)
+                            }
+                            if (senderLevel != null) {
+                                LevelBadge(level = senderLevel)
+                            }
+                            if (!isOwnMessage) Spacer(modifier = Modifier.weight(1f, fill = true))
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
                     if (!message.replyToUsername.isNullOrBlank()) {
                         Box(
                             modifier = Modifier
+                                .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(Color.Black.copy(alpha = 0.18f))
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -479,41 +478,45 @@ private fun ChatBubble(
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
-                }
-            }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = formatChatTime(message.createdAt),
-                    color = Color.White.copy(alpha = 0.4f),
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp)
-                )
-                Text(
-                    text = "Balas",
-                    color = Color.White.copy(alpha = 0.5f),
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                    modifier = Modifier
-                        .padding(start = 8.dp)
-                        .clickable(onClick = onReply)
-                )
-                if (isOwnMessage) {
-                    if (isDeleting) {
-                        CircularProgressIndicator(
-                            color = Color.White.copy(alpha = 0.5f),
-                            strokeWidth = 1.5.dp,
-                            modifier = Modifier
-                                .padding(start = 8.dp)
-                                .size(10.dp)
-                        )
-                    } else {
+                    // Baris footer: waktu + aksi balas/hapus, tetap di dalam kartu.
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(top = 4.dp)
+                    ) {
                         Text(
-                            text = "Hapus",
+                            text = formatChatTime(message.createdAt),
+                            color = Color.White.copy(alpha = 0.4f),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp)
+                        )
+                        Text(
+                            text = "Balas",
                             color = Color.White.copy(alpha = 0.5f),
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                             modifier = Modifier
                                 .padding(start = 8.dp)
-                                .clickable(onClick = onDeleteRequest)
+                                .clickable(onClick = onReply)
                         )
+                        if (isOwnMessage) {
+                            if (isDeleting) {
+                                CircularProgressIndicator(
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    strokeWidth = 1.5.dp,
+                                    modifier = Modifier
+                                        .padding(start = 8.dp)
+                                        .size(10.dp)
+                                )
+                            } else {
+                                Text(
+                                    text = "Hapus",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                    modifier = Modifier
+                                        .padding(start = 8.dp)
+                                        .clickable(onClick = onDeleteRequest)
+                                )
+                            }
+                        }
                     }
                 }
             }
