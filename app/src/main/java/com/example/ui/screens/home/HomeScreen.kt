@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -665,7 +666,8 @@ private fun HomeProfileHeader(
                 // sisa hari aktif kalau lagi Premium, atau ajakan aktivasi kalau belum.
                 Surface(
                     shape = RoundedCornerShape(50),
-                    color = if (state.isPremium) ZenimePrimary.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceVariant,
+                    color = Color.Transparent,
+                    border = BorderStroke(1.dp, CardOutlineBorder.copy(alpha = 0.5f)),
                     modifier = Modifier
                         .weight(1f)
                         .clickable(onClick = onPremiumClick)
@@ -674,23 +676,12 @@ private fun HomeProfileHeader(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(22.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (state.isPremium) ZenimePrimary.copy(alpha = 0.22f)
-                                    else Color.White.copy(alpha = 0.08f)
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.WorkspacePremium,
-                                contentDescription = null,
-                                tint = if (state.isPremium) ZenimePrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(13.dp)
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Filled.Verified,
+                            contentDescription = null,
+                            tint = Color(0xFF3897F0),
+                            modifier = Modifier.size(16.dp)
+                        )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = when {
@@ -716,19 +707,11 @@ private fun HomeProfileHeader(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(22.dp)
-                                .clip(CircleShape)
-                                .background(StarYellow.copy(alpha = 0.18f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Image(
-                                painter = painterResource(id = R.drawable.ic_zcoin_badge),
-                                contentDescription = null,
-                                modifier = Modifier.size(13.dp)
-                            )
-                        }
+                        Image(
+                            painter = painterResource(id = R.drawable.ic_zcoin_badge),
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = formatZCoinBalance(state.coinBalance),
