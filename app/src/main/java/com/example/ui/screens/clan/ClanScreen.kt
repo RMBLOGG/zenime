@@ -41,6 +41,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -49,9 +50,11 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.ClanDonationEntry
 import com.example.data.model.ClanMemberDisplay
+import com.example.ui.components.ClanRainbowBadge
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.GeneratedAvatar
+import com.example.ui.components.LevelBadge
 import com.example.ui.theme.ZenimePrimary
 import java.time.Instant
 import java.time.ZoneId
@@ -61,6 +64,8 @@ import java.util.Locale
 private val LeaderBadgeColor = Color(0xFFFFC107)      // kuning, sama kayak referensi
 private val CoLeaderBadgeColor = Color(0xFF9C6BE0)     // ungu
 private val MemberBadgeColor = Color(0xFF3A404C)       // abu gelap
+private val ClanHeaderGradientTop = Color(0xFF3B2E73)   // ungu -- nyontek referensi
+private val ClanHeaderGradientBottom = Color(0xFF1C1533)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -184,7 +189,11 @@ private fun ClanContent(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         items(uiState.filteredMembers, key = { it.firebaseUid }) { member ->
-                            MemberListItem(member)
+                            MemberListItem(
+                                member = member,
+                                clanTag = clan.tag,
+                                level = uiState.memberLevels[member.firebaseUid]
+                            )
                         }
                         item { Spacer(Modifier.height(16.dp)) }
                     }
@@ -229,21 +238,22 @@ private fun ClanHeaderCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer)
+            .background(
+                Brush.verticalGradient(
+                    listOf(ClanHeaderGradientTop, ClanHeaderGradientBottom)
+                )
+            )
             .padding(20.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            ClanPhoto(photoUrl = clan.photoUrl, tag = clan.tag, size = 52.dp)
-            Spacer(Modifier.width(12.dp))
-            Column {
-                TagPill(tag = clan.tag)
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = clan.name,
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
+            ClanRainbowBadge(text = clan.tag)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = clan.name,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
+                color = Color.White,
+                modifier = Modifier.weight(1f, fill = false)
+            )
         }
 
         uiState.leader?.let { leader ->
@@ -254,7 +264,7 @@ private fun ClanHeaderCard(
                 Text(
                     text = leader.username,
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                    color = Color.White.copy(alpha = 0.75f)
                 )
             }
         }
@@ -283,12 +293,13 @@ private fun ClanHeaderCard(
             Spacer(Modifier.height(8.dp))
             androidx.compose.material3.OutlinedButton(
                 onClick = onDonateClick,
-                modifier = Modifier.fillMaxWidth().height(44.dp),
-                shape = RoundedCornerShape(14.dp)
+                modifier = Modifier.fillMaxWidth().height(46.dp),
+                shape = RoundedCornerShape(50),
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, Color.White.copy(alpha = 0.35f))
             ) {
                 Icon(Icons.Filled.Diamond, contentDescription = null, tint = ZenimePrimary, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
-                Text("Donasi ZCoin", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                Text("Donasi ZCoin", fontWeight = FontWeight.Bold, color = Color.White)
             }
         }
 
@@ -297,7 +308,7 @@ private fun ClanHeaderCard(
             Text(
                 text = feedback,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                color = Color.White.copy(alpha = 0.75f)
             )
         }
     }
@@ -316,7 +327,7 @@ private fun ClanCtaButton(
                 onClick = onRequestJoinClick,
                 enabled = !isSubmitting,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(50),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = LeaderBadgeColor,
                     contentColor = Color.Black
@@ -334,10 +345,10 @@ private fun ClanCtaButton(
                 onClick = {},
                 enabled = false,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(50),
                 colors = ButtonDefaults.buttonColors(
-                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    disabledContainerColor = Color.White.copy(alpha = 0.1f),
+                    disabledContentColor = Color.White.copy(alpha = 0.7f)
                 )
             ) {
                 Text("Menunggu Persetujuan", fontWeight = FontWeight.Bold)
@@ -348,10 +359,10 @@ private fun ClanCtaButton(
                 onClick = {},
                 enabled = false,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(50),
                 colors = ButtonDefaults.buttonColors(
-                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    disabledContainerColor = Color.White.copy(alpha = 0.1f),
+                    disabledContentColor = Color.White.copy(alpha = 0.7f)
                 )
             ) {
                 Text("Kamu Sudah Gabung Clan Lain", fontWeight = FontWeight.Bold)
@@ -365,7 +376,7 @@ private fun ClanCtaButton(
                 Text(
                     text = "Kamu member clan ini",
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                    color = Color.White.copy(alpha = 0.75f)
                 )
             }
         }
@@ -373,7 +384,7 @@ private fun ClanCtaButton(
             Button(
                 onClick = onManageClanClick,
                 modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(14.dp),
+                shape = RoundedCornerShape(50),
                 colors = ButtonDefaults.buttonColors(containerColor = ZenimePrimary)
             ) {
                 Text("Kelola Clan", fontWeight = FontWeight.Bold, color = Color.White)
@@ -387,20 +398,20 @@ private fun ClanStatBox(value: String, label: String, modifier: Modifier = Modif
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.35f))
+            .background(Color.Black.copy(alpha = 0.28f))
             .padding(vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = value,
             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onPrimaryContainer
+            color = Color.White
         )
         Spacer(Modifier.height(2.dp))
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+            color = Color.White.copy(alpha = 0.65f)
         )
     }
 }
@@ -415,7 +426,7 @@ private fun ClanTabRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(50))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -438,7 +449,7 @@ private fun ClanTabRow(
 private fun ClanTabChip(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(50))
             .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
             .clickable(onClick = onClick)
             .padding(vertical = 10.dp),
@@ -462,7 +473,7 @@ private fun MemberSearchField(query: String, onQueryChange: (String) -> Unit) {
         placeholder = { Text("Cari member (nama atau ID)") },
         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
         singleLine = true,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(50),
         colors = OutlinedTextFieldDefaults.colors(
             unfocusedBorderColor = MaterialTheme.colorScheme.outline,
             focusedBorderColor = MaterialTheme.colorScheme.primary
@@ -504,7 +515,7 @@ private fun TodayDonationSummary(uiState: ClanUiState) {
 }
 
 @Composable
-private fun MemberListItem(member: ClanMemberDisplay) {
+private fun MemberListItem(member: ClanMemberDisplay, clanTag: String, level: Int?) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -513,17 +524,27 @@ private fun MemberListItem(member: ClanMemberDisplay) {
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        MemberAvatar(member = member, size = 44.dp)
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            MemberAvatar(member = member, size = 44.dp)
+            Spacer(Modifier.height(6.dp))
+            RoleBadge(role = member.role)
+        }
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = member.username,
                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1
             )
-            Spacer(Modifier.height(4.dp))
-            RoleBadge(role = member.role)
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(5.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ClanRainbowBadge(text = clanTag, modifier = Modifier.padding(end = 6.dp))
+                if (level != null) {
+                    LevelBadge(level = level)
+                }
+            }
+            Spacer(Modifier.height(5.dp))
             Text(
                 text = "Gabung ${formatRelativeDate(member.joinedAt)}",
                 style = MaterialTheme.typography.labelSmall,
@@ -644,43 +665,6 @@ private fun DonationAvatar(entry: ClanDonationEntry, size: androidx.compose.ui.u
     }
 }
 
-@Composable
-private fun ClanPhoto(photoUrl: String?, tag: String, size: androidx.compose.ui.unit.Dp) {
-    if (photoUrl != null) {
-        AsyncImage(
-            model = photoUrl,
-            contentDescription = tag,
-            modifier = Modifier.size(size).clip(RoundedCornerShape(14.dp))
-        )
-    } else {
-        Box(
-            modifier = Modifier
-                .size(size)
-                .clip(RoundedCornerShape(14.dp))
-                .background(ZenimePrimary),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(tag.take(1), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-        }
-    }
-}
-
-@Composable
-private fun TagPill(tag: String) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(ZenimePrimary)
-            .padding(horizontal = 8.dp, vertical = 2.dp)
-    ) {
-        Text(
-            text = tag,
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
-            color = Color.White
-        )
-    }
-}
-
 private fun formatCompact(value: Long): String {
     val abs = kotlin.math.abs(value)
     return when {
@@ -693,8 +677,19 @@ private fun formatCompact(value: Long): String {
 private fun formatRelativeDate(isoTimestamp: String): String {
     return try {
         val instant = Instant.parse(isoTimestamp)
-        val formatter = DateTimeFormatter.ofPattern("d MMM yyyy", Locale("id", "ID"))
-        formatter.withZone(ZoneId.systemDefault()).format(instant)
+        val now = Instant.now()
+        val minutes = java.time.Duration.between(instant, now).toMinutes()
+        when {
+            minutes < 1 -> "baru saja"
+            minutes < 60 -> "$minutes menit lalu"
+            minutes < 60 * 24 -> "${minutes / 60} jam lalu"
+            minutes < 60 * 24 * 30 -> "${minutes / (60 * 24)} hari lalu"
+            minutes < 60 * 24 * 365 -> "${minutes / (60 * 24 * 30)} bulan lalu"
+            else -> {
+                val formatter = DateTimeFormatter.ofPattern("d MMM yyyy", Locale("id", "ID"))
+                formatter.withZone(ZoneId.systemDefault()).format(instant)
+            }
+        }
     } catch (e: Exception) {
         ""
     }

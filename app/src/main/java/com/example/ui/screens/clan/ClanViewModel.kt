@@ -6,6 +6,7 @@ import com.example.data.model.Clan
 import com.example.data.model.ClanDonationEntry
 import com.example.data.model.ClanMemberDisplay
 import com.example.data.repository.ClanRepository
+import com.example.data.repository.XpRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +28,7 @@ data class ClanUiState(
     val error: String? = null,
     val clan: Clan? = null,
     val members: List<ClanMemberDisplay> = emptyList(),
+    val memberLevels: Map<String, Int> = emptyMap(),
     val donationsToday: List<ClanDonationEntry> = emptyList(),
     val selectedTab: ClanTab = ClanTab.MEMBERS,
     val searchQuery: String = "",
@@ -61,7 +63,8 @@ data class ClanUiState(
 class ClanViewModel(
     private val clanId: String,
     private val firebaseUid: String,
-    private val repository: ClanRepository = ClanRepository()
+    private val repository: ClanRepository = ClanRepository(),
+    private val xpRepository: XpRepository = XpRepository()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ClanUiState())
@@ -88,11 +91,19 @@ class ClanViewModel(
             val members = repository.getMembers(clanId).getOrDefault(emptyList())
             val donations = repository.getTodayDonations(clanId).getOrDefault(emptyList())
             val cta = resolveCta(members)
+            // Level per member (badge "Lv.X") -- data XP-nya sama kayak yang dipakai
+            // di Chat Global & Leaderboard XP, biar konsisten di seluruh app.
+            val levels = if (members.isNotEmpty()) {
+                xpRepository.getLevelsForUids(members.map { it.firebaseUid }).getOrDefault(emptyMap())
+            } else {
+                emptyMap()
+            }
 
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 clan = clan,
                 members = members,
+                memberLevels = levels,
                 donationsToday = donations,
                 cta = cta
             )
