@@ -33,6 +33,7 @@ import com.example.data.repository.AnimeRepository
 import com.example.data.repository.ComicRepository
 import com.example.notifications.setupAnnouncementNotifications
 import com.example.ui.navigation.ZenimeAppNavHost
+import com.example.ui.screens.maintenance.MaintenanceScreen
 import com.example.ui.screens.update.ForceUpdateScreen
 import com.example.ui.theme.ZenimeTheme
 import com.example.util.ApkDownloader
@@ -50,6 +51,12 @@ class MainActivity : ComponentActivity() {
     // false = versi udah paling baru (atau repo belum ada release/fetch
     // gagal), lanjut app seperti biasa.
     private var needsUpdate by mutableStateOf<Boolean?>(null)
+
+    // true = "maintenance_mode" aktif di Firebase Remote Config -> app
+    // diblokir total, cuma MaintenanceScreen yang di-compose (dicek PALING
+    // DULUAN, sebelum needsUpdate -- kalau server lagi maintenance gak ada
+    // gunanya lanjut ngecek update atau prefetch homepage).
+    private var isMaintenanceMode by mutableStateOf(false)
 
     // Info release terbaru dari GitHub (tag + link APK + changelog), diisi
     // bareng needsUpdate. Cuma valid kalau needsUpdate == true.
@@ -116,11 +123,26 @@ class MainActivity : ComponentActivity() {
         // konten HomeScreen) sesegera mungkin, sebelum compose pertama kali
         // ke-render -- supaya poster udah nyampe/lagi keburu kecache pas
         // LoginScreen tampil, bukan mulai fetch baru pas layar itu dibuka.
-        lifecycleScope.launch {
-            // Ambil base URL terbaru + feature_flags dari Firebase Remote
-            // Config dulu (kalau ada koneksi), baru mulai request API pertama
-            // supaya langsung pakai base URL yang sesuai.
-            RemoteConfigManager.refresh()
+        // Dipanggil sekali di awal onCreate, lalu dipanggil ULANG tiap user
+        // pencet "Coba Sekarang" di MaintenanceScreen (lihat setContent di
+        // bawah) -- forceRefresh() motong cache 1 jam Remote Config supaya
+        // status maintenance_mode yang baru aja di-publish di Console
+        // langsung kebaca, bukan nunggu sampai app di-force-close.
+        suspend fun checkAppState(isRetry: Boolean) {
+            if (isRetry) {
+                RemoteConfigManager.forceRefresh()
+            } else {
+                RemoteConfigManager.refresh()
+            }
+
+            isMaintenanceMode = RemoteConfigManager.isMaintenanceMode()
+            if (isMaintenanceMode) {
+                // Server lagi diperbaiki -- gak ada gunanya ngecek update
+                // atau prefetch homepage dulu, MaintenanceScreen bakal
+                // nge-block semuanya.
+                needsUpdate = false
+                return
+            }
 
             // Cek release terbaru LANGSUNG ke GitHub (bukan Firebase Remote
             // Config lagi) -- gak ada cache/throttle, tiap app dibuka pasti
@@ -144,6 +166,8 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        lifecycleScope.launch { checkAppState(isRetry = false) }
+
         setContent {
             val themeMode by userPrefs.themeModeFlow.collectAsStateWithLifecycle(initialValue = "DARK")
             val dynamicColor by userPrefs.dynamicColorFlow.collectAsStateWithLifecycle(initialValue = false)
@@ -158,8 +182,17 @@ class MainActivity : ComponentActivity() {
                 darkTheme = isDark,
                 dynamicColor = dynamicColor
             ) {
-                when (needsUpdate) {
-                    true -> {
+                when {
+                    isMaintenanceMode -> {
+                        MaintenanceScreen(
+                            title = RemoteConfigManager.maintenanceTitle(),
+                            message = RemoteConfigManager.maintenanceMessage(),
+                            onRetry = {
+                                lifecycleScope.launch { checkAppState(isRetry = true) }
+                            }
+                        )
+                    }
+                    needsUpdate == true -> {
                         val downloadState by apkDownloader.state.collectAsState()
                         val downloadUrl = latestUpdateInfo?.downloadUrl.orEmpty()
                         ForceUpdateScreen(
@@ -180,11 +213,12 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     }
-                    // false = versi aman -> app normal. null = masih ngecek
-                    // Remote Config -> blank sebentar (biasanya cuma sekejap,
-                    // gak pakai splash animasi lagi supaya gak dobel).
-                    false -> ZenimeAppNavHost(repository = repository, comicRepository = comicRepository)
-                    null -> Box(
+                    // false = versi aman & gak maintenance -> app normal.
+                    // null = masih ngecek Remote Config/GitHub -> blank
+                    // sebentar (biasanya cuma sekejap, gak pakai splash
+                    // animasi lagi supaya gak dobel).
+                    needsUpdate == false -> ZenimeAppNavHost(repository = repository, comicRepository = comicRepository)
+                    else -> Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background)

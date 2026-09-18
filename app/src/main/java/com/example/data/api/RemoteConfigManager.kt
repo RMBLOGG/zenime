@@ -41,6 +41,16 @@ object RemoteConfigManager {
     // supaya nambah fitur baru gak perlu daftarin dulu di Console.
     private const val KEY_FEATURE_FLAGS = "feature_flags"
 
+    // --- Maintenance mode ---
+    // Blokir total app (lewat MaintenanceScreen) kapan pun tanpa perlu
+    // rilis versi baru -- dipakai pas Supabase/server backend lagi
+    // diperbaiki. Setup di Console: tambah parameter "maintenance_mode"
+    // (Boolean), lalu opsional "maintenance_title"/"maintenance_message"
+    // (String) buat custom pesannya. Kosong = pakai default di bawah.
+    private const val KEY_MAINTENANCE_MODE = "maintenance_mode"
+    private const val KEY_MAINTENANCE_TITLE = "maintenance_title"
+    private const val KEY_MAINTENANCE_MESSAGE = "maintenance_message"
+
     private val remoteConfig by lazy {
         Firebase.remoteConfig.apply {
             setConfigSettingsAsync(
@@ -108,6 +118,17 @@ object RemoteConfigManager {
         val value = remoteConfig.getString(KEY_BASE_URL)
         return value.ifBlank { null }
     }
+
+    /** True kalau parameter "maintenance_mode" di Console lagi diaktifkan. */
+    fun isMaintenanceMode(): Boolean = remoteConfig.getBoolean(KEY_MAINTENANCE_MODE)
+
+    fun maintenanceTitle(): String =
+        remoteConfig.getString(KEY_MAINTENANCE_TITLE).ifBlank { "Sedang Maintenance" }
+
+    fun maintenanceMessage(): String =
+        remoteConfig.getString(KEY_MAINTENANCE_MESSAGE).ifBlank {
+            "Server sedang dalam perbaikan. Zenime akan kembali normal sebentar lagi."
+        }
 
     // Cache hasil parse JSON feature_flags biar gak parse ulang tiap
     // isFeatureEnabled() dipanggil. Di-reset tiap kali refresh()/forceRefresh()
