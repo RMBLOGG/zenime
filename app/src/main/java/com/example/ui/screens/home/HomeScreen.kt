@@ -140,48 +140,83 @@ fun HomeScreen(
         containerColor = MaterialTheme.colorScheme.background,
         modifier = modifier
     ) { innerPadding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = false,
+            onRefresh = { viewModel.loadHome() },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            when (val state = homeState) {
-                is Result.Loading -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = 16.dp, bottom = 8.dp)
-                    ) {
-                        ShimmerBanner()
-                        Spacer(modifier = Modifier.height(16.dp))
-                        ShimmerHorizontalSection()
-                        ShimmerHorizontalSection()
-                    }
+            LazyColumn(
+                state = listState,
+                contentPadding = PaddingValues(bottom = 110.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Kartu profil ala AniBiPlay & promo diskusi SELALU tampil di
+                // atas, lepas dari status homeState (loading/error/success) --
+                // profileState & onChatClick gak bergantung ke data Beranda,
+                // jadi pas gagal load Beranda (misal lagi offline), user tetap
+                // bisa liat profil & masuk Chat Global, gak ikut ilang ketutup
+                // layar "Koneksi Bermasalah".
+                item {
+                    HomeProfileHeader(
+                        state = profileState,
+                        onProfileClick = onProfileClick,
+                        onPremiumClick = onPremiumClick,
+                        onCoinClick = onCoinClick,
+                        onSearchClick = onSearchClick,
+                        modifier = Modifier.padding(top = 16.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HomePremiumBanner(
+                        isPremium = profileState.isPremium,
+                        onPremiumClick = onPremiumClick,
+                        onNotificationClick = onClanClick
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
-                is Result.Error -> {
-                    // Gagal narik Beranda (biasanya lagi offline). Kalau ada
-                    // video yang udah didownload, jadiin Beranda tetap
-                    // berguna -- tampilin itu di bawah pesan errornya,
-                    // bukan cuma layar kosong nyuruh coba lagi.
-                    if (downloads.isEmpty()) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(top = 16.dp)
-                        ) {
-                            ErrorStateView(
-                                message = state.message,
-                                onRetry = { viewModel.loadHome(forceConfigRefresh = true) }
-                            )
+                item {
+                    HomeDiscussionPromoCard(onChatClick = onChatClick)
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+
+                when (val state = homeState) {
+                    is Result.Loading -> {
+                        item {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                ShimmerBanner()
+                                Spacer(modifier = Modifier.height(16.dp))
+                                ShimmerHorizontalSection()
+                                ShimmerHorizontalSection()
+                            }
                         }
-                    } else {
-                        LazyColumn(
-                            contentPadding = PaddingValues(top = 16.dp, start = 16.dp, end = 16.dp, bottom = 110.dp),
-                            verticalArrangement = Arrangement.spacedBy(20.dp),
-                            modifier = Modifier.fillMaxSize()
-                        ) {
+                    }
+                    is Result.Error -> {
+                        // Gagal narik Beranda (biasanya lagi offline). Profil &
+                        // promo diskusi tetap tampil (item di atas) -- di sini
+                        // cukup pesan error + retry, dan kalau ada video yang
+                        // udah didownload, jadiin tetap berguna.
+                        if (downloads.isEmpty()) {
                             item {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 16.dp)
+                                ) {
+                                    ErrorStateView(
+                                        message = state.message,
+                                        onRetry = { viewModel.loadHome(forceConfigRefresh = true) }
+                                    )
+                                }
+                            }
+                        } else {
+                            item {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp)
+                                ) {
                                     Text(
                                         text = state.message,
                                         style = MaterialTheme.typography.bodyMedium,
@@ -204,201 +239,163 @@ fun HomeScreen(
                                     text = "Video yang sudah didownload",
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.padding(bottom = 4.dp)
+                                    modifier = Modifier.padding(horizontal = 16.dp, bottom = 4.dp)
                                 )
                             }
                             items(downloads, key = { it.episodeId }) { download ->
-                                YoutubeStyleDownloadCard(
-                                    item = download,
-                                    onCardClick = {
-                                        if (download.status == DownloadStatus.COMPLETED) {
-                                            onPlayEpisodeClick(download.episodeId, download.animeId)
-                                        }
-                                    },
-                                    onDeleteClick = { viewModel.deleteDownload(download.episodeId) }
-                                )
+                                Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                    YoutubeStyleDownloadCard(
+                                        item = download,
+                                        onCardClick = {
+                                            if (download.status == DownloadStatus.COMPLETED) {
+                                                onPlayEpisodeClick(download.episodeId, download.animeId)
+                                            }
+                                        },
+                                        onDeleteClick = { viewModel.deleteDownload(download.episodeId) }
+                                    )
+                                }
                             }
                         }
                     }
-                }
-                is Result.Success -> {
-                    val data = state.data
-                    PullToRefreshBox(
-                        isRefreshing = false,
-                        onRefresh = { viewModel.loadHome() },
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        LazyColumn(
-                            state = listState,
-                            contentPadding = PaddingValues(bottom = 110.dp),
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            // Kartu profil ala AniBiPlay -- avatar, username,
-                            // zenime_code, status Premium (sisa hari), & saldo
-                            // ZCoin. Header floating "Zenime" sudah dihapus,
-                            // jadi cukup sedikit padding atas buat jarak status bar.
+                    is Result.Success -> {
+                        val data = state.data
+
+                        // "Terakhir Ditonton" -- continue watching row dihapus
+                        // dari Beranda sesuai permintaan user.
+
+                        // Hero Banner Carousel -- sumber & jumlah item
+                        // ngikutin preferensi "Sumber Banner" & "Jumlah
+                        // Anime di Carousel" dari Pengaturan, fallback ke
+                        // urutan lama (hot > trailer > popular) kalau
+                        // sumber pilihan lagi kosong.
+                        val bannerList = when (heroSource) {
+                            "HOT" -> data.hot
+                            "POPULAR" -> data.popular
+                            "RANDOM" -> data.random
+                            else -> null
+                        } ?: data.hot ?: data.trailer ?: data.popular ?: emptyList()
+
+                        if (bannerList.isNotEmpty()) {
                             item {
-                                HomeProfileHeader(
-                                    state = profileState,
-                                    onProfileClick = onProfileClick,
-                                    onPremiumClick = onPremiumClick,
-                                    onCoinClick = onCoinClick,
-                                    onSearchClick = onSearchClick,
-                                    modifier = Modifier.padding(top = 16.dp)
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                HomePremiumBanner(
-                                    isPremium = profileState.isPremium,
-                                    onPremiumClick = onPremiumClick,
-                                    onNotificationClick = onClanClick
+                                HeroBannerCarousel(
+                                    bannerItems = bannerList.take(heroItemCount),
+                                    style = heroStyle,
+                                    autoplay = heroAutoplay,
+                                    intervalMs = heroIntervalMs.toLong(),
+                                    onAnimeClick = onAnimeClick,
+                                    leaderboard = heroLeaderboard,
+                                    onXpLeaderboardClick = onXpLeaderboardClick,
+                                    onClanLeaderboardClick = onClanClick
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
                             }
+                        }
 
-                            // "Terakhir Ditonton" -- continue watching row dihapus
-                            // dari Beranda sesuai permintaan user.
+                        // Section donasi SociaBuzz -- diletakkan di bawah hero
+                        // carousel biar keliatan tapi gak ganggu/nutupin
+                        // konten atau nav bar kayak versi floating button.
+                        item {
+                            DonationSection(
+                                onClick = onDonationClick,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                            Spacer(modifier = Modifier.height(20.dp))
+                        }
 
-                            // Hero Banner Carousel -- sumber & jumlah item
-                            // ngikutin preferensi "Sumber Banner" & "Jumlah
-                            // Anime di Carousel" dari Pengaturan, fallback ke
-                            // urutan lama (hot > trailer > popular) kalau
-                            // sumber pilihan lagi kosong.
-                            val bannerList = when (heroSource) {
-                                "HOT" -> data.hot
-                                "POPULAR" -> data.popular
-                                "RANDOM" -> data.random
-                                else -> null
-                            } ?: data.hot ?: data.trailer ?: data.popular ?: emptyList()
-
-                            if (bannerList.isNotEmpty()) {
+                        // Section: Sedang Tayang (Ongoing) -- di Dayynime v5, field
+                        // "hot" merepresentasikan anime yang lagi tayang, sama seperti
+                        // konvensi yang dipakai di Aniku. Sengaja ditaruh paling atas,
+                        // di atas section "Baru Ditambahkan".
+                        data.hot?.let { hotList ->
+                            if (hotList.isNotEmpty()) {
                                 item {
-                                    HeroBannerCarousel(
-                                        bannerItems = bannerList.take(heroItemCount),
-                                        style = heroStyle,
-                                        autoplay = heroAutoplay,
-                                        intervalMs = heroIntervalMs.toLong(),
+                                    AnimeHorizontalSection(
+                                        title = "Sedang Tayang",
+                                        items = hotList,
                                         onAnimeClick = onAnimeClick,
-                                        leaderboard = heroLeaderboard,
-                                        onXpLeaderboardClick = onXpLeaderboardClick,
-                                        onClanLeaderboardClick = onClanClick
+                                        onSeeAllClick = onSeeAllOngoingClick
                                     )
-                                    Spacer(modifier = Modifier.height(16.dp))
                                 }
                             }
+                        }
 
-                            // Kartu promo "Diskusi Publik" -- persis di bawah hero
-                            // carousel sesuai referensi, ngajak masuk Chat Global.
-                            item {
-                                HomeDiscussionPromoCard(onChatClick = onChatClick)
-                                Spacer(modifier = Modifier.height(16.dp))
-                            }
-
-                            // Section donasi SociaBuzz -- diletakkan di bawah hero
-                            // carousel biar keliatan tapi gak ganggu/nutupin
-                            // konten atau nav bar kayak versi floating button.
-                            item {
-                                DonationSection(
-                                    onClick = onDonationClick,
-                                    modifier = Modifier.padding(horizontal = 16.dp)
-                                )
-                                Spacer(modifier = Modifier.height(20.dp))
-                            }
-
-                            // Section: Sedang Tayang (Ongoing) -- di Dayynime v5, field
-                            // "hot" merepresentasikan anime yang lagi tayang, sama seperti
-                            // konvensi yang dipakai di Aniku. Sengaja ditaruh paling atas,
-                            // di atas section "Baru Ditambahkan".
-                            data.hot?.let { hotList ->
-                                if (hotList.isNotEmpty()) {
-                                    item {
-                                        AnimeHorizontalSection(
-                                            title = "Sedang Tayang",
-                                            items = hotList,
-                                            onAnimeClick = onAnimeClick,
-                                            onSeeAllClick = onSeeAllOngoingClick
-                                        )
-                                    }
-                                }
-                            }
-
-                            // Section: Update Hari Ini (Today)
-                            data.today?.let { todayList ->
-                                if (todayList.isNotEmpty()) {
-                                    item {
-                                        AnimeHorizontalSection(
-                                            title = "Update Hari Ini",
-                                            items = todayList,
-                                            onAnimeClick = onAnimeClick
-                                        )
-                                    }
-                                }
-                            }
-
-                            // Section: Baru Ditambahkan (New)
-                            data.new?.let { newList ->
-                                if (newList.isNotEmpty()) {
-                                    item {
-                                        AnimeHorizontalSection(
-                                            title = "New Anime Update",
-                                            items = newList,
-                                            onAnimeClick = onAnimeClick,
-                                            showNewBadge = true
-                                        )
-                                    }
-                                }
-                            }
-
-                            // Section: Komik Terbaru -- sumber terpisah dari data
-                            // anime (Result sendiri), jadi ditampilin selama ada
-                            // isinya walau homeState anime masih loading/gagal.
-                            val comicList = (comicLatestState as? Result.Success)?.data.orEmpty()
-                            if (comicList.isNotEmpty()) {
+                        // Section: Update Hari Ini (Today)
+                        data.today?.let { todayList ->
+                            if (todayList.isNotEmpty()) {
                                 item {
-                                    ComicHorizontalSection(
-                                        title = "Komik Terbaru",
-                                        items = comicList,
-                                        onComicClick = onComicClick,
-                                        onSeeAllClick = onSeeAllComicClick
+                                    AnimeHorizontalSection(
+                                        title = "Update Hari Ini",
+                                        items = todayList,
+                                        onAnimeClick = onAnimeClick
                                     )
                                 }
                             }
+                        }
 
-                            // Section: Terpopuler (Popular)
-                            data.popular?.let { popularList ->
-                                if (popularList.isNotEmpty()) {
-                                    item {
-                                        AnimeHorizontalSection(
-                                            title = "Terpopuler",
-                                            items = popularList,
-                                            onAnimeClick = onAnimeClick
-                                        )
-                                    }
+                        // Section: Baru Ditambahkan (New)
+                        data.new?.let { newList ->
+                            if (newList.isNotEmpty()) {
+                                item {
+                                    AnimeHorizontalSection(
+                                        title = "New Anime Update",
+                                        items = newList,
+                                        onAnimeClick = onAnimeClick,
+                                        showNewBadge = true
+                                    )
                                 }
                             }
+                        }
 
-                            // Section: Rekomendasi (Random)
-                            data.random?.let { randomList ->
-                                if (randomList.isNotEmpty()) {
-                                    item {
-                                        AnimeHorizontalSection(
-                                            title = "Rekomendasi Pilihan",
-                                            items = randomList,
-                                            onAnimeClick = onAnimeClick
-                                        )
-                                    }
+                        // Section: Komik Terbaru -- sumber terpisah dari data
+                        // anime (Result sendiri), jadi ditampilin selama ada
+                        // isinya walau homeState anime masih loading/gagal.
+                        val comicList = (comicLatestState as? Result.Success)?.data.orEmpty()
+                        if (comicList.isNotEmpty()) {
+                            item {
+                                ComicHorizontalSection(
+                                    title = "Komik Terbaru",
+                                    items = comicList,
+                                    onComicClick = onComicClick,
+                                    onSeeAllClick = onSeeAllComicClick
+                                )
+                            }
+                        }
+
+                        // Section: Terpopuler (Popular)
+                        data.popular?.let { popularList ->
+                            if (popularList.isNotEmpty()) {
+                                item {
+                                    AnimeHorizontalSection(
+                                        title = "Terpopuler",
+                                        items = popularList,
+                                        onAnimeClick = onAnimeClick
+                                    )
                                 }
                             }
+                        }
 
-                            // Section: Segera Tayang (Waiting)
-                            data.waiting?.let { waitingList ->
-                                if (waitingList.isNotEmpty()) {
-                                    item {
-                                        AnimeHorizontalSection(
-                                            title = "Segera Tayang",
-                                            items = waitingList,
-                                            onAnimeClick = onAnimeClick
-                                        )
-                                    }
+                        // Section: Rekomendasi (Random)
+                        data.random?.let { randomList ->
+                            if (randomList.isNotEmpty()) {
+                                item {
+                                    AnimeHorizontalSection(
+                                        title = "Rekomendasi Pilihan",
+                                        items = randomList,
+                                        onAnimeClick = onAnimeClick
+                                    )
+                                }
+                            }
+                        }
+
+                        // Section: Segera Tayang (Waiting)
+                        data.waiting?.let { waitingList ->
+                            if (waitingList.isNotEmpty()) {
+                                item {
+                                    AnimeHorizontalSection(
+                                        title = "Segera Tayang",
+                                        items = waitingList,
+                                        onAnimeClick = onAnimeClick
+                                    )
                                 }
                             }
                         }
