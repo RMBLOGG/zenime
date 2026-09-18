@@ -239,7 +239,7 @@ fun HomeScreen(
                                     text = "Video yang sudah didownload",
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
                                     color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.padding(horizontal = 16.dp, bottom = 4.dp)
+                                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp)
                                 )
                             }
                             items(downloads, key = { it.episodeId }) { download ->
