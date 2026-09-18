@@ -24,6 +24,13 @@ data class ZenimeCodeResponse(
     @Json(name = "message") val message: String? = null
 )
 
+/** Response batch zenime-get-user-numbers: peta firebase_uid -> user_number. */
+@JsonClass(generateAdapter = true)
+data class UserNumbersResponse(
+    @Json(name = "user_numbers") val userNumbers: Map<String, Long> = emptyMap(),
+    @Json(name = "message") val message: String? = null
+)
+
 @JsonClass(generateAdapter = true)
 data class PremiumStatusResponse(
     @Json(name = "is_premium") val isPremium: Boolean = false,

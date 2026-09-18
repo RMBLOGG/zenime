@@ -229,6 +229,7 @@ fun ChatScreen(
                                     senderClanTag = uiState.clanTagsByUid[message.firebaseUid],
                                     senderLevel = uiState.xpLevelsByUid[message.firebaseUid],
                                     senderUsernameColor = uiState.usernameColorsByUid[message.firebaseUid],
+                                    senderUserNumber = uiState.userNumbersByUid[message.firebaseUid],
                                     isDeleting = uiState.deletingMessageId == message.id,
                                     ownAvatarUrl = uiState.displayAvatarUrl,
                                     onReply = { viewModel.setReplyTarget(message) },
@@ -335,6 +336,7 @@ private fun ChatBubble(
     senderClanTag: String?,
     senderLevel: Int?,
     senderUsernameColor: String?,
+    senderUserNumber: Long?,
     isDeleting: Boolean,
     ownAvatarUrl: String?,
     onReply: () -> Unit,
@@ -400,6 +402,15 @@ private fun ChatBubble(
                                         .size(17.dp)
                                 )
                             }
+                            if (senderUserNumber != null) {
+                                Text(
+                                    text = "#$senderUserNumber",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(end = 4.dp)
+                                )
+                            }
                             Text(
                                 text = message.username,
                                 color = usernameColor,
@@ -424,6 +435,15 @@ private fun ChatBubble(
                                     modifier = Modifier
                                         .padding(start = 3.dp)
                                         .size(17.dp)
+                                )
+                            }
+                            if (senderUserNumber != null) {
+                                Text(
+                                    text = "#$senderUserNumber",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(start = 4.dp)
                                 )
                             }
                             Spacer(modifier = Modifier.weight(1f, fill = true))

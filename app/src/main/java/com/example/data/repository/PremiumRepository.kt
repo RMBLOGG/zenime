@@ -52,6 +52,18 @@ class PremiumRepository(
         }
     }
 
+    /** Batch-fetch user_number (ID urut ala Aniku) buat banyak uid sekaligus -- dipakai di Chat Global. */
+    suspend fun getUserNumbersForUids(firebaseUids: List<String>): Result<Map<String, Long>> {
+        val distinctUids = firebaseUids.filter { it.isNotBlank() }.distinct()
+        if (distinctUids.isEmpty()) return Result.success(emptyMap())
+        return try {
+            val response = api.getUserNumbers(mapOf("firebase_uids" to distinctUids))
+            Result.success(response.userNumbers)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     /**
      * Cek status premium user; dipanggil sebelum nonton buat gating.
      * Setiap sukses, hasilnya ditulis ke [statusCache] (kalau ada) buat

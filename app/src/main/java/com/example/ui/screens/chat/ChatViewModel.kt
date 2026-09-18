@@ -84,6 +84,10 @@ data class ChatUiState(
     // (ZenimePrimary) pas dirender.
     val usernameColorsByUid: Map<String, String> = emptyMap(),
 
+    // ID urut ala Aniku per firebase_uid pengirim (uid -> 196) -- dipakai
+    // buat nampilin "#196" di samping badge Premium/username di bubble chat.
+    val userNumbersByUid: Map<String, Long> = emptyMap(),
+
     // --- Pesan Suara (VN) -- kirim khusus Premium, dengerin/play terbuka
     // buat semua user (lihat catatan di ChatRepository.sendVoiceMessage).
     val isRecording: Boolean = false,
@@ -155,6 +159,10 @@ class ChatViewModel(
     private val usernameColorCache = mutableMapOf<String, String?>()
     private val usernameColorCheckedUids = mutableSetOf<String>()
 
+    // Sama pola kayak cache di atas, tapi buat user_number (ID urut ala Aniku).
+    private val userNumberCache = mutableMapOf<String, Long?>()
+    private val userNumberCheckedUids = mutableSetOf<String>()
+
     init {
         loadProfileAndPremiumStatus(fallbackUsername)
         // Full load sekali di awal (isi riwayat pesan), abis itu pesan baru
@@ -191,6 +199,14 @@ class ChatViewModel(
             usernameColorCheckedUids += firebaseUid
             usernameColorCache[firebaseUid] = profile?.usernameColor
 
+            // Sama juga buat user_number diri sendiri -- satu request batch
+            // (isinya cuma 1 uid) biar konsisten sama cache lain di atas.
+            val ownUserNumber = premiumRepository.getUserNumbersForUids(listOf(firebaseUid))
+                .getOrNull()
+                ?.get(firebaseUid)
+            userNumberCheckedUids += firebaseUid
+            userNumberCache[firebaseUid] = ownUserNumber
+
             _uiState.value = _uiState.value.copy(
                 displayUsername = profile?.username?.ifBlank { fallbackUsername } ?: fallbackUsername,
                 displayAvatarUrl = resolvedAvatarUrl,
@@ -198,7 +214,8 @@ class ChatViewModel(
                 displayUsernameColor = profile?.usernameColor,
                 isPremium = isPremium,
                 premiumUids = premiumUidsSnapshot(),
-                usernameColorsByUid = usernameColorCache.filterValues { it != null }.mapValues { it.value!! }
+                usernameColorsByUid = usernameColorCache.filterValues { it != null }.mapValues { it.value!! },
+                userNumbersByUid = userNumberCache.filterValues { it != null }.mapValues { it.value!! }
             )
         }
     }
@@ -300,6 +317,29 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * Cek user_number (ID urut ala Aniku) buat pengirim-pengirim baru yang
+     * muncul di daftar pesan (pola persis sama kayak
+     * [checkUsernameColorsForNewSenders]). Fetch dilakuin batch sekali jalan.
+     */
+    private fun checkUserNumbersForNewSenders(messages: List<ChatMessage>) {
+        val newUids = messages
+            .map { it.firebaseUid }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .filterNot { userNumberCheckedUids.contains(it) }
+        if (newUids.isEmpty()) return
+
+        userNumberCheckedUids += newUids
+        viewModelScope.launch {
+            val numbers = premiumRepository.getUserNumbersForUids(newUids).getOrDefault(emptyMap())
+            newUids.forEach { uid -> userNumberCache[uid] = numbers[uid] }
+            _uiState.value = _uiState.value.copy(
+                userNumbersByUid = userNumberCache.filterValues { it != null }.mapValues { it.value!! }
+            )
+        }
+    }
+
     /** Subscribe ke Supabase Realtime -- gantiin polling PostgREST tiap 3 detik. */
     private fun startRealtime() {
         realtimeJob?.cancel()
@@ -319,6 +359,7 @@ class ChatViewModel(
                 checkClanTagsForNewSenders(listOf(event.message))
                 checkXpLevelsForNewSenders(listOf(event.message))
                 checkUsernameColorsForNewSenders(listOf(event.message))
+                checkUserNumbersForNewSenders(listOf(event.message))
             }
             is ChatRealtimeEvent.Deleted -> {
                 _uiState.value = _uiState.value.copy(
@@ -355,6 +396,7 @@ class ChatViewModel(
             checkClanTagsForNewSenders(messages)
             checkXpLevelsForNewSenders(messages)
             checkUsernameColorsForNewSenders(messages)
+            checkUserNumbersForNewSenders(messages)
         } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
