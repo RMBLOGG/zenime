@@ -166,7 +166,16 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        lifecycleScope.launch { checkAppState(isRetry = false) }
+        // isRetry: true selalu (bukan cuma pas tombol retry) -- SENGAJA
+        // motong cache 1 jam RemoteConfigManager.refresh() di sini. Kalau
+        // pakai refresh() biasa, app yang di-UPDATE (bukan install ulang)
+        // bakal ngewarisin cache Remote Config dari sesi sebelumnya dan
+        // BISA SKIP FETCH BARU sampai 1 jam -- artinya toggle
+        // maintenance_mode di Console gak langsung kepake pas app dibuka.
+        // forceRefresh() di cold start mahalnya cuma 1 request tambahan
+        // per buka app (jauh di bawah quota Remote Config), harga yang
+        // wajar buat kill-switch yang harus REAL-TIME.
+        lifecycleScope.launch { checkAppState(isRetry = true) }
 
         setContent {
             val themeMode by userPrefs.themeModeFlow.collectAsStateWithLifecycle(initialValue = "DARK")
