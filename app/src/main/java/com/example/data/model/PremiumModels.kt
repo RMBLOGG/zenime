@@ -20,6 +20,7 @@ data class PremiumPackagesResponse(
 @JsonClass(generateAdapter = true)
 data class ZenimeCodeResponse(
     @Json(name = "zenime_code") val zenimeCode: String? = null,
+    @Json(name = "user_number") val userNumber: Long? = null,
     @Json(name = "message") val message: String? = null
 )
 

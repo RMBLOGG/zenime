@@ -632,6 +632,16 @@ private fun HomeProfileHeader(
                             )
                         }
                     }
+                    if (state.userNumber != null) {
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "ID #${state.userNumber}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                     Spacer(modifier = Modifier.height(5.dp))
                     LevelBadge(level = state.level)
                 }

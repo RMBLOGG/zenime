@@ -34,6 +34,7 @@ data class HomeProfileUiState(
     val username: String = "",
     val avatarUrl: String? = null,
     val zenimeCode: String? = null,
+    val userNumber: Long? = null,
     val isPremium: Boolean = false,
     val premiumDaysLeft: Long? = null,
     val coinBalance: Long = 0L,
@@ -127,7 +128,7 @@ class HomeViewModel(
             val premiumStatus = premiumResult.getOrNull()
             val daysLeft = premiumStatus?.expiresAt?.let { computeDaysLeft(it) }
 
-            val codeResult = premiumRepository.getZenimeCode(uid)
+            val identityResult = premiumRepository.getProfileIdentity(uid).getOrNull()
             val balanceResult = coinRepository.getBalance(uid)
             val myXp = xpRepository.getMyXp(uid).getOrNull()
 
@@ -137,7 +138,8 @@ class HomeViewModel(
                 // Foto profil sekarang bebas buat semua user (bukan lagi benefit
                 // Premium) -- selalu dipasang kalau ada, sama kayak di ChatViewModel.
                 avatarUrl = chatProfile?.avatarUrl,
-                zenimeCode = codeResult.getOrNull(),
+                zenimeCode = identityResult?.first,
+                userNumber = identityResult?.second,
                 isPremium = premiumStatus?.isPremium ?: false,
                 premiumDaysLeft = daysLeft,
                 coinBalance = balanceResult.getOrNull() ?: 0L,

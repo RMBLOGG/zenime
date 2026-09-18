@@ -39,6 +39,20 @@ class PremiumRepository(
     }
 
     /**
+     * Ambil zenime_code + user_number (ID urut ala Aniku) sekaligus dalam
+     * satu request -- dipakai khusus di kartu profil Beranda. Screen lain
+     * (Premium/Coin) yang cuma butuh kode tetap pakai [getZenimeCode].
+     */
+    suspend fun getProfileIdentity(firebaseUid: String): Result<Pair<String?, Long?>> {
+        return try {
+            val response = api.getZenimeCode(mapOf("firebase_uid" to firebaseUid))
+            Result.success(response.zenimeCode to response.userNumber)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Cek status premium user; dipanggil sebelum nonton buat gating.
      * Setiap sukses, hasilnya ditulis ke [statusCache] (kalau ada) buat
      * jadi fallback pas nanti gagal cek karena offline -- lihat
