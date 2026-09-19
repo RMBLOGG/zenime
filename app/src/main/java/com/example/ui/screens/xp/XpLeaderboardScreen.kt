@@ -1,6 +1,5 @@
 package com.example.ui.screens.xp
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -39,7 +39,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,7 +47,6 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.example.R
 import com.example.data.model.UserXpDisplay
 import com.example.ui.components.ClanRainbowBadge
 import com.example.ui.components.EmptyStateView
@@ -266,9 +264,10 @@ private fun PodiumCard(
             )
             if (entry.isPremium) {
                 Spacer(Modifier.width(3.dp))
-                Image(
-                    painter = painterResource(id = R.drawable.ic_premium_badge),
+                Icon(
+                    imageVector = Icons.Filled.Verified,
                     contentDescription = "Premium",
+                    tint = Color(0xFF3897F0),
                     modifier = Modifier.size(14.dp)
                 )
             }
@@ -329,9 +328,10 @@ private fun XpLeaderboardRow(rank: Int, entry: UserXpDisplay, isMe: Boolean) {
                 )
                 if (entry.isPremium) {
                     Spacer(Modifier.width(4.dp))
-                    Image(
-                        painter = painterResource(id = R.drawable.ic_premium_badge),
+                    Icon(
+                        imageVector = Icons.Filled.Verified,
                         contentDescription = "Premium",
+                        tint = Color(0xFF3897F0),
                         modifier = Modifier.size(16.dp)
                     )
                 }
