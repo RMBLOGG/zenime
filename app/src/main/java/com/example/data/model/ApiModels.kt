@@ -48,10 +48,16 @@ data class GenreItem(
     @Json(name = "name") val name: String? = null,
     @Json(name = "title") val title: String? = null,
     @Json(name = "slug") val slug: String? = null,
-    @Json(name = "value") val value: String? = null
+    @Json(name = "value") val value: String? = null,
+    // API baru (explore/genre) ngasih grouping genre lewat field ini (mis.
+    // "Genre", "Tema", dll) -- belum dipakai UI, disiapin buat nanti.
+    @Json(name = "group") val group: String? = null
 ) {
     fun getDisplayName(): String = name ?: title ?: value ?: slug ?: "Unknown"
-    fun getFilterValue(): String = slug ?: value ?: name ?: ""
+
+    // API baru (explore/movie_genre) filter pakai id_genre numerik, bukan
+    // slug -- makanya id diprioritaskan duluan sekarang.
+    fun getFilterValue(): String = id ?: slug ?: value ?: name ?: ""
 }
 
 @JsonClass(generateAdapter = true)
@@ -98,6 +104,25 @@ data class EpisodeDetail(
 @JsonClass(generateAdapter = true)
 data class StreamResponse(
     @Json(name = "episode") val episode: EpisodeDetail? = null,
-    @Json(name = "episodeNext") val episodeNext: EpisodeDetail? = null,
-    @Json(name = "servers") val servers: List<StreamServer>? = null
+    // Nama field JSON dari API baru beda ("episode_next"/"server"), tapi
+    // nama properti Kotlin dipertahankan sama biar UI (PlayerScreen dkk)
+    // gak perlu diubah sama sekali.
+    @Json(name = "episode_next") val episodeNext: EpisodeDetail? = null,
+    @Json(name = "server") val servers: List<StreamServer>? = null
+)
+
+/**
+ * Amplop respons mentah API baru (Animein raw, base path /3/2/...):
+ * {"status": 200, "error": false, "data": {...}}.
+ * "data" isinya beda-beda tiap endpoint (kadang key "movie", kadang
+ * "episode", kadang "genre", dll) makanya ditampung sebagai Map dulu,
+ * baru di-parse manual di AnimeRepository -- sama kayak pola
+ * first_list()/clean_movie() di referensi Flask, supaya gak gampang
+ * crash kalau upstream ngasih bentuk yang agak beda dari dugaan.
+ */
+@JsonClass(generateAdapter = true)
+data class RawEnvelope(
+    @Json(name = "status") val status: Int? = null,
+    @Json(name = "error") val error: Boolean? = null,
+    @Json(name = "data") val data: Map<String, Any?>? = null
 )

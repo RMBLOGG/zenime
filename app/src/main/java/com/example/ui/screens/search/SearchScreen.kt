@@ -396,7 +396,7 @@ fun FilterBottomSheetContent(
         Text("Urutkan", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.height(8.dp))
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(null to "Default", "latest" to "Terbaru", "popular" to "Terpopuler").forEach { (valKey, label) ->
+            listOf(null to "Default", "views" to "Terpopuler", "alphabet" to "A-Z").forEach { (valKey, label) ->
                 FilterChip(
                     selected = tempSort == valKey,
                     onClick = { tempSort = valKey },

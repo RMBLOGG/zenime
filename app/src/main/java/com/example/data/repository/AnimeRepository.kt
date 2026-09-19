@@ -9,16 +9,23 @@ import com.example.data.local.UserPreferencesRepository
 import com.example.data.local.WatchHistoryEntity
 import com.example.data.local.ZenimeDao
 import com.example.data.model.AnimeItem
+import com.example.data.model.EpisodeDetail
 import com.example.data.model.EpisodeItem
 import com.example.data.model.GenreItem
 import com.example.data.model.HomeResponse
+import com.example.data.model.RawEnvelope
 import com.example.data.model.SearchResponse
 import com.example.util.friendlyErrorMessage
 import com.example.data.model.StreamResponse
 import com.example.data.model.StreamServer
 import com.example.util.qualityValueP
+import com.squareup.moshi.Moshi
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
@@ -60,6 +67,56 @@ class AnimeRepository(
     private val allEpisodesCache = ConcurrentHashMap<String, CacheEntry<List<EpisodeItem>>>()
     private val scheduleCache = ConcurrentHashMap<String, CacheEntry<List<AnimeItem>>>()
     private var genresCache: CacheEntry<List<GenreItem>>? = null
+
+    // ---- Parsing amplop API baru --------------------------------------
+    // API baru balikin {"status","error","data":{...}} dengan bentuk "data"
+    // beda-beda tiap endpoint. RawEnvelope nampung "data" sebagai Map dulu
+    // (lewat adapter Any bawaan Moshi), baru di-navigasi & di-convert manual
+    // ke model yang udah ada di sini -- sama kayak first_list()/clean_movie()
+    // di referensi Flask, biar gak gampang crash kalau bentuknya sedikit
+    // meleset dari dugaan.
+    private val rawMoshi: Moshi by lazy {
+        Moshi.Builder().addLast(KotlinJsonAdapterFactory()).build()
+    }
+    private val animeItemAdapter by lazy { rawMoshi.adapter(AnimeItem::class.java) }
+    private val episodeItemAdapter by lazy { rawMoshi.adapter(EpisodeItem::class.java) }
+    private val episodeDetailAdapter by lazy { rawMoshi.adapter(EpisodeDetail::class.java) }
+    private val genreItemAdapter by lazy { rawMoshi.adapter(GenreItem::class.java) }
+    private val streamServerAdapter by lazy { rawMoshi.adapter(StreamServer::class.java) }
+
+    private val dayKeyToApiDay = mapOf(
+        "monday" to "SENIN", "tuesday" to "SELASA", "wednesday" to "RABU",
+        "thursday" to "KAMIS", "friday" to "JUMAT", "saturday" to "SABTU",
+        "sunday" to "MINGGU"
+    )
+
+    @Suppress("UNCHECKED_CAST")
+    private fun asMap(value: Any?): Map<String, Any?>? = value as? Map<String, Any?>
+
+    @Suppress("UNCHECKED_CAST")
+    private fun asMapList(value: Any?): List<Map<String, Any?>> =
+        (value as? List<*>)?.filterIsInstance<Map<String, Any?>>() ?: emptyList()
+
+    /** Ambil list dari data[key]; kalau gak ada, pakai list pertama yang ketemu di data. */
+    private fun firstList(data: Map<String, Any?>?, key: String): List<Map<String, Any?>> {
+        if (data == null) return emptyList()
+        asMapList(data[key]).let { if (it.isNotEmpty() || data[key] is List<*>) return it }
+        for (v in data.values) {
+            if (v is List<*>) return asMapList(v)
+        }
+        return emptyList()
+    }
+
+    private fun <T> Map<String, Any?>.toModelOrNull(adapter: com.squareup.moshi.JsonAdapter<T>): T? =
+        try {
+            adapter.fromJsonValue(this)
+        } catch (e: Exception) {
+            null
+        }
+
+    private fun movieMaps(env: RawEnvelope): List<AnimeItem> =
+        firstList(env.data, "movie").mapNotNull { it.toModelOrNull(animeItemAdapter) }
+            .filter { it.id.isNotBlank() }
 
     /** Panggil ini dari pull-to-refresh kalau nanti mau nambahin fitur itu. */
     fun clearAllCache() {
@@ -110,7 +167,30 @@ class AnimeRepository(
         val deferred = CompletableDeferred<HomeResponse>()
         homeMutex.withLock { homeInFlight = deferred }
         return try {
-            val response = api.getHome()
+            // API baru cuma punya section hot/new/popular/random (gak ada
+            // today/trailer/waiting kayak API lama) -- ditembak paralel
+            // biar beranda gak lebih lambat dari sebelumnya. Section yang
+            // gak ada tetap null, aman karena HomeScreen udah pakai ?.let
+            // buat nampilin tiap section (otomatis kesembunyi kalau null).
+            val response = coroutineScope {
+                val hotDef = async { runCatching { movieMaps(api.getHomeSection("hot")) } }
+                val newDef = async { runCatching { movieMaps(api.getHomeSection("new")) } }
+                val popularDef = async { runCatching { movieMaps(api.getHomeSection("popular")) } }
+                val randomDef = async { runCatching { movieMaps(api.getHomeSection("random")) } }
+                val results = listOf(hotDef, newDef, popularDef, randomDef).awaitAll()
+                // Kalau SEMUA section gagal, anggap request gagal total (biar
+                // fallback ke cache lama / pesan error jalan kayak biasa).
+                if (results.all { it.isFailure }) throw results.first().exceptionOrNull()!!
+                HomeResponse(
+                    hot = results[0].getOrNull(),
+                    new = results[1].getOrNull(),
+                    today = null,
+                    popular = results[2].getOrNull(),
+                    trailer = null,
+                    random = results[3].getOrNull(),
+                    waiting = null
+                )
+            }
             homeCache = CacheEntry(response, System.currentTimeMillis())
             deferred.complete(response)
             response
@@ -140,14 +220,7 @@ class AnimeRepository(
         }
         emit(Result.Loading)
         try {
-            val response = api.search(
-                keyword = query,
-                page = page,
-                sort = sort,
-                genreIn = genreIn,
-                status = status,
-                type = type
-            )
+            val response = runSearch(query, page, sort, genreIn, status, type)
             searchCache[key] = CacheEntry(response, System.currentTimeMillis())
             emit(Result.Success(response))
         } catch (e: Exception) {
@@ -159,6 +232,66 @@ class AnimeRepository(
         }
     }.flowOn(Dispatchers.IO)
 
+    /**
+     * API baru gak punya 1 endpoint pencarian gabungan (keyword+genre+
+     * status+type+sort sekaligus kayak API lama) -- tiap dimensi filter
+     * endpoint-nya sendiri:
+     *   keyword -> explore/movie, genre -> explore/movie_genre,
+     *   tipe -> explore/movie_type. "status" (Ongoing/Completed) malah
+     *   gak ada endpoint filter-nya sama sekali di API baru.
+     *
+     * Jadi: satu filter jadi "endpoint utama" (prioritas: keyword > genre >
+     * tipe), sisanya (termasuk status, yang emang gak ada endpoint-nya sama
+     * sekali) diterapkan manual di sisi app dari hasil endpoint utama itu --
+     * biar UI filter yang udah ada tetap kepake dan beberapa filter bisa
+     * dikombinasi sekaligus, walau gak sekuat query gabungan di server dulu.
+     * Kalau gak ada satupun dari keyword/genre/tipe yang dipilih, gak ada
+     * endpoint yang cocok buat "tampilkan semua" -- balikin kosong dulu,
+     * sama kayak halaman /cari di web referensi yang minta user ngetik dulu.
+     */
+    private suspend fun runSearch(
+        query: String,
+        page: Int?,
+        sort: String?,
+        genreIn: String?,
+        status: String?,
+        type: String?
+    ): SearchResponse {
+        val apiPage = page ?: 0
+        val apiSort = sort?.takeIf { it == "views" || it == "alphabet" }
+
+        val env: RawEnvelope? = when {
+            query.isNotBlank() -> api.exploreByKeyword(keyword = query, sort = apiSort, page = apiPage)
+            !genreIn.isNullOrBlank() -> api.exploreByGenre(idGenre = genreIn, sort = apiSort, page = apiPage)
+            !type.isNullOrBlank() -> api.exploreByType(type = type, sort = apiSort, page = apiPage)
+            else -> null
+        }
+
+        if (env == null) {
+            return SearchResponse(query = query, page = apiPage.toString(), results = emptyList(), next_page = null)
+        }
+
+        var movies = movieMaps(env)
+        val hasMoreRaw = movies.isNotEmpty()
+
+        // Filter tambahan di sisi app buat dimensi yang bukan endpoint utama.
+        if (!status.isNullOrBlank()) {
+            movies = movies.filter { it.status?.trim()?.equals(status, ignoreCase = true) == true }
+        }
+        if (!type.isNullOrBlank() && query.isNotBlank()) {
+            // type cuma jadi endpoint utama kalau keyword kosong -- kalau
+            // keyword yang jadi utama, type diterapkan manual di sini.
+            movies = movies.filter { it.type?.equals(type, ignoreCase = true) == true }
+        }
+
+        return SearchResponse(
+            query = query,
+            page = apiPage.toString(),
+            results = movies,
+            next_page = if (hasMoreRaw) apiPage + 1 else null
+        )
+    }
+
     // ---- Detail ----------------------------------------------------------
     fun getDetail(id: String, forceRefresh: Boolean = false): Flow<Result<AnimeItem>> = flow {
         val cached = detailCache[id]
@@ -168,7 +301,13 @@ class AnimeRepository(
         }
         emit(Result.Loading)
         try {
-            val response = api.getDetail(id)
+            val env = api.getDetailRaw(id)
+            // Kadang "data" langsung berisi field-field anime-nya (flat),
+            // kadang dibungkus lagi di data.movie -- dicoba dua-duanya sama
+            // kayak fallback di web referensi.
+            val movieMap = env.data?.let { d -> asMap(d["movie"]) ?: d }
+            val response = movieMap?.toModelOrNull(animeItemAdapter)
+                ?: throw IllegalStateException("Detail anime kosong dari server")
             detailCache[id] = CacheEntry(response, System.currentTimeMillis())
             emit(Result.Success(response))
         } catch (e: Exception) {
@@ -194,7 +333,7 @@ class AnimeRepository(
         }
         emit(Result.Loading)
         try {
-            val response = api.getEpisodes(id, page)
+            val response = fetchEpisodePage(id, page ?: 0)
             episodesCache[key] = CacheEntry(response, System.currentTimeMillis())
             emit(Result.Success(response))
         } catch (e: Exception) {
@@ -206,11 +345,10 @@ class AnimeRepository(
         }
     }.flowOn(Dispatchers.IO)
 
-    // animeinweb /api/anime/{id}/episodes dipaginasi upstream (30/halaman).
-    // Buat anime yang episode-nya banyak (One Piece dkk bisa 1000+), loop semua
-    // halaman di sini sampe ketemu halaman kosong. Batch pertama request TANPA
-    // page param sama sekali (bukan page=1) -- page=1 itu udah batch KEDUA
-    // di upstream. Sama persis pattern yang dipakai di Aniku.
+    // movie/episode di API baru dipaginasi upstream mulai dari page=0 (bukan
+    // pola null-lalu-1 kayak API lama). Buat anime yang episode-nya banyak
+    // (One Piece dkk bisa 1000+), loop semua halaman di sini sampe ketemu
+    // halaman kosong.
     fun getAllEpisodes(id: String, forceRefresh: Boolean = false): Flow<Result<List<EpisodeItem>>> = flow {
         val cached = allEpisodesCache[id]
         if (!forceRefresh && isFresh(cached, TTL_EPISODES)) {
@@ -220,17 +358,13 @@ class AnimeRepository(
         emit(Result.Loading)
         try {
             val allEpisodes = mutableListOf<EpisodeItem>()
-            val firstBatch = api.getEpisodes(id, page = null)
-            allEpisodes.addAll(firstBatch)
-            if (firstBatch.isNotEmpty()) {
-                var epPage = 1
-                val MAX_EPISODE_PAGES = 60 // ~1800 episode, jauh di atas anime terpanjang yang ada
-                while (epPage <= MAX_EPISODE_PAGES) {
-                    val pageResult = api.getEpisodes(id, page = epPage)
-                    if (pageResult.isEmpty()) break
-                    allEpisodes.addAll(pageResult)
-                    epPage++
-                }
+            var epPage = 0
+            val MAX_EPISODE_PAGES = 60 // ~1800 episode, jauh di atas anime terpanjang yang ada
+            while (epPage <= MAX_EPISODE_PAGES) {
+                val pageResult = fetchEpisodePage(id, epPage)
+                if (pageResult.isEmpty()) break
+                allEpisodes.addAll(pageResult)
+                epPage++
             }
             val result = allEpisodes.toList()
             allEpisodesCache[id] = CacheEntry(result, System.currentTimeMillis())
@@ -244,6 +378,12 @@ class AnimeRepository(
         }
     }.flowOn(Dispatchers.IO)
 
+    private suspend fun fetchEpisodePage(id: String, page: Int): List<EpisodeItem> {
+        val env = api.getEpisodesRaw(id, page = page)
+        return firstList(env.data, "episode").mapNotNull { it.toModelOrNull(episodeItemAdapter) }
+            .filter { it.id.isNotBlank() }
+    }
+
     // ---- Episode stream ----------------------------------------------------
     // SENGAJA TIDAK DI-CACHE: link stream biasanya signed URL dengan masa
     // berlaku pendek dari upstream. Kalau di-cache dan URL-nya udah expired,
@@ -251,12 +391,31 @@ class AnimeRepository(
     fun getEpisodeStream(episodeId: String): Flow<Result<StreamResponse>> = flow {
         emit(Result.Loading)
         try {
-            val response = api.getEpisodeStream(episodeId)
+            val response = fetchStream(episodeId)
             emit(Result.Success(response))
         } catch (e: Exception) {
             emit(Result.Error(e, friendlyErrorMessage(e, "Gagal memuat link streaming")))
         }
     }.flowOn(Dispatchers.IO)
+
+    /**
+     * "episode" & "episode_next" upstream kadang bukan object (mis. `false`
+     * kalau gak ada episode berikutnya) -- asMap() balikin null diam-diam
+     * buat kasus gitu, gak crash, sama kayak isinstance(nxt, dict) di
+     * referensi Flask.
+     */
+    private suspend fun fetchStream(episodeId: String): StreamResponse {
+        val data = api.getStreamRaw(episodeId).data
+        val episode = asMap(data?.get("episode"))?.toModelOrNull(episodeDetailAdapter)
+        val nextMap = asMap(data?.get("episode_next"))
+        val episodeNext = if (nextMap != null && nextMap["id"] != null) {
+            nextMap.toModelOrNull(episodeDetailAdapter)
+        } else null
+        val servers = firstList(data, "server")
+            .mapNotNull { it.toModelOrNull(streamServerAdapter) }
+            .filter { !it.link.isNullOrBlank() }
+        return StreamResponse(episode = episode, episodeNext = episodeNext, servers = servers)
+    }
 
     // ---- Schedule ----------------------------------------------------------
     fun getSchedule(day: String, forceRefresh: Boolean = false): Flow<Result<List<AnimeItem>>> = flow {
@@ -267,7 +426,12 @@ class AnimeRepository(
         }
         emit(Result.Loading)
         try {
-            val response = api.getSchedule(day)
+            // API baru minta kode hari Indonesia (SENIN..MINGGU), sedangkan
+            // ScheduleViewModel masih ngirim key Inggris (monday..sunday) --
+            // ditranslate di sini biar ViewModel gak perlu diubah.
+            val apiDay = dayKeyToApiDay[day.lowercase()] ?: day.uppercase()
+            val env = api.getScheduleRaw(apiDay)
+            val response = movieMaps(env)
             scheduleCache[day] = CacheEntry(response, System.currentTimeMillis())
             emit(Result.Success(response))
         } catch (e: Exception) {
@@ -288,7 +452,8 @@ class AnimeRepository(
         }
         emit(Result.Loading)
         try {
-            val response = api.getGenres()
+            val env = api.getGenresRaw()
+            val response = firstList(env.data, "genre").mapNotNull { it.toModelOrNull(genreItemAdapter) }
             genresCache = CacheEntry(response, System.currentTimeMillis())
             emit(Result.Success(response))
         } catch (e: Exception) {
@@ -401,7 +566,7 @@ class AnimeRepository(
      */
     suspend fun getDownloadQualityOptions(episodeId: String): Result<List<StreamServer>> {
         return try {
-            val stream = api.getEpisodeStream(episodeId)
+            val stream = fetchStream(episodeId)
             val options = stream.servers.orEmpty()
                 .filter { !it.link.isNullOrBlank() }
                 .distinctBy { it.quality }
