@@ -162,3 +162,31 @@ fun ShimmerBanner(modifier: Modifier = Modifier) {
             .background(brush)
     )
 }
+
+/** Kerangka loading untuk grid episode 3 kolom (kotak persegi). */
+@Composable
+fun ShimmerEpisodeGrid(
+    modifier: Modifier = Modifier,
+    rows: Int = 4,
+    columns: Int = 3
+) {
+    val brush = shimmerBrush()
+    Column(
+        modifier = modifier.padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        repeat(rows) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                repeat(columns) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(brush)
+                    )
+                }
+            }
+        }
+    }
+}

@@ -90,7 +90,7 @@ import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.model.EpisodeItem
 import com.example.ui.components.DownloadQualityPickerDialog
 import com.example.ui.components.ErrorStateView
-import com.example.ui.components.ShimmerEpisodeList
+import com.example.ui.components.ShimmerEpisodeGrid
 import com.example.util.isDownloadAllowed
 import com.example.util.isEpisodeLocked
 import com.example.ui.components.ShimmerHorizontalSection
@@ -128,13 +128,13 @@ fun DetailScreen(
     val cuplixState by viewModel.cuplix.collectAsStateWithLifecycle()
     val coversState by viewModel.covers.collectAsStateWithLifecycle()
     val postersState by viewModel.posters.collectAsStateWithLifecycle()
+    var galleryPreview by remember { mutableStateOf<com.example.data.model.GalleryImage?>(null) }
 
     // Tab aktif disimpan sebagai nama enum supaya selamat dari rotasi layar.
     var selectedTabName by rememberSaveable { mutableStateOf(DetailTab.EPISODE.name) }
     val selectedTab = DetailTab.values().firstOrNull { it.name == selectedTabName } ?: DetailTab.EPISODE
     LaunchedEffect(selectedTab) { viewModel.ensureTabLoaded(selectedTab) }
 
-    var isSynopsisExpanded by remember { mutableStateOf(false) }
     var episodeToDeleteDownload by remember { mutableStateOf<String?>(null) }
 
     val context = LocalContext.current
@@ -385,103 +385,13 @@ fun DetailScreen(
                         }
 
                         if (selectedTab == DetailTab.EPISODE) {
-                        // 2. Genre Chips Bar (Pill Shape)
-                        anime.genre?.let { genreStr ->
-                            item {
-                                Spacer(modifier = Modifier.height(12.dp))
-                                val genreList = genreStr.split(",").map { it.trim() }
-                                LazyRow(
-                                    contentPadding = PaddingValues(horizontal = 20.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    items(genreList) { g ->
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = MaterialTheme.colorScheme.surface,
-                                            modifier = Modifier.border(1.dp, CardOutlineBorder, CircleShape)
-                                        ) {
-                                            Text(
-                                                text = g,
-                                                style = MaterialTheme.typography.labelMedium.copy(
-                                                    fontWeight = FontWeight.Medium,
-                                                    fontSize = 11.sp
-                                                ),
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
+                        // Daftar episode: grid 3 kolom (thumbnail persegi + nomor).
+                        item(key = "episode_top_space") {
+                            Spacer(modifier = Modifier.height(16.dp))
                         }
-
-                        // 3. Synopsis
-                        anime.synopsis?.let { synopsisText ->
-                            item {
-                                Spacer(modifier = Modifier.height(16.dp))
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 20.dp)
-                                ) {
-                                    Text(
-                                        text = "Sinopsis",
-                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    Text(
-                                        text = synopsisText,
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            lineHeight = 20.sp
-                                        ),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = if (isSynopsisExpanded) Int.MAX_VALUE else 3,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.animateContentSize()
-                                    )
-                                    Text(
-                                        text = if (isSynopsisExpanded) "Sembunyikan" else "Baca Selengkapnya...",
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = ZenimePrimary,
-                                        modifier = Modifier
-                                            .padding(top = 4.dp)
-                                            .clickable { isSynopsisExpanded = !isSynopsisExpanded }
-                                    )
-                                }
-                            }
-                        }
-
-                        // 4. Episode List Section Header
-                        item {
-                            Spacer(modifier = Modifier.height(20.dp))
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 20.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = if (episodesState is Result.Loading) {
-                                        "Daftar Episode"
-                                    } else {
-                                        "Daftar Episode (${episodesList.size})"
-                                    },
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 18.sp
-                                    ),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(12.dp))
-                        }
-
-                        // 5. Episode Card List (Horizontal Small Cards)
                         if (episodesState is Result.Loading) {
                             item {
-                                ShimmerEpisodeList()
+                                ShimmerEpisodeGrid()
                             }
                         } else if (episodesList.isEmpty()) {
                             item {
@@ -499,29 +409,24 @@ fun DetailScreen(
                                 }
                             }
                         } else {
-                            items(episodesList, key = { it.id }) { ep ->
-                                val isWatched = watchHistory?.episodeId == ep.id
-                                val downloadEntry = downloads.find { it.episodeId == ep.id }
-                                EpisodeHorizontalCard(
-                                    episode = ep,
-                                    posterUrl = ep.resolvedImageUrl ?: anime.image_cover ?: anime.image_poster,
-                                    isWatched = isWatched,
-                                    isLocked = isEpisodeLocked(ep.index, isPremium),
-                                    downloadEntry = downloadEntry,
-                                    isDownloadAllowed = isDownloadAllowed(isPremium),
-                                    onDownloadClick = {
-                                        if (isDownloadAllowed(isPremium)) {
-                                            viewModel.openDownloadQualityPicker(ep)
-                                        } else {
-                                            onUpgradeClick()
-                                        }
-                                    },
-                                    onDeleteDownloadClick = { episodeToDeleteDownload = ep.id },
-                                    onClick = {
-                                        onEpisodeClick(ep.id, ep.title ?: "Episode ${ep.index}")
+                            episodeGridItems(
+                                episodes = episodesList,
+                                fallbackImageUrl = anime.image_cover ?: anime.image_poster,
+                                watchedEpisodeId = watchHistory?.episodeId,
+                                downloads = downloads,
+                                isPremium = isPremium,
+                                onEpisodeClick = { ep ->
+                                    onEpisodeClick(ep.id, ep.title ?: "Episode ${ep.index}")
+                                },
+                                onDownloadClick = { ep ->
+                                    if (isDownloadAllowed(isPremium)) {
+                                        viewModel.openDownloadQualityPicker(ep)
+                                    } else {
+                                        onUpgradeClick()
                                     }
-                                )
-                            }
+                                },
+                                onDeleteDownloadClick = { ep -> episodeToDeleteDownload = ep.id }
+                            )
                             if (isLoadingMoreEpisodes) {
                                 item {
                                     Box(
@@ -540,47 +445,57 @@ fun DetailScreen(
                             }
                         }
                         } else {
-                            // Tab lain: satu item berisi konten tab (dimuat malas, beranimasi).
-                            item(key = "tab_content_${selectedTab.name}") {
-                                TabContentEnter {
-                                    when (selectedTab) {
-                                        DetailTab.SEASON -> SeasonTabContent(
+                            // Tab lain. Season cuma sedikit -> satu item. Cuplix/Cover/Poster
+                            // berisi puluhan gambar -> dipecah jadi baris LazyColumn supaya
+                            // hanya yang terlihat yang dikomposisi (tidak macet saat dibuka).
+                            when (selectedTab) {
+                                DetailTab.SEASON -> item(key = "tab_content_SEASON") {
+                                    TabContentEnter {
+                                        SeasonTabContent(
                                             state = seasonsState,
                                             currentAnimeId = viewModel.animeId,
                                             onAnimeClick = onAnimeClick,
                                             onRetry = { viewModel.retryTab(DetailTab.SEASON) }
                                         )
-                                        DetailTab.CUPLIX -> CuplixTabContent(
-                                            state = cuplixState,
-                                            onClipClick = onCuplixClick,
-                                            onLoadMore = { viewModel.loadMoreCuplix() },
-                                            onRetry = { viewModel.retryTab(DetailTab.CUPLIX) }
-                                        )
-                                        DetailTab.COVER -> GalleryTabContent(
-                                            state = coversState,
-                                            columns = 2,
-                                            aspectRatio = 16f / 9f,
-                                            emptyMessage = "Belum ada cover kiriman pengguna.",
-                                            onLoadMore = { viewModel.loadMoreCovers() },
-                                            onRetry = { viewModel.retryTab(DetailTab.COVER) }
-                                        )
-                                        DetailTab.POSTER -> GalleryTabContent(
-                                            state = postersState,
-                                            columns = 3,
-                                            aspectRatio = 2f / 3f,
-                                            emptyMessage = "Belum ada poster kiriman pengguna.",
-                                            onLoadMore = { viewModel.loadMorePosters() },
-                                            onRetry = { viewModel.retryTab(DetailTab.POSTER) }
-                                        )
-                                        DetailTab.EPISODE -> Unit
                                     }
                                 }
+                                DetailTab.CUPLIX -> cuplixTabItems(
+                                    state = cuplixState,
+                                    onClipClick = onCuplixClick,
+                                    onLoadMore = { viewModel.loadMoreCuplix() },
+                                    onRetry = { viewModel.retryTab(DetailTab.CUPLIX) }
+                                )
+                                DetailTab.COVER -> galleryTabItems(
+                                    keyPrefix = "cover",
+                                    state = coversState,
+                                    columns = 2,
+                                    aspectRatio = 16f / 9f,
+                                    emptyMessage = "Belum ada cover kiriman pengguna.",
+                                    onImageClick = { galleryPreview = it },
+                                    onLoadMore = { viewModel.loadMoreCovers() },
+                                    onRetry = { viewModel.retryTab(DetailTab.COVER) }
+                                )
+                                DetailTab.POSTER -> galleryTabItems(
+                                    keyPrefix = "poster",
+                                    state = postersState,
+                                    columns = 3,
+                                    aspectRatio = 2f / 3f,
+                                    emptyMessage = "Belum ada poster kiriman pengguna.",
+                                    onImageClick = { galleryPreview = it },
+                                    onLoadMore = { viewModel.loadMorePosters() },
+                                    onRetry = { viewModel.retryTab(DetailTab.POSTER) }
+                                )
+                                DetailTab.EPISODE -> Unit
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    galleryPreview?.let { image ->
+        ImagePreviewDialog(image = image, onDismiss = { galleryPreview = null })
     }
 
     // Dialog pilih kualitas sebelum download mulai.

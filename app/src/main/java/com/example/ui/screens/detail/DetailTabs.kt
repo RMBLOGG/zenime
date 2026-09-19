@@ -3,6 +3,7 @@ package com.example.ui.screens.detail
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -23,6 +24,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -32,6 +35,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -43,6 +47,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -320,24 +325,26 @@ private fun formatSeasonCount(raw: String?): String? {
 // ---------------------------------------------------------------------------
 // Cuplix per anime
 // ---------------------------------------------------------------------------
-@Composable
-fun CuplixTabContent(
+/**
+ * Tab Cuplix sebagai item LazyColumn: hanya baris yang terlihat yang dikomposisi
+ * dan memuat gambar, jadi tab langsung terbuka tanpa tersendat.
+ */
+fun LazyListScope.cuplixTabItems(
     state: PagedTabState<CuplixItem>,
     onClipClick: (String) -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit
 ) {
-    PagedTabHost(
+    pagedGridItems(
+        keyPrefix = "cuplix",
         state = state,
         emptyMessage = "Belum ada Cuplix untuk anime ini.",
+        columns = 2,
+        spacing = 12.dp,
+        onLoadMore = onLoadMore,
         onRetry = onRetry
-    ) { clips ->
-        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-            StaggeredGrid(items = clips, columns = 2, spacing = 12.dp) { clip ->
-                CuplixCard(clip = clip, onClick = { onClipClick(clip.id) })
-            }
-            LoadMoreFooter(state = state, onLoadMore = onLoadMore)
-        }
+    ) { clip ->
+        CuplixCard(clip = clip, onClick = { onClipClick(clip.id) })
     }
 }
 
@@ -402,36 +409,31 @@ private fun CuplixCard(clip: CuplixItem, onClick: () -> Unit) {
 // ---------------------------------------------------------------------------
 // Cover & Poster (galeri kiriman pengguna)
 // ---------------------------------------------------------------------------
-@Composable
-fun GalleryTabContent(
+/** Tab Cover / Poster sebagai item LazyColumn (lihat catatan di [cuplixTabItems]). */
+fun LazyListScope.galleryTabItems(
+    keyPrefix: String,
     state: PagedTabState<GalleryImage>,
     columns: Int,
     aspectRatio: Float,
     emptyMessage: String,
+    onImageClick: (GalleryImage) -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit
 ) {
-    var preview by remember { mutableStateOf<GalleryImage?>(null) }
-
-    PagedTabHost(
+    pagedGridItems(
+        keyPrefix = keyPrefix,
         state = state,
         emptyMessage = emptyMessage,
+        columns = columns,
+        spacing = 10.dp,
+        onLoadMore = onLoadMore,
         onRetry = onRetry
-    ) { images ->
-        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-            StaggeredGrid(items = images, columns = columns, spacing = 10.dp) { image ->
-                GalleryCard(
-                    image = image,
-                    aspectRatio = aspectRatio,
-                    onClick = { preview = image }
-                )
-            }
-            LoadMoreFooter(state = state, onLoadMore = onLoadMore)
-        }
-    }
-
-    preview?.let { image ->
-        ImagePreviewDialog(image = image, onDismiss = { preview = null })
+    ) { image ->
+        GalleryCard(
+            image = image,
+            aspectRatio = aspectRatio,
+            onClick = { onImageClick(image) }
+        )
     }
 }
 
@@ -475,7 +477,7 @@ private fun GalleryCard(
 }
 
 @Composable
-private fun ImagePreviewDialog(image: GalleryImage, onDismiss: () -> Unit) {
+internal fun ImagePreviewDialog(image: GalleryImage, onDismiss: () -> Unit) {
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -588,29 +590,81 @@ private fun <T> PagedTabHost(
     }
 }
 
-/** Grid biasa (bukan Lazy) -- aman karena sudah berada di dalam satu item LazyColumn. */
-@Composable
-private fun <T> StaggeredGrid(
-    items: List<T>,
+/**
+ * Grid berhalaman untuk tab Cuplix / Cover / Poster. Tiap baris jadi satu item
+ * LazyColumn (bukan satu Column raksasa), sehingga 30+ gambar tidak dikomposisi
+ * dan di-decode sekaligus saat tab dibuka.
+ */
+private fun <T> LazyListScope.pagedGridItems(
+    keyPrefix: String,
+    state: PagedTabState<T>,
+    emptyMessage: String,
     columns: Int,
     spacing: Dp,
+    onLoadMore: () -> Unit,
+    onRetry: () -> Unit,
     itemContent: @Composable (T) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
-        items.chunked(columns).forEachIndexed { rowIndex, rowItems ->
-            Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
-                rowItems.forEachIndexed { colIndex, item ->
-                    Box(modifier = Modifier.weight(1f)) {
-                        AnimatedGridItem(index = rowIndex * columns + colIndex) {
-                            itemContent(item)
-                        }
-                    }
+    if (state.items.isEmpty()) {
+        // Memuat / galat / kosong.
+        item(key = "${keyPrefix}_status") {
+            PagedTabHost(state = state, emptyMessage = emptyMessage, onRetry = onRetry) { }
+        }
+        return
+    }
+
+    val rows = state.items.chunked(columns)
+    itemsIndexed(rows, key = { index, _ -> "${keyPrefix}_row_$index" }) { rowIndex, rowItems ->
+        GridRowEnter(animate = rowIndex < 4, delayMs = rowIndex * 60L) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = spacing),
+                horizontalArrangement = Arrangement.spacedBy(spacing)
+            ) {
+                rowItems.forEach { item ->
+                    Box(modifier = Modifier.weight(1f)) { itemContent(item) }
                 }
                 repeat(columns - rowItems.size) {
                     Spacer(modifier = Modifier.weight(1f))
                 }
             }
         }
+    }
+    item(key = "${keyPrefix}_footer") {
+        Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+            LoadMoreFooter(state = state, onLoadMore = onLoadMore)
+        }
+    }
+}
+
+/**
+ * Fade + geser sedikit dari bawah, murni di layer grafis (tanpa rekomposisi).
+ * Hanya baris paling atas yang beranimasi, dan hanya sekali per tab dibuka.
+ */
+@Composable
+private fun GridRowEnter(
+    animate: Boolean,
+    delayMs: Long,
+    content: @Composable () -> Unit
+) {
+    var played by rememberSaveable { mutableStateOf(!animate) }
+    val progress = remember { Animatable(if (played) 1f else 0f) }
+    LaunchedEffect(Unit) {
+        if (!played) {
+            delay(delayMs)
+            progress.animateTo(1f, tween(240))
+            played = true
+        }
+    }
+    Box(
+        modifier = Modifier.graphicsLayer {
+            alpha = progress.value
+            translationY = (1f - progress.value) * 24.dp.toPx()
+        }
+    ) {
+        content()
     }
 }
 
