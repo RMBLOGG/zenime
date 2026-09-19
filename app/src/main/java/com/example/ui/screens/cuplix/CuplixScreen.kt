@@ -38,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,6 +83,7 @@ import java.util.Locale
 @Composable
 fun CuplixScreen(
     viewModel: CuplixViewModel,
+    startClipId: String? = null,
     onBackClick: () -> Unit,
     onAnimeClick: (animeId: String) -> Unit,
     onEpisodeClick: (episodeId: String, animeId: String) -> Unit,
@@ -145,9 +147,25 @@ fun CuplixScreen(
     val pagerState = rememberPagerState(pageCount = { state.items.size })
     val activeItem: CuplixItem? = state.items.getOrNull(pagerState.settledPage)
 
-    // Ganti urutan -> balik ke klip pertama.
+    // Dibuka dari strip beranda -> loncat ke klip yang diketuk (sekali saja;
+    // rememberSaveable supaya tidak loncat lagi saat balik dari layar lain).
+    var jumpedToStart by rememberSaveable { mutableStateOf(startClipId == null) }
+    LaunchedEffect(state.items.size) {
+        if (!jumpedToStart && state.items.isNotEmpty()) {
+            val index = state.items.indexOfFirst { it.id == startClipId }
+            if (index >= 0) pagerState.scrollToPage(index)
+            jumpedToStart = true
+        }
+    }
+
+    // Ganti urutan -> balik ke klip pertama. Hanya saat urutan BERUBAH, bukan
+    // saat layar dibuka lagi (posisi terakhir dipulihkan oleh pager state).
+    var lastSort by remember { mutableStateOf(state.sort) }
     LaunchedEffect(state.sort) {
-        if (state.items.isNotEmpty()) pagerState.scrollToPage(0)
+        if (state.sort != lastSort) {
+            lastSort = state.sort
+            if (state.items.isNotEmpty()) pagerState.scrollToPage(0)
+        }
     }
 
     // Muat batch berikutnya saat tinggal 3 klip lagi.

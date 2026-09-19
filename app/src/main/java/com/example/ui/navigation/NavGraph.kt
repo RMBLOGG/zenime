@@ -159,7 +159,10 @@ sealed class Screen(
 
     // Feed klip pendek (Cuplix). Sengaja TIDAK masuk bottomNavScreens, jadi
     // bottom bar otomatis hilang dan layar penuh dipakai buat video.
-    data object Cuplix : Screen("cuplix")
+    data object Cuplix : Screen("cuplix?at={at}") {
+        fun createRoute(startClipId: String? = null): String =
+            if (startClipId != null) "cuplix?at=${URLEncoder.encode(startClipId, "UTF-8")}" else "cuplix"
+    }
 
     data object Chat : Screen("chat")
 
@@ -471,19 +474,28 @@ fun ZenimeAppNavHost(
                     onXpLeaderboardClick = {
                         navController.navigate(Screen.XpLeaderboard.route)
                     },
-                    onCuplixClick = {
-                        navController.navigate(Screen.Cuplix.route)
+                    onCuplixClick = { startClipId ->
+                        navController.navigate(Screen.Cuplix.createRoute(startClipId))
                     }
                 )
             }
 
             // Cuplix -- feed klip pendek gaya scroll vertikal
-            composable(Screen.Cuplix.route) {
+            composable(
+                route = Screen.Cuplix.route,
+                arguments = listOf(navArgument("at") {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                })
+            ) { backStackEntry ->
+                val startClipId = backStackEntry.arguments?.getString("at")
                 val cuplixViewModel: CuplixViewModel = viewModel(
                     factory = viewModelFactory { initializer { CuplixViewModel(repository) } }
                 )
                 CuplixScreen(
                     viewModel = cuplixViewModel,
+                    startClipId = startClipId,
                     onBackClick = { navController.popBackStack() },
                     onAnimeClick = { animeId ->
                         navController.navigate(Screen.Detail.createRoute(animeId))

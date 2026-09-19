@@ -93,6 +93,7 @@ import com.example.ui.components.ComicPosterCard
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.GeneratedAvatar
 import com.example.ui.components.LevelBadge
+import com.example.data.model.CuplixItem
 import com.example.ui.components.SectionHeader
 import com.example.ui.components.ShimmerBanner
 import com.example.ui.components.ShimmerHorizontalSection
@@ -122,13 +123,15 @@ fun HomeScreen(
     onDonationClick: () -> Unit = {},
     onClanClick: () -> Unit = {},
     onXpLeaderboardClick: () -> Unit = {},
-    onCuplixClick: () -> Unit = {},
+    // null = buka feed dari klip pertama; non-null = langsung ke klip itu.
+    onCuplixClick: (startClipId: String?) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val homeState by viewModel.homeState.collectAsStateWithLifecycle()
     val comicLatestState by viewModel.comicLatestState.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val profileState by viewModel.profileState.collectAsStateWithLifecycle()
+    val cuplixClips by viewModel.cuplixClips.collectAsStateWithLifecycle()
     val heroStyle by viewModel.heroStyle.collectAsStateWithLifecycle()
     val heroAutoplay by viewModel.heroAutoplay.collectAsStateWithLifecycle()
     val heroIntervalMs by viewModel.heroIntervalMs.collectAsStateWithLifecycle()
@@ -178,8 +181,6 @@ fun HomeScreen(
                 }
                 item {
                     HomeDiscussionPromoCard(onChatClick = onChatClick)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    HomeCuplixPromoCard(onCuplixClick = onCuplixClick)
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
@@ -303,6 +304,17 @@ fun HomeScreen(
                                 modifier = Modifier.padding(horizontal = 16.dp)
                             )
                             Spacer(modifier = Modifier.height(20.dp))
+                        }
+
+                        // Section Cuplix -- persis di bawah "Dukung Kami".
+                        if (cuplixClips.isNotEmpty()) {
+                            item {
+                                CuplixHorizontalSection(
+                                    clips = cuplixClips,
+                                    onClipClick = { clipId -> onCuplixClick(clipId) },
+                                    onSeeAllClick = { onCuplixClick(null) }
+                                )
+                            }
                         }
 
                         // Section: Sedang Tayang (Ongoing) -- di Dayynime v5, field
@@ -531,44 +543,38 @@ private fun HomeDiscussionPromoCard(
 }
 
 /**
- * Kartu masuk ke Cuplix -- klip pendek anime gaya scroll vertikal.
+ * Strip "Cuplix": thumbnail kotak membulat bergulir ke samping. Ketuk satu
+ * klip -> feed Cuplix terbuka tepat di klip itu; "Lihat Semua" -> feed dari awal.
  */
 @Composable
-private fun HomeCuplixPromoCard(
-    onCuplixClick: () -> Unit,
+private fun CuplixHorizontalSection(
+    clips: List<CuplixItem>,
+    onClipClick: (clipId: String) -> Unit,
+    onSeeAllClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    HomeSectionCard(
-        modifier = modifier,
-        onClick = onCuplixClick,
-        contentPadding = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = Icons.Filled.Movie,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(10.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Cuplix",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "Klip pendek anime, geser ke atas buat lanjut",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+    Column(modifier = modifier.padding(vertical = 10.dp)) {
+        SectionHeader(title = "Cuplix", onSeeAllClick = onSeeAllClick)
+
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(clips, key = { it.id }) { clip ->
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(clip.urlThumbnail)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = clip.caption ?: clip.anime ?: "Cuplix",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(80.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                        .clickable { onClipClick(clip.id) }
                 )
             }
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                contentDescription = "Buka Cuplix",
-                tint = ZenimePrimary,
-                modifier = Modifier.size(18.dp)
-            )
         }
     }
 }

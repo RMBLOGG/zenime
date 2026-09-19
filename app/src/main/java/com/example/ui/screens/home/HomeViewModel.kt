@@ -8,6 +8,7 @@ import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.local.WatchHistoryEntity
 import com.example.data.model.BacakomikListItem
 import com.example.data.model.Clan
+import com.example.data.model.CuplixItem
 import com.example.data.model.HomeResponse
 import com.example.data.model.UserXpDisplay
 import com.example.data.repository.AnimeRepository
@@ -17,6 +18,7 @@ import com.example.data.repository.CoinRepository
 import com.example.data.repository.ComicRepository
 import com.example.data.repository.PremiumRepository
 import com.example.data.repository.XpRepository
+import com.example.ui.screens.cuplix.CuplixViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -90,6 +92,11 @@ class HomeViewModel(
     val continueWatching: StateFlow<List<WatchHistoryEntity>> = repository.watchHistory
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
 
+    // Strip "Cuplix" di Beranda (di bawah "Dukung Kami"). Diambil terpisah dan
+    // diam-diam gagal: kalau error/kosong, section-nya tinggal tidak tampil.
+    private val _cuplixClips = MutableStateFlow<List<CuplixItem>>(emptyList())
+    val cuplixClips: StateFlow<List<CuplixItem>> = _cuplixClips.asStateFlow()
+
     private val _profileState = MutableStateFlow(HomeProfileUiState())
     val profileState: StateFlow<HomeProfileUiState> = _profileState.asStateFlow()
 
@@ -102,6 +109,7 @@ class HomeViewModel(
     init {
         loadHome()
         loadComicLatest()
+        loadCuplix()
         loadProfileHeader()
         loadHeroLeaderboard()
     }
@@ -145,6 +153,19 @@ class HomeViewModel(
                 coinBalance = balanceResult.getOrNull() ?: 0L,
                 level = myXp?.level ?: 1
             )
+        }
+    }
+
+    private fun loadCuplix() {
+        viewModelScope.launch {
+            val result = repository.getCuplixPage(
+                sort = CuplixViewModel.SORT_POPULAR,
+                seenIds = emptyList(),
+                cursors = emptyMap()
+            )
+            if (result is Result.Success) {
+                _cuplixClips.value = result.data.items.take(12)
+            }
         }
     }
 
