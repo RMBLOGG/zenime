@@ -27,6 +27,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -163,12 +169,13 @@ fun SeasonTabContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             seasons.forEachIndexed { index, season ->
                 AnimatedGridItem(index = index) {
                     SeasonCard(
                         season = season,
+                        number = index + 1,
                         isCurrent = season.id == currentAnimeId,
                         onClick = { if (season.id != currentAnimeId) onAnimeClick(season.id) }
                     )
@@ -181,68 +188,133 @@ fun SeasonTabContent(
 @Composable
 private fun SeasonCard(
     season: AnimeItem,
+    number: Int,
     isCurrent: Boolean,
     onClick: () -> Unit
 ) {
-    Row(
+    val shape = RoundedCornerShape(24.dp)
+    val textShadow = Shadow(color = Color.Black.copy(alpha = 0.7f), blurRadius = 6f)
+    val views = formatSeasonCount(season.views)
+    val favorites = formatSeasonCount(season.favorites)
+
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(
-                width = 1.dp,
-                color = if (isCurrent) ZenimePrimary.copy(alpha = 0.6f) else CardOutlineBorder,
-                shape = RoundedCornerShape(12.dp)
+            .aspectRatio(16f / 9f)
+            .shadow(elevation = 8.dp, shape = shape, clip = false)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .then(
+                if (isCurrent) Modifier.border(1.5.dp, ZenimePrimary, shape) else Modifier
             )
             .clickable(onClick = onClick)
-            .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically
     ) {
         AsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
-                .data(season.image_poster)
+                .data(season.image_cover?.takeIf { it.isNotBlank() } ?: season.image_poster)
                 .crossfade(true)
                 .build(),
-            contentDescription = null,
+            contentDescription = season.title,
             contentScale = ContentScale.Crop,
-            modifier = Modifier
-                .width(56.dp)
-                .aspectRatio(2f / 3f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+            modifier = Modifier.fillMaxSize()
         )
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
+
+        // Gradien gelap di bagian bawah supaya teks tetap terbaca.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        0.35f to Color.Transparent,
+                        1f to Color.Black.copy(alpha = 0.88f)
+                    )
+                )
+        )
+
+        if (isCurrent) {
             Text(
-                text = season.title ?: "Tanpa Judul",
-                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                text = "Sedang dilihat",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = Color.White,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(14.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(ZenimePrimary)
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
             )
-            val meta = listOfNotNull(
-                season.year?.takeIf { it.isNotBlank() },
-                season.type?.takeIf { it.isNotBlank() },
-                season.status?.takeIf { it.isNotBlank() }
-            ).joinToString(" • ")
-            if (meta.isNotBlank()) {
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = meta,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            if (isCurrent) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = "Sedang dilihat",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = ZenimePrimary
-                )
+        }
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Season $number",
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 32.sp,
+                    shadow = textShadow
+                ),
+                color = Color.White,
+                maxLines = 1
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                if (views != null) {
+                    SeasonStat(
+                        icon = Icons.Filled.PlayCircle,
+                        text = "$views views",
+                        color = SeasonViewsColor,
+                        shadow = textShadow
+                    )
+                }
+                if (favorites != null) {
+                    SeasonStat(
+                        icon = Icons.Filled.Star,
+                        text = "$favorites favorites",
+                        color = SeasonFavoritesColor,
+                        shadow = textShadow
+                    )
+                }
             }
         }
     }
+}
+
+@Composable
+private fun SeasonStat(
+    icon: ImageVector,
+    text: String,
+    color: Color,
+    shadow: Shadow
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(15.dp)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall.copy(shadow = shadow),
+            color = color,
+            maxLines = 1
+        )
+    }
+}
+
+private val SeasonViewsColor = Color(0xFFFF3B3B)
+private val SeasonFavoritesColor = Color(0xFFFFC928)
+
+/** "431604" -> "431.604" (format Indonesia). Null kalau kosong / bukan angka. */
+private fun formatSeasonCount(raw: String?): String? {
+    val n = raw?.trim()?.toLongOrNull() ?: return raw?.takeIf { it.isNotBlank() }
+    return java.text.NumberFormat.getInstance(Locale("id", "ID")).format(n)
 }
 
 // ---------------------------------------------------------------------------
