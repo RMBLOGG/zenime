@@ -101,9 +101,30 @@ class AnimeRepository(
     @Suppress("UNCHECKED_CAST")
     private fun asMap(value: Any?): Map<String, Any?>? = value as? Map<String, Any?>
 
+    // Array PHP kadang terkirim sebagai object ber-key angka ({"0":{..},"1":{..}}),
+    // bukan [..] -- dua-duanya diterima (app Animein juga begitu: arrFlexible).
     @Suppress("UNCHECKED_CAST")
-    private fun asMapList(value: Any?): List<Map<String, Any?>> =
-        (value as? List<*>)?.filterIsInstance<Map<String, Any?>>() ?: emptyList()
+    private fun asMapList(value: Any?): List<Map<String, Any?>> = when (value) {
+        is List<*> -> value.filterIsInstance<Map<String, Any?>>()
+        is Map<*, *> ->
+            if (value.isNotEmpty() && value.keys.all { it is String && it.toIntOrNull() != null }) {
+                value.values.filterIsInstance<Map<String, Any?>>()
+            } else {
+                emptyList()
+            }
+        else -> emptyList()
+    }
+
+    /**
+     * Pesan galat untuk tab detail: menyebut penyebab yang bisa dibedakan
+     * (kode HTTP / format data) supaya gampang didiagnosis dari layar.
+     */
+    private fun tabError(e: Throwable, fallback: String): String = when (e) {
+        is retrofit2.HttpException -> "$fallback (server membalas HTTP ${e.code()})."
+        is com.squareup.moshi.JsonDataException -> "$fallback (format data dari server tidak sesuai)."
+        is com.squareup.moshi.JsonEncodingException -> "$fallback (respons server bukan JSON yang valid)."
+        else -> friendlyErrorMessage(e, fallback)
+    }
 
     /** Ambil list dari data[key]; kalau gak ada, pakai list pertama yang ketemu di data. */
     private fun firstList(data: Map<String, Any?>?, key: String): List<Map<String, Any?>> {
@@ -621,7 +642,7 @@ class AnimeRepository(
                 .filter { it.id.isNotBlank() && !it.idEpisode.isNullOrBlank() }
             Result.Success(CuplixPage(items = items, cursors = emptyMap(), hasMore = items.isNotEmpty()))
         } catch (e: Exception) {
-            Result.Error(e, friendlyErrorMessage(e, "Gagal memuat Cuplix anime ini"))
+            Result.Error(e, tabError(e, "Gagal memuat Cuplix anime ini"))
         }
     }
 
@@ -658,7 +679,7 @@ class AnimeRepository(
             Result.Success(images)
         } catch (e: Exception) {
             val label = if (kind == GalleryKind.COVER) "cover" else "poster"
-            Result.Error(e, friendlyErrorMessage(e, "Gagal memuat $label"))
+            Result.Error(e, tabError(e, "Gagal memuat $label"))
         }
     }
 
@@ -678,7 +699,7 @@ class AnimeRepository(
                 .filter { it.id.isNotBlank() }
             Result.Success(seasons)
         } catch (e: Exception) {
-            Result.Error(e, friendlyErrorMessage(e, "Gagal memuat season"))
+            Result.Error(e, tabError(e, "Gagal memuat season"))
         }
     }
 

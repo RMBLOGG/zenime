@@ -128,8 +128,14 @@ data class StreamResponse(
 data class RawEnvelope(
     @Json(name = "status") val status: Int? = null,
     @Json(name = "error") val error: Boolean? = null,
-    @Json(name = "data") val data: Map<String, Any?>? = null
-)
+    // Server (PHP) kadang mengirim "data": [] saat hasilnya kosong, bukan {} --
+    // makanya ditampung sebagai Any? dulu, lalu dibaca lewat [data] di bawah.
+    @Json(name = "data") val rawData: Any? = null
+) {
+    /** "data" berupa object -> Map; array kosong ([]) atau bentuk lain -> null. */
+    @Suppress("UNCHECKED_CAST")
+    val data: Map<String, Any?>? get() = rawData as? Map<String, Any?>
+}
 
 /**
  * Satu Cuplix (klip pendek). Video-nya BUKAN file terpisah: klip adalah
