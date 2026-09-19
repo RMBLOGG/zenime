@@ -168,3 +168,18 @@ data class CuplixPage(
     val cursors: Map<String, String>,
     val hasMore: Boolean
 )
+
+enum class GalleryKind { COVER, POSTER }
+
+/**
+ * Satu gambar galeri kiriman user (tab Cover / Poster di halaman detail).
+ * Dibuat manual dari map mentah (bukan Moshi) karena bentuk field-nya belum
+ * terverifikasi -- angka atau string sama-sama diterima.
+ */
+data class GalleryImage(
+    val id: String,
+    val imageUrl: String?,
+    val points: String?,
+    val username: String?,
+    val isPro: Boolean
+)

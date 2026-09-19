@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.common.Result
 import com.example.data.model.CuplixItem
+import com.example.data.model.CuplixPage
 import com.example.data.repository.AnimeRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,7 +28,15 @@ data class CuplixUiState(
  * (dedupe), dan kalau satu batch isinya cuma duplikat feed dianggap habis
  * supaya tidak minta halaman berikutnya terus-menerus.
  */
-class CuplixViewModel(private val repository: AnimeRepository) : ViewModel() {
+class CuplixViewModel(
+    private val repository: AnimeRepository,
+    // Non-null = feed khusus klip milik satu anime (dibuka dari tab Cuplix di
+    // halaman detail). Null = feed global seperti biasa.
+    private val movieId: String? = null
+) : ViewModel() {
+
+    /** Feed per-anime tidak punya pilihan urutan (pakai type=NEW dari API). */
+    val movieScoped: Boolean get() = movieId != null
 
     companion object {
         const val SORT_POPULAR = "scroll_likes"
@@ -42,6 +51,7 @@ class CuplixViewModel(private val repository: AnimeRepository) : ViewModel() {
     private var cursors: Map<String, String> = emptyMap()
     private var hasMore = true
     private var loadJob: Job? = null
+    private var nextMoviePage = 0   // hanya dipakai di mode per-anime (page API mulai 0)
 
     // URL video per episode. Dipakai buat prefetch klip berikutnya; dibuang
     // kalau pemutaran gagal (link bisa kedaluwarsa).
@@ -71,6 +81,7 @@ class CuplixViewModel(private val repository: AnimeRepository) : ViewModel() {
         if (reset) {
             seenIds.clear()
             cursors = emptyMap()
+            nextMoviePage = 0
             hasMore = true
         }
         val sort = _state.value.sort
@@ -82,7 +93,7 @@ class CuplixViewModel(private val repository: AnimeRepository) : ViewModel() {
             }
         }
         loadJob = viewModelScope.launch {
-            when (val result = repository.getCuplixPage(sort, seenIds.toList(), cursors)) {
+            when (val result = fetchPage(sort)) {
                 is Result.Success -> {
                     val fresh = result.data.items.filter { seenIds.add(it.id) }
                     cursors = result.data.cursors
@@ -103,6 +114,23 @@ class CuplixViewModel(private val repository: AnimeRepository) : ViewModel() {
                 is Result.Loading -> Unit
             }
         }
+    }
+
+    private suspend fun fetchPage(sort: String): Result<CuplixPage> {
+        val movie = movieId ?: return repository.getCuplixPage(sort, seenIds.toList(), cursors)
+
+        var page = nextMoviePage
+        var result = repository.getMovieCuplixPage(movie, page)
+        // Kalau ternyata API mulai dari 1: halaman 0 kosong tapi halaman 1 ada isinya.
+        if (page == 0 && result is Result.Success && result.data.items.isEmpty()) {
+            val alt = repository.getMovieCuplixPage(movie, 1)
+            if (alt is Result.Success && alt.data.items.isNotEmpty()) {
+                result = alt
+                page = 1
+            }
+        }
+        if (result is Result.Success) nextMoviePage = page + 1
+        return result
     }
 
     suspend fun videoUrl(episodeId: String): Result<String> {

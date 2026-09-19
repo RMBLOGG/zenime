@@ -287,18 +287,20 @@ fun CuplixScreen(
                 )
             }
             Spacer(modifier = Modifier.weight(1f))
-            SortPill("Populer", state.sort == CuplixViewModel.SORT_POPULAR) {
-                viewModel.setSort(CuplixViewModel.SORT_POPULAR)
+            if (!viewModel.movieScoped) {
+                SortPill("Populer", state.sort == CuplixViewModel.SORT_POPULAR) {
+                    viewModel.setSort(CuplixViewModel.SORT_POPULAR)
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                SortPill("Terbaru", state.sort == CuplixViewModel.SORT_NEW) {
+                    viewModel.setSort(CuplixViewModel.SORT_NEW)
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                SortPill("Terlama", state.sort == CuplixViewModel.SORT_OLD) {
+                    viewModel.setSort(CuplixViewModel.SORT_OLD)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
             }
-            Spacer(modifier = Modifier.width(6.dp))
-            SortPill("Terbaru", state.sort == CuplixViewModel.SORT_NEW) {
-                viewModel.setSort(CuplixViewModel.SORT_NEW)
-            }
-            Spacer(modifier = Modifier.width(6.dp))
-            SortPill("Terlama", state.sort == CuplixViewModel.SORT_OLD) {
-                viewModel.setSort(CuplixViewModel.SORT_OLD)
-            }
-            Spacer(modifier = Modifier.width(8.dp))
         }
     }
 }

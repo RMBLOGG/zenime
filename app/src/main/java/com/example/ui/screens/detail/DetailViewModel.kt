@@ -6,17 +6,41 @@ import com.example.data.common.Result
 import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.local.WatchHistoryEntity
 import com.example.data.model.AnimeItem
+import com.example.data.model.CuplixItem
+import com.example.data.model.GalleryImage
+import com.example.data.model.GalleryKind
 import com.example.data.model.EpisodeItem
 import com.example.data.model.StreamServer
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.PremiumRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+/** Tab di halaman detail. EPISODE = isi lama (genre, sinopsis, daftar episode). */
+enum class DetailTab(val label: String) {
+    EPISODE("Episode"),
+    SEASON("Season"),
+    CUPLIX("Cuplix"),
+    COVER("Cover"),
+    POSTER("Poster")
+}
+
+/** State satu tab berisi daftar berhalaman (season, cuplix, cover, poster). */
+data class PagedTabState<T>(
+    val items: List<T> = emptyList(),
+    val isLoading: Boolean = false,      // muat awal
+    val isLoadingMore: Boolean = false,  // muat halaman berikutnya
+    val error: String? = null,
+    val hasMore: Boolean = true,
+    val loaded: Boolean = false          // sudah pernah berhasil dimuat
+)
 
 class DetailViewModel(
     private val repository: AnimeRepository,
@@ -88,6 +112,151 @@ class DetailViewModel(
     // sama PlayerViewModel yang cuma satu episode aktif).
     private val _downloadQualityPicker = MutableStateFlow<DetailDownloadPickerState?>(null)
     val downloadQualityPicker: StateFlow<DetailDownloadPickerState?> = _downloadQualityPicker.asStateFlow()
+
+    // ---- Tab Season / Cuplix / Cover / Poster ------------------------------
+    // Dimuat malas: baru diminta saat tab-nya pertama kali dibuka.
+    private val _seasons = MutableStateFlow(PagedTabState<AnimeItem>(hasMore = false))
+    val seasons: StateFlow<PagedTabState<AnimeItem>> = _seasons.asStateFlow()
+
+    private val _cuplix = MutableStateFlow(PagedTabState<CuplixItem>())
+    val cuplix: StateFlow<PagedTabState<CuplixItem>> = _cuplix.asStateFlow()
+
+    private val _covers = MutableStateFlow(PagedTabState<GalleryImage>())
+    val covers: StateFlow<PagedTabState<GalleryImage>> = _covers.asStateFlow()
+
+    private val _posters = MutableStateFlow(PagedTabState<GalleryImage>())
+    val posters: StateFlow<PagedTabState<GalleryImage>> = _posters.asStateFlow()
+
+    private val cuplixPager = TabPager(_cuplix, keyOf = { it.id }) { page ->
+        when (val r = repository.getMovieCuplixPage(animeId, page)) {
+            is Result.Success -> Result.Success(r.data.items)
+            is Result.Error -> r
+            is Result.Loading -> Result.Loading
+        }
+    }
+    private val coverPager = TabPager(_covers, keyOf = { it.id }) { page ->
+        repository.getMovieGallery(GalleryKind.COVER, animeId, page)
+    }
+    private val posterPager = TabPager(_posters, keyOf = { it.id }) { page ->
+        repository.getMovieGallery(GalleryKind.POSTER, animeId, page)
+    }
+
+    /** Dipanggil saat tab dipilih -- memuat datanya kalau belum pernah. */
+    fun ensureTabLoaded(tab: DetailTab) {
+        when (tab) {
+            DetailTab.SEASON -> loadSeasons(force = false)
+            DetailTab.CUPLIX -> cuplixPager.ensureLoaded()
+            DetailTab.COVER -> coverPager.ensureLoaded()
+            DetailTab.POSTER -> posterPager.ensureLoaded()
+            DetailTab.EPISODE -> Unit
+        }
+    }
+
+    fun retryTab(tab: DetailTab) {
+        when (tab) {
+            DetailTab.SEASON -> loadSeasons(force = true)
+            DetailTab.CUPLIX -> cuplixPager.retry()
+            DetailTab.COVER -> coverPager.retry()
+            DetailTab.POSTER -> posterPager.retry()
+            DetailTab.EPISODE -> Unit
+        }
+    }
+
+    fun loadMoreCuplix() = cuplixPager.loadMore()
+    fun loadMoreCovers() = coverPager.loadMore()
+    fun loadMorePosters() = posterPager.loadMore()
+
+    private fun loadSeasons(force: Boolean) {
+        val s = _seasons.value
+        if (s.isLoading || (s.loaded && !force)) return
+        _seasons.update { it.copy(isLoading = true, error = null) }
+        viewModelScope.launch {
+            when (val result = repository.getSeasons(animeId)) {
+                is Result.Success -> _seasons.update {
+                    it.copy(items = result.data, isLoading = false, loaded = true, hasMore = false)
+                }
+                is Result.Error -> _seasons.update { it.copy(isLoading = false, error = result.message) }
+                is Result.Loading -> Unit
+            }
+        }
+    }
+
+    /**
+     * Paginasi generik satu tab. [page] mulai dari 0; kalau halaman 0 kosong
+     * tapi halaman 1 ada isinya, API dianggap mulai dari 1 (belum terverifikasi
+     * untuk endpoint ini). Item duplikat dibuang; halaman yang tidak menambah
+     * item baru dianggap halaman terakhir.
+     */
+    private inner class TabPager<T>(
+        private val state: MutableStateFlow<PagedTabState<T>>,
+        private val keyOf: (T) -> String,
+        private val fetch: suspend (page: Int) -> Result<List<T>>
+    ) {
+        private var nextPage = 0
+        private val seen = HashSet<String>()
+        private var job: Job? = null
+
+        fun ensureLoaded() {
+            val s = state.value
+            if (!s.loaded && !s.isLoading) load(reset = true)
+        }
+
+        fun retry() {
+            if (state.value.items.isEmpty()) load(reset = true) else loadMore()
+        }
+
+        fun loadMore() {
+            val s = state.value
+            if (s.loaded && s.hasMore && !s.isLoading && !s.isLoadingMore) load(reset = false)
+        }
+
+        private fun load(reset: Boolean) {
+            job?.cancel()
+            if (reset) {
+                nextPage = 0
+                seen.clear()
+            }
+            state.update {
+                if (reset) {
+                    it.copy(items = emptyList(), isLoading = true, isLoadingMore = false, error = null, hasMore = true, loaded = false)
+                } else {
+                    it.copy(isLoadingMore = true, error = null)
+                }
+            }
+            job = viewModelScope.launch {
+                var page = nextPage
+                var result = fetch(page)
+                if (page == 0 && result is Result.Success && result.data.isEmpty()) {
+                    val alt = fetch(1)
+                    if (alt is Result.Success && alt.data.isNotEmpty()) {
+                        result = alt
+                        page = 1
+                    }
+                }
+                val finalResult = result
+                val finalPage = page
+                when (finalResult) {
+                    is Result.Success -> {
+                        val fresh = finalResult.data.filter { seen.add(keyOf(it)) }
+                        nextPage = finalPage + 1
+                        state.update {
+                            it.copy(
+                                items = it.items + fresh,
+                                isLoading = false,
+                                isLoadingMore = false,
+                                hasMore = fresh.isNotEmpty(),
+                                loaded = true
+                            )
+                        }
+                    }
+                    is Result.Error -> state.update {
+                        it.copy(isLoading = false, isLoadingMore = false, error = finalResult.message)
+                    }
+                    is Result.Loading -> Unit
+                }
+            }
+        }
+    }
 
     init {
         loadDetail()

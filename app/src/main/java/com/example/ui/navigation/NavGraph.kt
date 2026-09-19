@@ -159,9 +159,16 @@ sealed class Screen(
 
     // Feed klip pendek (Cuplix). Sengaja TIDAK masuk bottomNavScreens, jadi
     // bottom bar otomatis hilang dan layar penuh dipakai buat video.
-    data object Cuplix : Screen("cuplix?at={at}") {
-        fun createRoute(startClipId: String? = null): String =
-            if (startClipId != null) "cuplix?at=${URLEncoder.encode(startClipId, "UTF-8")}" else "cuplix"
+    // at    = klip yang langsung dibuka (opsional)
+    // movie = kalau diisi, feed hanya berisi klip anime itu (dari tab Cuplix di detail)
+    data object Cuplix : Screen("cuplix?at={at}&movie={movie}") {
+        fun createRoute(startClipId: String? = null, movieId: String? = null): String {
+            val params = listOfNotNull(
+                startClipId?.let { "at=${URLEncoder.encode(it, "UTF-8")}" },
+                movieId?.let { "movie=${URLEncoder.encode(it, "UTF-8")}" }
+            )
+            return if (params.isEmpty()) "cuplix" else "cuplix?" + params.joinToString("&")
+        }
     }
 
     data object Chat : Screen("chat")
@@ -483,15 +490,23 @@ fun ZenimeAppNavHost(
             // Cuplix -- feed klip pendek gaya scroll vertikal
             composable(
                 route = Screen.Cuplix.route,
-                arguments = listOf(navArgument("at") {
-                    type = NavType.StringType
-                    nullable = true
-                    defaultValue = null
-                })
+                arguments = listOf(
+                    navArgument("at") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    },
+                    navArgument("movie") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
+                    }
+                )
             ) { backStackEntry ->
                 val startClipId = backStackEntry.arguments?.getString("at")
+                val movieId = backStackEntry.arguments?.getString("movie")
                 val cuplixViewModel: CuplixViewModel = viewModel(
-                    factory = viewModelFactory { initializer { CuplixViewModel(repository) } }
+                    factory = viewModelFactory { initializer { CuplixViewModel(repository, movieId) } }
                 )
                 CuplixScreen(
                     viewModel = cuplixViewModel,
@@ -837,6 +852,12 @@ fun ZenimeAppNavHost(
                     },
                     onUpgradeClick = {
                         navController.navigate(Screen.Premium.route)
+                    },
+                    onAnimeClick = { otherAnimeId ->
+                        navController.navigate(Screen.Detail.createRoute(otherAnimeId))
+                    },
+                    onCuplixClick = { clipId ->
+                        navController.navigate(Screen.Cuplix.createRoute(clipId, animeId))
                     }
                 )
             }

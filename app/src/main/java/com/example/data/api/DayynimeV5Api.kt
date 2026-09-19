@@ -81,6 +81,20 @@ interface DayynimeV5Api {
     @GET("3/2/episode/streamnew/{id}")
     suspend fun getStreamRaw(@Path("id") id: String): RawEnvelope
 
+    // ---- Tab halaman detail: Cuplix / Cover / Poster per anime ----
+    // Cuplix per anime ("data/..." tanpa prefix 3/2). Query: id_movie, page, type.
+    // Item-nya sama dengan Cuplix beranda (FypMapper.toFyp di app Animein).
+    @GET("data/movie/fyp/list_new")
+    suspend fun getMovieCuplixRaw(@QueryMap params: Map<String, String>): RawEnvelope
+
+    // Galeri kiriman user. Query: id_movie, page. Item: id, image, point,
+    // username, is_pro, rank, ...
+    @GET("3/2/movie_cover/data")
+    suspend fun getMovieCoverRaw(@QueryMap params: Map<String, String>): RawEnvelope
+
+    @GET("3/2/movie_poster/data")
+    suspend fun getMoviePosterRaw(@QueryMap params: Map<String, String>): RawEnvelope
+
     // ---- Cuplix (di API disebut "fyp"): klip pendek buatan user ----
     // Path "data/..." TIDAK pakai prefix "3/2/". Query: limit, sort
     // (scroll_likes | scroll_new | scroll_old), key_id_fyp (id yang sudah

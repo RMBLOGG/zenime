@@ -11,6 +11,8 @@ import com.example.data.local.ZenimeDao
 import com.example.data.model.AnimeItem
 import com.example.data.model.CuplixItem
 import com.example.data.model.CuplixPage
+import com.example.data.model.GalleryImage
+import com.example.data.model.GalleryKind
 import com.example.data.model.EpisodeDetail
 import com.example.data.model.EpisodeItem
 import com.example.data.model.GenreItem
@@ -597,6 +599,101 @@ class AnimeRepository(
         } catch (e: Exception) {
             Result.Error(e, friendlyErrorMessage(e, "Gagal memuat Cuplix"))
         }
+    }
+
+    // ---- Tab halaman detail: Cuplix / Cover / Poster / Season -------------
+    /**
+     * Cuplix milik satu anime (data/movie/fyp/list_new). Item-nya sama dengan
+     * Cuplix beranda. [page] mulai dari 0 di app aslinya -- pemanggil yang
+     * menangani kemungkinan API mulai dari 1.
+     */
+    suspend fun getMovieCuplixPage(
+        movieId: String,
+        page: Int,
+        type: String = "NEW"
+    ): Result<CuplixPage> = withContext(Dispatchers.IO) {
+        try {
+            val env = api.getMovieCuplixRaw(
+                mapOf("id_movie" to movieId, "page" to page.toString(), "type" to type)
+            )
+            val items = firstList(env.data, "fyp")
+                .mapNotNull { it.toModelOrNull(cuplixItemAdapter) }
+                .filter { it.id.isNotBlank() && !it.idEpisode.isNullOrBlank() }
+            Result.Success(CuplixPage(items = items, cursors = emptyMap(), hasMore = items.isNotEmpty()))
+        } catch (e: Exception) {
+            Result.Error(e, friendlyErrorMessage(e, "Gagal memuat Cuplix anime ini"))
+        }
+    }
+
+    /** Galeri cover/poster kiriman user untuk satu anime. */
+    suspend fun getMovieGallery(
+        kind: GalleryKind,
+        movieId: String,
+        page: Int
+    ): Result<List<GalleryImage>> = withContext(Dispatchers.IO) {
+        try {
+            val params = mapOf("id_movie" to movieId, "page" to page.toString())
+            val env = when (kind) {
+                GalleryKind.COVER -> api.getMovieCoverRaw(params)
+                GalleryKind.POSTER -> api.getMoviePosterRaw(params)
+            }
+            val key = if (kind == GalleryKind.COVER) "cover" else "poster"
+            val images = firstList(env.data, key).mapNotNull { raw ->
+                val id = raw["id"].asText()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val image = raw["image"].asText()?.takeIf { it.isNotBlank() }
+                val url = when {
+                    image == null -> null
+                    image.startsWith("http") -> image
+                    image.startsWith("/") -> "https://xyz-api.animein.net$image"
+                    else -> null
+                }
+                GalleryImage(
+                    id = id,
+                    imageUrl = url,
+                    points = raw["point"].asText(),
+                    username = raw["username"].asText()?.takeIf { it.isNotBlank() },
+                    isPro = raw["is_pro"].asText().let { it == "1" || it.equals("true", true) }
+                )
+            }.filter { it.imageUrl != null }
+            Result.Success(images)
+        } catch (e: Exception) {
+            val label = if (kind == GalleryKind.COVER) "cover" else "poster"
+            Result.Error(e, friendlyErrorMessage(e, "Gagal memuat $label"))
+        }
+    }
+
+    /**
+     * Season lain dari anime ini. Tidak ada endpoint sendiri -- datanya ikut
+     * di respons detail (app Animein membacanya lewat MovieUser.getMovieSeasons()).
+     * Nama field-nya belum pasti, jadi dicari key mana pun yang mengandung
+     * "season" dan berisi list.
+     */
+    suspend fun getSeasons(movieId: String): Result<List<AnimeItem>> = withContext(Dispatchers.IO) {
+        try {
+            val data = api.getDetailRaw(movieId).data
+            val inner = data?.let { d -> asMap(d["movie"]) }
+            val list = findSeasonList(data) ?: findSeasonList(inner)
+            val seasons = asMapList(list)
+                .mapNotNull { it.toModelOrNull(animeItemAdapter) }
+                .filter { it.id.isNotBlank() }
+            Result.Success(seasons)
+        } catch (e: Exception) {
+            Result.Error(e, friendlyErrorMessage(e, "Gagal memuat season"))
+        }
+    }
+
+    private fun findSeasonList(map: Map<String, Any?>?): List<*>? =
+        map?.entries
+            ?.firstOrNull { (k, v) -> k.contains("season", ignoreCase = true) && v is List<*> }
+            ?.value as? List<*>
+
+    private fun Any?.asText(): String? = when (this) {
+        null -> null
+        is String -> this
+        is Double -> if (this % 1.0 == 0.0) toLong().toString() else toString()
+        is Number -> toString()
+        is Boolean -> toString()
+        else -> null
     }
 
     // Moshi membaca angka JSON sebagai Double ("77" -> 77.0); rapikan lagi.

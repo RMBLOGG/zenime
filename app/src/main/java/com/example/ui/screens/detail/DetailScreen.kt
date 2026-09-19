@@ -60,6 +60,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -106,6 +107,9 @@ fun DetailScreen(
     onBackClick: () -> Unit,
     onEpisodeClick: (episodeId: String, episodeTitle: String) -> Unit,
     onUpgradeClick: () -> Unit = {},
+    // Tab Season: buka detail anime lain. Tab Cuplix: buka feed klip anime ini.
+    onAnimeClick: (animeId: String) -> Unit = {},
+    onCuplixClick: (clipId: String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val detailState by viewModel.detailState.collectAsStateWithLifecycle()
@@ -119,6 +123,16 @@ fun DetailScreen(
     val downloadErrorMessage by viewModel.downloadErrorMessage.collectAsStateWithLifecycle()
 
     val downloadQualityPicker by viewModel.downloadQualityPicker.collectAsStateWithLifecycle()
+
+    val seasonsState by viewModel.seasons.collectAsStateWithLifecycle()
+    val cuplixState by viewModel.cuplix.collectAsStateWithLifecycle()
+    val coversState by viewModel.covers.collectAsStateWithLifecycle()
+    val postersState by viewModel.posters.collectAsStateWithLifecycle()
+
+    // Tab aktif disimpan sebagai nama enum supaya selamat dari rotasi layar.
+    var selectedTabName by rememberSaveable { mutableStateOf(DetailTab.EPISODE.name) }
+    val selectedTab = DetailTab.values().firstOrNull { it.name == selectedTabName } ?: DetailTab.EPISODE
+    LaunchedEffect(selectedTab) { viewModel.ensureTabLoaded(selectedTab) }
 
     var isSynopsisExpanded by remember { mutableStateOf(false) }
     var episodeToDeleteDownload by remember { mutableStateOf<String?>(null) }
@@ -181,9 +195,17 @@ fun DetailScreen(
                             totalItems > 0 && lastVisible >= totalItems - 4
                         }
                     }
-                    LaunchedEffect(shouldLoadMoreEpisodes, episodesList.size) {
-                        if (shouldLoadMoreEpisodes && episodesState is Result.Success) {
+                    LaunchedEffect(shouldLoadMoreEpisodes, episodesList.size, selectedTab) {
+                        if (selectedTab == DetailTab.EPISODE && shouldLoadMoreEpisodes && episodesState is Result.Success) {
                             viewModel.loadMoreEpisodesIfNeeded()
+                        }
+                    }
+
+                    // Pindah tab saat list sudah di-scroll jauh (mis. di episode ke-50):
+                    // balik ke baris tab dulu supaya isi tab baru langsung kelihatan.
+                    LaunchedEffect(selectedTab) {
+                        if (episodeListState.firstVisibleItemIndex > 1) {
+                            episodeListState.scrollToItem(1)
                         }
                     }
 
@@ -354,6 +376,15 @@ fun DetailScreen(
                             }
                         }
 
+                        // Baris tab (Episode | Season | Cuplix | Cover | Poster).
+                        item(key = "detail_tabs") {
+                            DetailTabRow(
+                                selected = selectedTab,
+                                onSelect = { selectedTabName = it.name }
+                            )
+                        }
+
+                        if (selectedTab == DetailTab.EPISODE) {
                         // 2. Genre Chips Bar (Pill Shape)
                         anime.genre?.let { genreStr ->
                             item {
@@ -504,6 +535,44 @@ fun DetailScreen(
                                             strokeWidth = 2.dp,
                                             color = ZenimePrimary
                                         )
+                                    }
+                                }
+                            }
+                        }
+                        } else {
+                            // Tab lain: satu item berisi konten tab (dimuat malas, beranimasi).
+                            item(key = "tab_content_${selectedTab.name}") {
+                                TabContentEnter {
+                                    when (selectedTab) {
+                                        DetailTab.SEASON -> SeasonTabContent(
+                                            state = seasonsState,
+                                            currentAnimeId = viewModel.animeId,
+                                            onAnimeClick = onAnimeClick,
+                                            onRetry = { viewModel.retryTab(DetailTab.SEASON) }
+                                        )
+                                        DetailTab.CUPLIX -> CuplixTabContent(
+                                            state = cuplixState,
+                                            onClipClick = onCuplixClick,
+                                            onLoadMore = { viewModel.loadMoreCuplix() },
+                                            onRetry = { viewModel.retryTab(DetailTab.CUPLIX) }
+                                        )
+                                        DetailTab.COVER -> GalleryTabContent(
+                                            state = coversState,
+                                            columns = 2,
+                                            aspectRatio = 16f / 9f,
+                                            emptyMessage = "Belum ada cover kiriman pengguna.",
+                                            onLoadMore = { viewModel.loadMoreCovers() },
+                                            onRetry = { viewModel.retryTab(DetailTab.COVER) }
+                                        )
+                                        DetailTab.POSTER -> GalleryTabContent(
+                                            state = postersState,
+                                            columns = 3,
+                                            aspectRatio = 2f / 3f,
+                                            emptyMessage = "Belum ada poster kiriman pengguna.",
+                                            onLoadMore = { viewModel.loadMorePosters() },
+                                            onRetry = { viewModel.retryTab(DetailTab.POSTER) }
+                                        )
+                                        DetailTab.EPISODE -> Unit
                                     }
                                 }
                             }
