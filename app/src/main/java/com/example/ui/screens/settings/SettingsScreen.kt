@@ -947,9 +947,9 @@ fun SettingsScreen(
 
                             listOf(
                                 "AUTO" to "Otomatis (Rekomendasi Sistem)",
-                                "HOT" to "Sedang Tayang",
+                                "HOT" to "Sedang Hangat",
                                 "POPULAR" to "Terpopuler",
-                                "RANDOM" to "Rekomendasi Pilihan"
+                                "RANDOM" to "Jas Por Yu"
                             ).forEach { (key, label) ->
                                 val selected = heroSource == key
                                 Row(

@@ -88,6 +88,16 @@ interface DayynimeV5Api {
     @GET("data/fyp2/list_scroll")
     suspend fun getCuplixRaw(@QueryMap params: Map<String, String>): RawEnvelope
 
+    // ---- Beranda gabungan Animein: data/home/list ----
+    // Path "data/..." TIDAK pakai prefix "3/2/". Respons data berisi array:
+    // slider, history, update (= "Episode Baru"), hot, new, today, popular,
+    // waiting, random. "day" = SENIN..MINGGU / RANDOM (dipakai buat "today").
+    @GET("data/home/list")
+    suspend fun getHomeListRaw(
+        @Query("limit") limit: Int = 10,
+        @Query("day") day: String
+    ): RawEnvelope
+
     // ---- Jadwal rilis: schedule/data?day=SENIN.. ----
     @GET("3/2/schedule/data")
     suspend fun getScheduleRaw(

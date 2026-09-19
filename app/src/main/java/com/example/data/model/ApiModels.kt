@@ -31,7 +31,11 @@ data class HomeResponse(
     @Json(name = "popular") val popular: List<AnimeItem>? = null,
     @Json(name = "trailer") val trailer: List<AnimeItem>? = null,
     @Json(name = "random") val random: List<AnimeItem>? = null,
-    @Json(name = "waiting") val waiting: List<AnimeItem>? = null
+    @Json(name = "waiting") val waiting: List<AnimeItem>? = null,
+    // "Episode Baru" (key "update" di data/home/list) + label episode tiap
+    // anime (id anime -> "Episode 23"), kalau server mengirimnya.
+    @Json(name = "update") val update: List<AnimeItem>? = null,
+    @Json(name = "update_episode_labels") val updateEpisodeLabels: Map<String, String>? = null
 )
 
 @JsonClass(generateAdapter = true)

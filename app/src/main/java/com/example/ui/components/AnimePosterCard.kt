@@ -45,8 +45,11 @@ import com.example.ui.theme.StatusOngoing
 fun AnimePosterCard(
     anime: AnimeItem,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Dipakai section "Episode Baru": label nomor episode di pojok kiri bawah poster.
+    episodeLabel: String? = null
 ) {
+    val episodeText = episodeLabel?.takeIf { it.isNotBlank() }
     Column(
         modifier = modifier
             .width(130.dp)
@@ -138,8 +141,28 @@ fun AnimePosterCard(
                     }
                 }
 
+                if (episodeText != null) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(6.dp)
+                    ) {
+                        Text(
+                            text = episodeText,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 9.sp
+                            ),
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+
                 // Views or Day at bottom left inside card
-                if (!anime.day.isNullOrEmpty()) {
+                if (episodeText == null && !anime.day.isNullOrEmpty()) {
                     Text(
                         text = anime.day.uppercase(),
                         style = MaterialTheme.typography.labelSmall.copy(

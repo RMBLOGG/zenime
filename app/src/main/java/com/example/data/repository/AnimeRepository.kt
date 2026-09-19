@@ -183,18 +183,25 @@ class AnimeRepository(
                 val newDef = async { runCatching { movieMaps(api.getHomeSection("new")) } }
                 val popularDef = async { runCatching { movieMaps(api.getHomeSection("popular")) } }
                 val randomDef = async { runCatching { movieMaps(api.getHomeSection("random")) } }
+                // Section tambahan dari data/home/list (Episode Baru, Jadwal Hari
+                // Ini, Paling Dinanti). Gagal -> section-nya saja yang hilang;
+                // TIDAK ikut menggagalkan beranda.
+                val extrasDef = async { runCatching { fetchHomeExtras() } }
                 val results = listOf(hotDef, newDef, popularDef, randomDef).awaitAll()
+                val extras = extrasDef.await().getOrNull()
                 // Kalau SEMUA section gagal, anggap request gagal total (biar
                 // fallback ke cache lama / pesan error jalan kayak biasa).
                 if (results.all { it.isFailure }) throw results.first().exceptionOrNull()!!
                 HomeResponse(
                     hot = results[0].getOrNull(),
                     new = results[1].getOrNull(),
-                    today = null,
+                    today = extras?.today?.takeIf { it.isNotEmpty() },
                     popular = results[2].getOrNull(),
                     trailer = null,
                     random = results[3].getOrNull(),
-                    waiting = null
+                    waiting = extras?.waiting?.takeIf { it.isNotEmpty() },
+                    update = extras?.update?.takeIf { it.isNotEmpty() },
+                    updateEpisodeLabels = extras?.updateLabels?.takeIf { it.isNotEmpty() }
                 )
             }
             homeCache = CacheEntry(response, System.currentTimeMillis())
@@ -206,6 +213,87 @@ class AnimeRepository(
         } finally {
             homeMutex.withLock { homeInFlight = null }
         }
+    }
+
+    // ---- Section tambahan Beranda (data/home/list) -----------------------
+    private data class HomeExtras(
+        val update: List<AnimeItem>,
+        val updateLabels: Map<String, String>,
+        val today: List<AnimeItem>,
+        val waiting: List<AnimeItem>
+    )
+
+    private suspend fun fetchHomeExtras(): HomeExtras {
+        val day = todayApiDay()
+        val data = api.getHomeListRaw(limit = 10, day = day).data
+
+        fun movieList(key: String): List<AnimeItem> =
+            asMapList(data?.get(key))
+                .mapNotNull { it.toModelOrNull(animeItemAdapter) }
+                .filter { it.id.isNotBlank() }
+
+        // "Episode Baru": item-nya berformat film biasa. Label "Episode 23"
+        // dicari dari field mana pun yang isinya nomor episode (nama field-nya
+        // belum pasti), jadi dibaca dari map mentahnya.
+        val updateRaw = asMapList(data?.get("update"))
+        val labels = LinkedHashMap<String, String>()
+        updateRaw.forEach { raw ->
+            val id = raw["id"]?.toString().orEmpty()
+            val label = episodeLabelOf(raw)
+            if (id.isNotBlank() && label != null) labels[id] = label
+        }
+
+        var today = movieList("today")
+        if (today.isEmpty()) {
+            // Cadangan: jadwal hari ini dari endpoint jadwal yang sudah terbukti jalan.
+            today = runCatching { movieMaps(api.getScheduleRaw(day)) }.getOrDefault(emptyList())
+        }
+
+        return HomeExtras(
+            update = movieList("update"),
+            updateLabels = labels,
+            today = today,
+            waiting = movieList("waiting")
+        )
+    }
+
+    private fun todayApiDay(): String {
+        val cal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Jakarta"))
+        return when (cal.get(java.util.Calendar.DAY_OF_WEEK)) {
+            java.util.Calendar.MONDAY -> "SENIN"
+            java.util.Calendar.TUESDAY -> "SELASA"
+            java.util.Calendar.WEDNESDAY -> "RABU"
+            java.util.Calendar.THURSDAY -> "KAMIS"
+            java.util.Calendar.FRIDAY -> "JUMAT"
+            java.util.Calendar.SATURDAY -> "SABTU"
+            else -> "MINGGU"
+        }
+    }
+
+    private val episodeTextRegex = Regex("(?:episode|eps?)\\.?\\s*\\d+(?:[.,]\\d+)?", RegexOption.IGNORE_CASE)
+    private val episodeKeyRegex = Regex(
+        "(?:episode|eps?|episode_(?:index|number|num|no)|(?:last|latest|new)_episode)",
+        RegexOption.IGNORE_CASE
+    )
+
+    /** Cari nomor episode di item mentah; null kalau tidak ada. */
+    private fun episodeLabelOf(raw: Map<String, Any?>): String? {
+        // 1) sudah berbentuk teks "Episode 23" / "Eps 23"
+        raw.values.forEach { v ->
+            if (v is String && episodeTextRegex.matches(v.trim())) return v.trim()
+        }
+        // 2) field bernama episode/eps/episode_index yang isinya angka saja
+        //    (id_episode sengaja tidak ikut: itu ID, bukan nomor)
+        for ((k, v) in raw) {
+            if (!episodeKeyRegex.matches(k)) continue
+            val number = when (v) {
+                is String -> v.trim().takeIf { s -> s.isNotEmpty() && s.all { c -> c.isDigit() || c == '.' } }
+                is Number -> if (v.toDouble() % 1.0 == 0.0) v.toLong().toString() else v.toString()
+                else -> null
+            }
+            if (number != null) return "Episode $number"
+        }
+        return null
     }
 
     // ---- Search ----------------------------------------------------------

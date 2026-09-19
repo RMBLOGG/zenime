@@ -317,7 +317,22 @@ fun HomeScreen(
                             }
                         }
 
-                        // Section: Sedang Tayang (Ongoing) -- di Dayynime v5, field
+                        // Section: Episode Baru ("update" di data/home/list) --
+                        // persis di atas "Sedang Hangat".
+                        data.update?.let { updateList ->
+                            if (updateList.isNotEmpty()) {
+                                item {
+                                    AnimeHorizontalSection(
+                                        title = "Episode Baru",
+                                        items = updateList,
+                                        onAnimeClick = onAnimeClick,
+                                        episodeLabels = data.updateEpisodeLabels.orEmpty()
+                                    )
+                                }
+                            }
+                        }
+
+                        // Section: Sedang Hangat (dulu "Sedang Tayang") -- di Dayynime v5, field
                         // "hot" merepresentasikan anime yang lagi tayang, sama seperti
                         // konvensi yang dipakai di Aniku. Sengaja ditaruh paling atas,
                         // di atas section "Baru Ditambahkan".
@@ -325,7 +340,7 @@ fun HomeScreen(
                             if (hotList.isNotEmpty()) {
                                 item {
                                     AnimeHorizontalSection(
-                                        title = "Sedang Tayang",
+                                        title = "Sedang Hangat",
                                         items = hotList,
                                         onAnimeClick = onAnimeClick,
                                         onSeeAllClick = onSeeAllOngoingClick
@@ -339,7 +354,7 @@ fun HomeScreen(
                             if (todayList.isNotEmpty()) {
                                 item {
                                     AnimeHorizontalSection(
-                                        title = "Update Hari Ini",
+                                        title = "Jadwal Hari Ini",
                                         items = todayList,
                                         onAnimeClick = onAnimeClick
                                     )
@@ -352,7 +367,7 @@ fun HomeScreen(
                             if (newList.isNotEmpty()) {
                                 item {
                                     AnimeHorizontalSection(
-                                        title = "New Anime Update",
+                                        title = "Judul Baru",
                                         items = newList,
                                         onAnimeClick = onAnimeClick,
                                         showNewBadge = true
@@ -394,7 +409,7 @@ fun HomeScreen(
                             if (randomList.isNotEmpty()) {
                                 item {
                                     AnimeHorizontalSection(
-                                        title = "Rekomendasi Pilihan",
+                                        title = "Jas Por Yu",
                                         items = randomList,
                                         onAnimeClick = onAnimeClick
                                     )
@@ -407,7 +422,7 @@ fun HomeScreen(
                             if (waitingList.isNotEmpty()) {
                                 item {
                                     AnimeHorizontalSection(
-                                        title = "Segera Tayang",
+                                        title = "Paling Dinanti",
                                         items = waitingList,
                                         onAnimeClick = onAnimeClick
                                     )
@@ -1868,6 +1883,7 @@ fun AnimeHorizontalSection(
     onAnimeClick: (String) -> Unit,
     onSeeAllClick: (() -> Unit)? = null,
     showNewBadge: Boolean = false,
+    episodeLabels: Map<String, String> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.padding(vertical = 10.dp)) {
@@ -1881,7 +1897,8 @@ fun AnimeHorizontalSection(
                 Box {
                     AnimePosterCard(
                         anime = anime,
-                        onClick = { onAnimeClick(anime.id) }
+                        onClick = { onAnimeClick(anime.id) },
+                        episodeLabel = episodeLabels[anime.id]
                     )
                     if (showNewBadge) {
                         Surface(
