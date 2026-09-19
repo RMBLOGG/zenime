@@ -3,6 +3,8 @@ package com.example.data.repository
 import com.example.data.api.SupabaseNetworkModule
 import com.example.data.local.PremiumStatusCache
 import com.example.data.model.PremiumPackage
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 class PremiumRepository(
     // Nullable & default null biar caller lama (yang belum punya Context
@@ -78,6 +80,27 @@ class PremiumRepository(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    /**
+     * Batch cek status premium buat sekumpulan uid sekaligus -- dipakai buat
+     * nampilin badge centang biru di Leaderboard XP. Edge Function
+     * `zenime-check-premium` sekarang cuma nerima satu uid per request (belum
+     * ada versi batch-nya kayak `zenime-get-user-numbers`), jadi di sini
+     * dipanggil PARALEL per uid (bukan sequential) biar leaderboard tetap
+     * kerasa cepet biarpun user-nya banyak. User yang gagal dicek (network
+     * error dll) dianggap TIDAK premium di map ini -- best-effort, bukan
+     * hal kritis buat sekadar nampilin badge.
+     */
+    suspend fun getPremiumStatusForUids(firebaseUids: List<String>): Map<String, Boolean> = coroutineScope {
+        val distinctUids = firebaseUids.filter { it.isNotBlank() }.distinct()
+        if (distinctUids.isEmpty()) return@coroutineScope emptyMap()
+
+        distinctUids.map { uid ->
+            async { uid to (checkPremiumStatus(uid).getOrNull()?.isPremium ?: false) }
+        }.map { it.await() }
+            .filter { (_, isPremium) -> isPremium }
+            .toMap()
     }
 }
 

@@ -25,7 +25,8 @@ import kotlinx.coroutines.tasks.await
 class XpRepository(
     private val xpApi: ZenimeXpApi = SupabaseNetworkModule.xpApi,
     private val chatRepository: ChatRepository = ChatRepository(),
-    private val clanRepository: ClanRepository = ClanRepository()
+    private val clanRepository: ClanRepository = ClanRepository(),
+    private val premiumRepository: PremiumRepository = PremiumRepository()
 ) {
 
     private suspend fun authHeader(): String {
@@ -93,6 +94,7 @@ class XpRepository(
         val xpByUid = xpApi.getLeaderboard().associateBy { it.firebaseUid }
         val clanTags = clanRepository.getClanTagsForUids(profiles.map { it.firebaseUid })
             .getOrDefault(emptyMap())
+        val premiumUids = premiumRepository.getPremiumStatusForUids(profiles.map { it.firebaseUid })
 
         profiles.map { profile ->
             val xp = xpByUid[profile.firebaseUid]
@@ -102,7 +104,8 @@ class XpRepository(
                 level = xp?.level ?: 1,
                 username = profile.username.ifBlank { "Pengguna" },
                 avatarUrl = profile.avatarUrl,
-                clanTag = clanTags[profile.firebaseUid]
+                clanTag = clanTags[profile.firebaseUid],
+                isPremium = premiumUids[profile.firebaseUid] == true
             )
         }.sortedByDescending { it.totalXp }
     }

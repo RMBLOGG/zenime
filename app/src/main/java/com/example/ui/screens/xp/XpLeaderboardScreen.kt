@@ -1,5 +1,6 @@
 package com.example.ui.screens.xp
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,6 +48,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.R
 import com.example.data.model.UserXpDisplay
 import com.example.ui.components.ClanRainbowBadge
 import com.example.ui.components.EmptyStateView
@@ -250,15 +253,26 @@ private fun PodiumCard(
         }
 
         Spacer(Modifier.height(6.dp))
-        Text(
-            text = entry.username + if (isMe) " (Kamu)" else "",
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.labelMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            textAlign = TextAlign.Center
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = entry.username + if (isMe) " (Kamu)" else "",
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            if (entry.isPremium) {
+                Spacer(Modifier.width(3.dp))
+                Image(
+                    painter = painterResource(id = R.drawable.ic_premium_badge),
+                    contentDescription = "Premium",
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+        }
         if (entry.clanTag != null) {
             Spacer(Modifier.height(4.dp))
             ClanRainbowBadge(text = entry.clanTag)
@@ -304,13 +318,24 @@ private fun XpLeaderboardRow(rank: Int, entry: UserXpDisplay, isMe: Boolean) {
         Spacer(Modifier.width(12.dp))
 
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = entry.username + if (isMe) " (Kamu)" else "",
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = entry.username + if (isMe) " (Kamu)" else "",
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                if (entry.isPremium) {
+                    Spacer(Modifier.width(4.dp))
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_premium_badge),
+                        contentDescription = "Premium",
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
             Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 LevelBadge(level = entry.level)

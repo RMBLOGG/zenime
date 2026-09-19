@@ -19,7 +19,8 @@ data class UserXpDisplay(
     val level: Int,
     val username: String,
     val avatarUrl: String?,
-    val clanTag: String?
+    val clanTag: String?,
+    val isPremium: Boolean = false
 )
 
 /** Body ke Edge Function watch-xp-heartbeat. firebase_uid TIDAK dikirim di sini
