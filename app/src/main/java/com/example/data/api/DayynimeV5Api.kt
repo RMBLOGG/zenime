@@ -4,6 +4,7 @@ import com.example.data.model.RawEnvelope
 import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.QueryMap
 
 /**
  * API baru: Animein raw API (base path /3/2/...), bukan lagi wrapper lama.
@@ -79,6 +80,13 @@ interface DayynimeV5Api {
     // ---- Link streaming episode ----
     @GET("3/2/episode/streamnew/{id}")
     suspend fun getStreamRaw(@Path("id") id: String): RawEnvelope
+
+    // ---- Cuplix (di API disebut "fyp"): klip pendek buatan user ----
+    // Path "data/..." TIDAK pakai prefix "3/2/". Query: limit, sort
+    // (scroll_likes | scroll_new | scroll_old), key_id_fyp (id yang sudah
+    // tampil, dipisah koma) dan kursor cursor_* dari server bila ada.
+    @GET("data/fyp2/list_scroll")
+    suspend fun getCuplixRaw(@QueryMap params: Map<String, String>): RawEnvelope
 
     // ---- Jadwal rilis: schedule/data?day=SENIN.. ----
     @GET("3/2/schedule/data")

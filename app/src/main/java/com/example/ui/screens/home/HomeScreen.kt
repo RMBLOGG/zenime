@@ -122,6 +122,7 @@ fun HomeScreen(
     onDonationClick: () -> Unit = {},
     onClanClick: () -> Unit = {},
     onXpLeaderboardClick: () -> Unit = {},
+    onCuplixClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val homeState by viewModel.homeState.collectAsStateWithLifecycle()
@@ -177,6 +178,8 @@ fun HomeScreen(
                 }
                 item {
                     HomeDiscussionPromoCard(onChatClick = onChatClick)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    HomeCuplixPromoCard(onCuplixClick = onCuplixClick)
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
@@ -520,6 +523,49 @@ private fun HomeDiscussionPromoCard(
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = "Buka Chat Global",
+                tint = ZenimePrimary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Kartu masuk ke Cuplix -- klip pendek anime gaya scroll vertikal.
+ */
+@Composable
+private fun HomeCuplixPromoCard(
+    onCuplixClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    HomeSectionCard(
+        modifier = modifier,
+        onClick = onCuplixClick,
+        contentPadding = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Filled.Movie,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Cuplix",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Klip pendek anime, geser ke atas buat lanjut",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                contentDescription = "Buka Cuplix",
                 tint = ZenimePrimary,
                 modifier = Modifier.size(18.dp)
             )

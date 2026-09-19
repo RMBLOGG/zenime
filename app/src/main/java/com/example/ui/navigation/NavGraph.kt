@@ -103,6 +103,8 @@ import com.example.ui.screens.comic.ComicReaderScreen
 import com.example.ui.screens.comic.ComicReaderViewModel
 import com.example.ui.screens.comic.ComicScreen
 import com.example.ui.screens.comic.ComicViewModel
+import com.example.ui.screens.cuplix.CuplixScreen
+import com.example.ui.screens.cuplix.CuplixViewModel
 import com.example.ui.screens.detail.DetailScreen
 import com.example.ui.screens.detail.DetailViewModel
 import com.example.ui.screens.favorites.FavoritesHistoryScreen
@@ -154,6 +156,10 @@ sealed class Screen(
     data object Premium : Screen("premium")
     data object Coin : Screen("coin")
     data object Donation : Screen("donation")
+
+    // Feed klip pendek (Cuplix). Sengaja TIDAK masuk bottomNavScreens, jadi
+    // bottom bar otomatis hilang dan layar penuh dipakai buat video.
+    data object Cuplix : Screen("cuplix")
 
     data object Chat : Screen("chat")
 
@@ -464,6 +470,26 @@ fun ZenimeAppNavHost(
                     },
                     onXpLeaderboardClick = {
                         navController.navigate(Screen.XpLeaderboard.route)
+                    },
+                    onCuplixClick = {
+                        navController.navigate(Screen.Cuplix.route)
+                    }
+                )
+            }
+
+            // Cuplix -- feed klip pendek gaya scroll vertikal
+            composable(Screen.Cuplix.route) {
+                val cuplixViewModel: CuplixViewModel = viewModel(
+                    factory = viewModelFactory { initializer { CuplixViewModel(repository) } }
+                )
+                CuplixScreen(
+                    viewModel = cuplixViewModel,
+                    onBackClick = { navController.popBackStack() },
+                    onAnimeClick = { animeId ->
+                        navController.navigate(Screen.Detail.createRoute(animeId))
+                    },
+                    onEpisodeClick = { episodeId, animeId ->
+                        navController.navigate(Screen.Player.createRoute(episodeId, animeId))
                     }
                 )
             }

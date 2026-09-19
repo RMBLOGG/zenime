@@ -9,6 +9,8 @@ import com.example.data.local.UserPreferencesRepository
 import com.example.data.local.WatchHistoryEntity
 import com.example.data.local.ZenimeDao
 import com.example.data.model.AnimeItem
+import com.example.data.model.CuplixItem
+import com.example.data.model.CuplixPage
 import com.example.data.model.EpisodeDetail
 import com.example.data.model.EpisodeItem
 import com.example.data.model.GenreItem
@@ -29,6 +31,8 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withContext
+import kotlin.math.abs
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
@@ -56,6 +60,7 @@ class AnimeRepository(
         private const val TTL_EPISODES = 15 * 60 * 1000L   // 15 menit, episode baru bisa nambah
         private const val TTL_SCHEDULE = 30 * 60 * 1000L   // 30 menit
         private const val TTL_GENRES = 60 * 60 * 1000L     // 1 jam, list genre nyaris statis
+        private const val CUPLIX_PAGE_SIZE = 30            // sama dengan limit yang dipakai app Animein
     }
 
     private var homeCache: CacheEntry<HomeResponse>? = null
@@ -83,6 +88,7 @@ class AnimeRepository(
     private val episodeDetailAdapter by lazy { rawMoshi.adapter(EpisodeDetail::class.java) }
     private val genreItemAdapter by lazy { rawMoshi.adapter(GenreItem::class.java) }
     private val streamServerAdapter by lazy { rawMoshi.adapter(StreamServer::class.java) }
+    private val cuplixItemAdapter by lazy { rawMoshi.adapter(CuplixItem::class.java) }
 
     private val dayKeyToApiDay = mapOf(
         "monday" to "SENIN", "tuesday" to "SELASA", "wednesday" to "RABU",
@@ -464,6 +470,78 @@ class AnimeRepository(
             }
         }
     }.flowOn(Dispatchers.IO)
+
+    // ---- Cuplix (klip pendek gaya scroll) -----------------------------------
+    /**
+     * Satu batch Cuplix. [seenIds] = id yang sudah tampil (dikirim sebagai
+     * key_id_fyp), [cursors] = kursor cursor_* dari batch sebelumnya. Bentuk
+     * respons: data.fyp = [...]; kursor (kalau ada) dibaca dari key cursor_*
+     * di data.
+     */
+    suspend fun getCuplixPage(
+        sort: String,
+        seenIds: List<String>,
+        cursors: Map<String, String>
+    ): Result<CuplixPage> = withContext(Dispatchers.IO) {
+        try {
+            val params = LinkedHashMap<String, String>()
+            params["limit"] = CUPLIX_PAGE_SIZE.toString()
+            params["sort"] = sort
+            params.putAll(cursors)
+            if (seenIds.isNotEmpty()) params["key_id_fyp"] = seenIds.takeLast(300).joinToString(",")
+
+            val env = api.getCuplixRaw(params)
+            val items = firstList(env.data, "fyp")
+                .mapNotNull { it.toModelOrNull(cuplixItemAdapter) }
+                .filter { it.id.isNotBlank() && !it.idEpisode.isNullOrBlank() }
+
+            val serverCursors = LinkedHashMap<String, String>()
+            env.data?.forEach { (k, v) ->
+                if (k.startsWith("cursor_")) cursorValue(v)?.let { serverCursors[k] = it }
+            }
+            Result.Success(
+                CuplixPage(
+                    items = items,
+                    cursors = if (serverCursors.isNotEmpty()) serverCursors else cursors,
+                    hasMore = items.size >= CUPLIX_PAGE_SIZE
+                )
+            )
+        } catch (e: Exception) {
+            Result.Error(e, friendlyErrorMessage(e, "Gagal memuat Cuplix"))
+        }
+    }
+
+    // Moshi membaca angka JSON sebagai Double ("77" -> 77.0); rapikan lagi.
+    private fun cursorValue(v: Any?): String? = when (v) {
+        is String -> v
+        is Double -> if (v % 1.0 == 0.0) v.toLong().toString() else v.toString()
+        is Number -> v.toString()
+        else -> null
+    }
+
+    /**
+     * URL video direct untuk memutar klip: dipilih kualitas terdekat 480p
+     * (cepat mulai, dan sama dengan batas kualitas non-premium). Klip cuma
+     * bisa dari server bertipe "direct".
+     */
+    suspend fun getCuplixVideoUrl(episodeId: String): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val direct = fetchStream(episodeId).servers.orEmpty()
+                .filter { !it.link.isNullOrBlank() && it.type.equals("direct", ignoreCase = true) }
+            val best = direct.minByOrNull { abs((qualityValueP(it.quality) ?: 480) - 480) }
+            val link = best?.link
+            if (link.isNullOrBlank()) {
+                Result.Error(
+                    IllegalStateException("Tidak ada server direct"),
+                    "Klip ini tidak punya video yang bisa diputar."
+                )
+            } else {
+                Result.Success(link)
+            }
+        } catch (e: Exception) {
+            Result.Error(e, friendlyErrorMessage(e, "Gagal memuat video klip"))
+        }
+    }
 
     // Local DB - Favorites
     val favorites: Flow<List<FavoriteEntity>> = dao.getAllFavorites()

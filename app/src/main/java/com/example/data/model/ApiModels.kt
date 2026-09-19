@@ -126,3 +126,41 @@ data class RawEnvelope(
     @Json(name = "error") val error: Boolean? = null,
     @Json(name = "data") val data: Map<String, Any?>? = null
 )
+
+/**
+ * Satu Cuplix (klip pendek). Video-nya BUKAN file terpisah: klip adalah
+ * potongan waktu (milidetik) dari sebuah episode -- [timeStart]..[timeEnd].
+ * Semua field dari API berupa string.
+ */
+@JsonClass(generateAdapter = true)
+data class CuplixItem(
+    @Json(name = "id") val id: String,
+    @Json(name = "caption") val caption: String? = null,
+    @Json(name = "url_thumbnail") val urlThumbnail: String? = null,
+    @Json(name = "id_episode") val idEpisode: String? = null,
+    @Json(name = "id_movie") val idMovie: String? = null,
+    @Json(name = "count_views") val countViews: String? = null,
+    @Json(name = "count_likes") val countLikes: String? = null,
+    @Json(name = "count_comments") val countComments: String? = null,
+    @Json(name = "anime") val anime: String? = null,
+    @Json(name = "episode") val episode: String? = null,
+    @Json(name = "time_start") val timeStart: String? = null,
+    @Json(name = "time_end") val timeEnd: String? = null,
+    @Json(name = "username") val username: String? = null
+) {
+    val startMs: Long get() = timeStart?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L
+
+    /** 0 = tanpa batas akhir (putar sampai video habis). */
+    val endMs: Long
+        get() {
+            val end = timeEnd?.toLongOrNull() ?: 0L
+            return if (end > startMs) end else 0L
+        }
+}
+
+/** Satu batch Cuplix + kursor untuk batch berikutnya. */
+data class CuplixPage(
+    val items: List<CuplixItem>,
+    val cursors: Map<String, String>,
+    val hasMore: Boolean
+)
