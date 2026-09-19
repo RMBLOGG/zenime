@@ -32,7 +32,7 @@ object NetworkModule {
         // ke placeholder atau base URL bawaan kode -- gak ada base URL yang
         // di-hardcode di app ini sama sekali.
         if (newBaseString == null) {
-            throw java.io.IOException(
+            throw com.example.util.ApiUnavailableException(
                 "Server sedang tidak tersedia. Coba lagi nanti."
             )
         }
@@ -61,6 +61,22 @@ object NetworkModule {
 
     val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            // Server sumber kadang lambat / memutus koneksi sesaat. GET itu aman
+            // diulang, jadi coba sekali lagi kalau koneksinya terputus. Timeout
+            // sengaja TIDAK diulang (nunggu 2x lipat cuma bikin user makin lama).
+            .addInterceptor { chain ->
+                val request = chain.request()
+                try {
+                    chain.proceed(request)
+                } catch (e: java.io.IOException) {
+                    val retryable = request.method == "GET" &&
+                        e !is java.net.SocketTimeoutException &&
+                        e !is com.example.util.ApiUnavailableException
+                    if (!retryable) throw e
+                    Thread.sleep(800)
+                    chain.proceed(request)
+                }
+            }
             .addInterceptor(dynamicBaseUrlInterceptor)
             .addInterceptor { chain ->
                 val request = chain.request().newBuilder()
@@ -72,8 +88,8 @@ object NetworkModule {
             .addInterceptor(HttpLoggingInterceptor().apply {
                 level = HttpLoggingInterceptor.Level.HEADERS
             })
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)   // server sumber sering lambat menjawab
             .build()
     }
 

@@ -448,6 +448,10 @@ fun DetailScreen(
                             // Tab lain. Season cuma sedikit -> satu item. Cuplix/Cover/Poster
                             // berisi puluhan gambar -> dipecah jadi baris LazyColumn supaya
                             // hanya yang terlihat yang dikomposisi (tidak macet saat dibuka).
+                            // Jarak atas sama dengan tab Episode (16dp).
+                            item(key = "tab_top_space") {
+                                Spacer(modifier = Modifier.height(16.dp))
+                            }
                             when (selectedTab) {
                                 DetailTab.SEASON -> item(key = "tab_content_SEASON") {
                                     TabContentEnter {
