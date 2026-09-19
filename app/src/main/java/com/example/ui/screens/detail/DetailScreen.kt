@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -55,6 +56,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -108,6 +110,7 @@ fun DetailScreen(
 ) {
     val detailState by viewModel.detailState.collectAsStateWithLifecycle()
     val episodesState by viewModel.episodesState.collectAsStateWithLifecycle()
+    val isLoadingMoreEpisodes by viewModel.isLoadingMoreEpisodes.collectAsStateWithLifecycle()
     val isFavorite by viewModel.isFavorite.collectAsStateWithLifecycle()
     val watchHistory by viewModel.watchHistory.collectAsStateWithLifecycle()
     val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
@@ -164,6 +167,25 @@ fun DetailScreen(
                 is Result.Success -> {
                     val anime = state.data
                     val episodesList = (episodesState as? Result.Success)?.data ?: emptyList()
+                    val episodeListState = rememberLazyListState()
+
+                    // Infinite-scroll episode: begitu user udah deket ujung
+                    // bawah list (yang isinya episode paling akhir), auto
+                    // ambil halaman berikutnya -- gak pakai tombol next/prev
+                    // kayak di web referensi.
+                    val shouldLoadMoreEpisodes by remember {
+                        derivedStateOf {
+                            val layoutInfo = episodeListState.layoutInfo
+                            val totalItems = layoutInfo.totalItemsCount
+                            val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                            totalItems > 0 && lastVisible >= totalItems - 4
+                        }
+                    }
+                    LaunchedEffect(shouldLoadMoreEpisodes, episodesList.size) {
+                        if (shouldLoadMoreEpisodes && episodesState is Result.Success) {
+                            viewModel.loadMoreEpisodesIfNeeded()
+                        }
+                    }
 
                     val targetEpisode = if (watchHistory != null && episodesList.isNotEmpty()) {
                         episodesList.find { it.id == watchHistory?.episodeId } ?: episodesList.firstOrNull()
@@ -172,6 +194,7 @@ fun DetailScreen(
                     }
 
                     LazyColumn(
+                        state = episodeListState,
                         contentPadding = PaddingValues(bottom = 36.dp),
                         modifier = Modifier.fillMaxSize()
                     ) {
@@ -467,6 +490,22 @@ fun DetailScreen(
                                         onEpisodeClick(ep.id, ep.title ?: "Episode ${ep.index}")
                                     }
                                 )
+                            }
+                            if (isLoadingMoreEpisodes) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 16.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(24.dp),
+                                            strokeWidth = 2.dp,
+                                            color = ZenimePrimary
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

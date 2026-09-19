@@ -42,6 +42,20 @@ class DetailViewModel(
     private val _episodesState = MutableStateFlow<Result<List<EpisodeItem>>>(Result.Loading)
     val episodesState: StateFlow<Result<List<EpisodeItem>>> = _episodesState.asStateFlow()
 
+    // Infinite-scroll episode (bukan tombol next/prev kayak web referensi):
+    // fetch per halaman (page API mulai dari 0), nambah ke list yang udah
+    // ada tiap kali loadMoreEpisodesIfNeeded() dipanggil dari scroll listener
+    // di DetailScreen. Anime episode banyak (One Piece dkk) jadi langsung
+    // nampilin halaman pertama, bukan nunggu SEMUA halaman kebaca dulu kayak
+    // getAllEpisodes() (itu masih dipakai PlayerScreen buat next/prev nav).
+    private var episodeNextPage = 0
+    private var episodesHasMore = true
+    private var isFetchingMoreEpisodes = false
+    private val episodesAccum = mutableListOf<EpisodeItem>()
+
+    private val _isLoadingMoreEpisodes = MutableStateFlow(false)
+    val isLoadingMoreEpisodes: StateFlow<Boolean> = _isLoadingMoreEpisodes.asStateFlow()
+
     val isFavorite: StateFlow<Boolean> = repository.isFavorite(animeId)
         .stateIn(
             scope = viewModelScope,
@@ -135,8 +149,11 @@ class DetailViewModel(
 
     private fun loadPreview() {
         viewModelScope.launch {
-            val episodesResult = repository.getAllEpisodes(animeId).first { it !is Result.Loading }
-            val episodes = (episodesResult as? Result.Success)?.data ?: return@launch
+            // Cukup ambil halaman pertama (episode 1 selalu ada di sana) --
+            // gak perlu nunggu semua halaman episode kebaca dulu cuma buat
+            // preview.
+            val firstPageResult = repository.getEpisodes(animeId, page = 0).first { it !is Result.Loading }
+            val episodes = (firstPageResult as? Result.Success)?.data ?: return@launch
             val firstEpisode = episodes.find { it.index?.trim() == "1" } ?: return@launch
 
             val streamResult = repository.getEpisodeStream(firstEpisode.id).first { it !is Result.Loading }
@@ -168,10 +185,56 @@ class DetailViewModel(
         }
     }
 
+    /** Reset & ambil halaman pertama (dipanggil pas layar dibuka / retry). */
     fun loadEpisodes() {
+        episodeNextPage = 0
+        episodesHasMore = true
+        isFetchingMoreEpisodes = false
+        episodesAccum.clear()
         viewModelScope.launch {
-            repository.getAllEpisodes(animeId).collect { result ->
-                _episodesState.value = result
+            _episodesState.value = Result.Loading
+            when (val result = repository.getEpisodes(animeId, page = 0).first { it !is Result.Loading }) {
+                is Result.Success -> {
+                    episodesAccum.addAll(result.data)
+                    episodesHasMore = result.data.isNotEmpty()
+                    episodeNextPage = 1
+                    _episodesState.value = Result.Success(episodesAccum.toList())
+                }
+                is Result.Error -> {
+                    episodesHasMore = false
+                    _episodesState.value = result
+                }
+                else -> {}
+            }
+        }
+    }
+
+    /**
+     * Dipanggil dari scroll listener di DetailScreen (bukan tombol) tiap
+     * kali user udah deket ujung bawah list episode -- auto nambah halaman
+     * berikutnya kalau masih ada & lagi gak proses fetch lain.
+     */
+    fun loadMoreEpisodesIfNeeded() {
+        if (isFetchingMoreEpisodes || !episodesHasMore) return
+        if (_episodesState.value !is Result.Success) return
+        isFetchingMoreEpisodes = true
+        viewModelScope.launch {
+            _isLoadingMoreEpisodes.value = true
+            try {
+                when (val result = repository.getEpisodes(animeId, page = episodeNextPage).first { it !is Result.Loading }) {
+                    is Result.Success -> {
+                        episodesHasMore = result.data.isNotEmpty()
+                        if (result.data.isNotEmpty()) {
+                            episodesAccum.addAll(result.data)
+                            episodeNextPage++
+                            _episodesState.value = Result.Success(episodesAccum.toList())
+                        }
+                    }
+                    else -> episodesHasMore = false
+                }
+            } finally {
+                _isLoadingMoreEpisodes.value = false
+                isFetchingMoreEpisodes = false
             }
         }
     }
