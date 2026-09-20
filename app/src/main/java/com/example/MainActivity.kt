@@ -47,6 +47,15 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
+    private companion object {
+        // popup_id yang udah ditutup user di "sesi" app ini -- dipakai buat
+        // popup dengan popup_repeat = true. Sengaja di companion (level
+        // proses), bukan field Activity: tetap kesimpan pas layar diputar /
+        // Activity dibuat ulang, tapi kereset begitu app di-kill lalu
+        // dibuka lagi -- itulah yang bikin popup muncul lagi tiap app dibuka.
+        var sessionSeenPopupId by mutableStateOf("")
+    }
+
     // null = belum kelar ngecek GitHub Releases (tampilin blank sebentar),
     // true = ada release lebih baru dari versionName APK ini -> app
     // diblokir total, cuma ForceUpdateScreen yang di-compose (ZenimeAppNavHost
@@ -247,14 +256,19 @@ class MainActivity : ComponentActivity() {
                         Box(modifier = Modifier.fillMaxSize()) {
                             ZenimeAppNavHost(repository = repository, comicRepository = comicRepository)
 
-                            // null awalnya = DataStore belum kebaca, popup
-                            // ditahan dulu biar gak kedip.
-                            val lastSeenPopupId by userPrefs.lastSeenPopupIdFlow
+                            // popup_repeat = false: dedupe permanen lewat DataStore
+                            // (null awalnya = belum kebaca, popup ditahan dulu biar
+                            // gak kedip). popup_repeat = true: dedupe cuma selama
+                            // sesi app ini (memori), jadi muncul lagi tiap app dibuka.
+                            val savedSeenPopupId by userPrefs.lastSeenPopupIdFlow
                                 .collectAsStateWithLifecycle(initialValue = null as String?)
+                            val popup = announcementPopup
+                            val seenId = if (popup?.repeat == true) sessionSeenPopupId else savedSeenPopupId
                             AnnouncementPopupHost(
-                                popup = announcementPopup,
-                                lastSeenId = lastSeenPopupId,
+                                popup = popup,
+                                lastSeenId = seenId,
                                 onDismiss = { id ->
+                                    sessionSeenPopupId = id
                                     lifecycleScope.launch { userPrefs.setLastSeenPopupId(id) }
                                 }
                             )

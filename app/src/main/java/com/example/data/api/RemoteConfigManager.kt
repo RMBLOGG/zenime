@@ -43,7 +43,9 @@ data class AnnouncementPopup(
     val title: String,
     val message: String,
     val buttonText: String,
-    val buttonUrl: String
+    val buttonUrl: String,
+    val footnote: String,
+    val repeat: Boolean
 )
 
 object RemoteConfigManager {
@@ -82,12 +84,21 @@ object RemoteConfigManager {
     //   popup_message      -> isi popup
     //   popup_button_text  -> teks tombol aksi (opsional)
     //   popup_button_url   -> link http/https yang dibuka tombol (opsional)
+    //   popup_footnote     -> baris kecil berwarna di bawah isi, mis.
+    //                         "Versi terbaru: 1.4.6" (opsional)
+    //   popup_repeat       -> (Boolean) true = popup muncul SETIAP app baru
+    //                         dibuka (selama saklar ON), walau udah pernah
+    //                         ditutup. Sekali ditutup, gak muncul lagi sampai
+    //                         app dibuka ulang. false/kosong = cuma sekali
+    //                         per popup_id.
     private const val KEY_POPUP_ENABLED = "popup_enabled"
     private const val KEY_POPUP_ID = "popup_id"
     private const val KEY_POPUP_TITLE = "popup_title"
     private const val KEY_POPUP_MESSAGE = "popup_message"
     private const val KEY_POPUP_BUTTON_TEXT = "popup_button_text"
     private const val KEY_POPUP_BUTTON_URL = "popup_button_url"
+    private const val KEY_POPUP_FOOTNOTE = "popup_footnote"
+    private const val KEY_POPUP_REPEAT = "popup_repeat"
 
     private val remoteConfig by lazy {
         Firebase.remoteConfig.apply {
@@ -206,7 +217,8 @@ object RemoteConfigManager {
     fun currentPopup(): AnnouncementPopup? {
         if (!remoteConfig.getBoolean(KEY_POPUP_ENABLED)) return null
         val title = remoteConfig.getString(KEY_POPUP_TITLE).trim()
-        val message = remoteConfig.getString(KEY_POPUP_MESSAGE).trim()
+        // Ketik \n (backslash + huruf n) di Console buat ganti baris.
+        val message = remoteConfig.getString(KEY_POPUP_MESSAGE).replace("\\n", "\n").trim()
         if (title.isEmpty() && message.isEmpty()) return null
         val id = remoteConfig.getString(KEY_POPUP_ID).trim()
             .ifEmpty { "$title|$message".hashCode().toString() }
@@ -215,7 +227,9 @@ object RemoteConfigManager {
             title = title,
             message = message,
             buttonText = remoteConfig.getString(KEY_POPUP_BUTTON_TEXT).trim(),
-            buttonUrl = remoteConfig.getString(KEY_POPUP_BUTTON_URL).trim()
+            buttonUrl = remoteConfig.getString(KEY_POPUP_BUTTON_URL).trim(),
+            footnote = remoteConfig.getString(KEY_POPUP_FOOTNOTE).replace("\\n", "\n").trim(),
+            repeat = remoteConfig.getBoolean(KEY_POPUP_REPEAT)
         )
     }
 
