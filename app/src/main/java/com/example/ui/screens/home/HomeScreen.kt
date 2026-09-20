@@ -95,6 +95,7 @@ import com.example.ui.components.GeneratedAvatar
 import com.example.ui.components.LevelBadge
 import com.example.data.model.CuplixItem
 import com.example.ui.components.AnimeCoverBannerSection
+import com.example.ui.components.AnimeRankedSection
 import com.example.ui.components.SectionHeader
 import com.example.ui.components.ShimmerBanner
 import com.example.ui.components.ShimmerHorizontalSection
@@ -396,7 +397,7 @@ fun HomeScreen(
                         data.popular?.let { popularList ->
                             if (popularList.isNotEmpty()) {
                                 item {
-                                    AnimeHorizontalSection(
+                                    AnimeRankedSection(
                                         title = "Terpopuler",
                                         items = popularList,
                                         onAnimeClick = onAnimeClick
