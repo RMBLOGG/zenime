@@ -94,6 +94,7 @@ import com.example.ui.components.ErrorStateView
 import com.example.ui.components.GeneratedAvatar
 import com.example.ui.components.LevelBadge
 import com.example.data.model.CuplixItem
+import com.example.ui.components.AnimeCoverBannerSection
 import com.example.ui.components.SectionHeader
 import com.example.ui.components.ShimmerBanner
 import com.example.ui.components.ShimmerHorizontalSection
@@ -339,7 +340,7 @@ fun HomeScreen(
                         data.hot?.let { hotList ->
                             if (hotList.isNotEmpty()) {
                                 item {
-                                    AnimeHorizontalSection(
+                                    AnimeCoverBannerSection(
                                         title = "Sedang Hangat",
                                         items = hotList,
                                         onAnimeClick = onAnimeClick,
@@ -408,7 +409,7 @@ fun HomeScreen(
                         data.random?.let { randomList ->
                             if (randomList.isNotEmpty()) {
                                 item {
-                                    AnimeHorizontalSection(
+                                    AnimeCoverBannerSection(
                                         title = "Jas Por Yu",
                                         items = randomList,
                                         onAnimeClick = onAnimeClick

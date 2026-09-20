@@ -221,7 +221,12 @@ class AnimeRepository(
                     today = extras?.today?.takeIf { it.isNotEmpty() },
                     popular = results[2].getOrNull(),
                     trailer = null,
-                    random = results[3].getOrNull(),
+                    // "Jas Por Yu": home/random cuma memberi ~3 item, sedangkan
+                    // data/home/list (limit=10) memberi lebih banyak -- pakai yang
+                    // paling banyak isinya.
+                    random = listOfNotNull(results[3].getOrNull(), extras?.random)
+                        .maxByOrNull { it.size }
+                        ?.takeIf { it.isNotEmpty() },
                     waiting = extras?.waiting?.takeIf { it.isNotEmpty() },
                     update = extras?.update?.takeIf { it.isNotEmpty() },
                     updateEpisodeLabels = extras?.updateLabels?.takeIf { it.isNotEmpty() }
@@ -243,7 +248,8 @@ class AnimeRepository(
         val update: List<AnimeItem>,
         val updateLabels: Map<String, String>,
         val today: List<AnimeItem>,
-        val waiting: List<AnimeItem>
+        val waiting: List<AnimeItem>,
+        val random: List<AnimeItem>
     )
 
     private suspend fun fetchHomeExtras(): HomeExtras {
@@ -276,7 +282,8 @@ class AnimeRepository(
             update = movieList("update"),
             updateLabels = labels,
             today = today,
-            waiting = movieList("waiting")
+            waiting = movieList("waiting"),
+            random = movieList("random")
         )
     }
 
