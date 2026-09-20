@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.example.ads.AdManager
+import com.example.data.api.AnnouncementPopup
 import com.example.data.api.GithubUpdateChecker
 import com.example.data.api.NetworkModule
 import com.example.data.api.RemoteConfigManager
@@ -33,6 +34,7 @@ import com.example.data.repository.AnimeRepository
 import com.example.data.repository.ComicRepository
 import com.example.notifications.setupAnnouncementNotifications
 import com.example.ui.navigation.ZenimeAppNavHost
+import com.example.ui.screens.announcement.AnnouncementPopupHost
 import com.example.ui.screens.maintenance.MaintenanceScreen
 import com.example.ui.screens.update.ForceUpdateScreen
 import com.example.ui.theme.ZenimeTheme
@@ -40,6 +42,7 @@ import com.example.util.ApkDownloader
 import com.example.util.DownloadState
 import com.example.util.PipController
 import androidx.compose.runtime.collectAsState
+import com.google.firebase.remoteconfig.ConfigUpdateListenerRegistration
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -57,6 +60,15 @@ class MainActivity : ComponentActivity() {
     // DULUAN, sebelum needsUpdate -- kalau server lagi maintenance gak ada
     // gunanya lanjut ngecek update atau prefetch homepage).
     private var isMaintenanceMode by mutableStateOf(false)
+
+    // Pop up pengumuman dari Remote Config ("popup_enabled" ON di Console).
+    // null = saklar OFF / gak ada isi. Diupdate pas app start DAN real-time
+    // lewat listener di onStart (lihat di bawah).
+    private var announcementPopup by mutableStateOf<AnnouncementPopup?>(null)
+
+    // Registrasi listener real-time Remote Config -- dipasang di onStart,
+    // dilepas di onStop supaya gak bocor dan gak jalan pas app di background.
+    private var configListener: ConfigUpdateListenerRegistration? = null
 
     // Info release terbaru dari GitHub (tag + link APK + changelog), diisi
     // bareng needsUpdate. Cuma valid kalau needsUpdate == true.
@@ -136,6 +148,7 @@ class MainActivity : ComponentActivity() {
             }
 
             isMaintenanceMode = RemoteConfigManager.isMaintenanceMode()
+            announcementPopup = RemoteConfigManager.currentPopup()
             if (isMaintenanceMode) {
                 // Server lagi diperbaiki -- gak ada gunanya ngecek update
                 // atau prefetch homepage dulu, MaintenanceScreen bakal
@@ -226,7 +239,27 @@ class MainActivity : ComponentActivity() {
                     // null = masih ngecek Remote Config/GitHub -> blank
                     // sebentar (biasanya cuma sekejap, gak pakai splash
                     // animasi lagi supaya gak dobel).
-                    needsUpdate == false -> ZenimeAppNavHost(repository = repository, comicRepository = comicRepository)
+                    needsUpdate == false -> {
+                        // Box(fillMaxSize) supaya pop up pengumuman bisa jadi
+                        // overlay di ATAS seluruh app (scrim + kartu beranimasi).
+                        // Sengaja di dalam cabang ini -- jadi gak pernah muncul
+                        // di atas MaintenanceScreen / ForceUpdateScreen.
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            ZenimeAppNavHost(repository = repository, comicRepository = comicRepository)
+
+                            // null awalnya = DataStore belum kebaca, popup
+                            // ditahan dulu biar gak kedip.
+                            val lastSeenPopupId by userPrefs.lastSeenPopupIdFlow
+                                .collectAsStateWithLifecycle(initialValue = null as String?)
+                            AnnouncementPopupHost(
+                                popup = announcementPopup,
+                                lastSeenId = lastSeenPopupId,
+                                onDismiss = { id ->
+                                    lifecycleScope.launch { userPrefs.setLastSeenPopupId(id) }
+                                }
+                            )
+                        }
+                    }
                     else -> Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -235,6 +268,23 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Real-time: begitu kamu Publish perubahan popup_* di Firebase
+        // Console, Firebase nge-push ke app yang lagi kebuka -- popup
+        // muncul/hilang tanpa user perlu restart app.
+        configListener?.remove()
+        configListener = RemoteConfigManager.listenRealtime {
+            announcementPopup = RemoteConfigManager.currentPopup()
+        }
+    }
+
+    override fun onStop() {
+        configListener?.remove()
+        configListener = null
+        super.onStop()
     }
 
     // Dipanggil sistem pas user ninggalin app (tekan Home, swipe ke recent

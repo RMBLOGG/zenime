@@ -1,6 +1,10 @@
 package com.example.data.api
 
 import com.google.firebase.Firebase
+import com.google.firebase.remoteconfig.ConfigUpdate
+import com.google.firebase.remoteconfig.ConfigUpdateListener
+import com.google.firebase.remoteconfig.ConfigUpdateListenerRegistration
+import com.google.firebase.remoteconfig.FirebaseRemoteConfigException
 import com.google.firebase.remoteconfig.remoteConfig
 import com.google.firebase.remoteconfig.remoteConfigSettings
 import kotlinx.coroutines.tasks.await
@@ -27,6 +31,21 @@ import org.json.JSONObject
  * 3. Publish. Untuk ganti base URL nanti (atau matiin app), tinggal edit/kosongin
  *    value parameter itu lalu Publish lagi.
  */
+/**
+ * Data pop up pengumuman in-app yang dibaca dari Remote Config
+ * (lihat RemoteConfigManager.currentPopup()).
+ *
+ * [id] dipakai buat nandain "popup ini udah pernah dilihat user" --
+ * ganti nilai popup_id di Console tiap mau nampilin popup BARU.
+ */
+data class AnnouncementPopup(
+    val id: String,
+    val title: String,
+    val message: String,
+    val buttonText: String,
+    val buttonUrl: String
+)
+
 object RemoteConfigManager {
 
     private const val KEY_BASE_URL = "api_base_url"
@@ -50,6 +69,25 @@ object RemoteConfigManager {
     private const val KEY_MAINTENANCE_MODE = "maintenance_mode"
     private const val KEY_MAINTENANCE_TITLE = "maintenance_title"
     private const val KEY_MAINTENANCE_MESSAGE = "maintenance_message"
+
+    // --- Pop up pengumuman in-app (real-time) ---
+    // Saklar utama = "popup_enabled" (Boolean). OFF (atau parameter belum
+    // ada di Console) -> gak ada popup sama sekali, dan kalau lagi tampil
+    // langsung hilang begitu di-OFF-in + Publish.
+    // Parameter lain (semua String):
+    //   popup_id           -> ganti tiap mau nampilin popup baru; user yang
+    //                         udah nutup popup dengan id yang sama gak akan
+    //                         lihat lagi. Kosong = id dibikin dari isi teks.
+    //   popup_title        -> judul popup
+    //   popup_message      -> isi popup
+    //   popup_button_text  -> teks tombol aksi (opsional)
+    //   popup_button_url   -> link http/https yang dibuka tombol (opsional)
+    private const val KEY_POPUP_ENABLED = "popup_enabled"
+    private const val KEY_POPUP_ID = "popup_id"
+    private const val KEY_POPUP_TITLE = "popup_title"
+    private const val KEY_POPUP_MESSAGE = "popup_message"
+    private const val KEY_POPUP_BUTTON_TEXT = "popup_button_text"
+    private const val KEY_POPUP_BUTTON_URL = "popup_button_url"
 
     private val remoteConfig by lazy {
         Firebase.remoteConfig.apply {
@@ -160,4 +198,49 @@ object RemoteConfigManager {
             JSONObject()
         }
     }
+
+    /**
+     * Pop up pengumuman yang lagi aktif, atau null kalau saklar
+     * "popup_enabled" OFF / judul & isi sama-sama kosong.
+     */
+    fun currentPopup(): AnnouncementPopup? {
+        if (!remoteConfig.getBoolean(KEY_POPUP_ENABLED)) return null
+        val title = remoteConfig.getString(KEY_POPUP_TITLE).trim()
+        val message = remoteConfig.getString(KEY_POPUP_MESSAGE).trim()
+        if (title.isEmpty() && message.isEmpty()) return null
+        val id = remoteConfig.getString(KEY_POPUP_ID).trim()
+            .ifEmpty { "$title|$message".hashCode().toString() }
+        return AnnouncementPopup(
+            id = id,
+            title = title,
+            message = message,
+            buttonText = remoteConfig.getString(KEY_POPUP_BUTTON_TEXT).trim(),
+            buttonUrl = remoteConfig.getString(KEY_POPUP_BUTTON_URL).trim()
+        )
+    }
+
+    /**
+     * Dengerin update Remote Config secara REAL-TIME (server nge-push begitu
+     * kamu Publish di Console, gak kena cache 1 jam). Config baru otomatis
+     * di-activate dulu, baru [onUpdated] dipanggil -- di dalamnya tinggal
+     * baca ulang currentPopup() dll.
+     *
+     * Panggil di onStart dan lepas (remove()) di onStop. Cuma jalan selama
+     * app kebuka; kalau app lagi ketutup, perubahan kebaca pas app dibuka
+     * lagi. [onUpdated] bisa dipanggil dari thread background.
+     */
+    fun listenRealtime(onUpdated: () -> Unit): ConfigUpdateListenerRegistration =
+        remoteConfig.addOnConfigUpdateListener(object : ConfigUpdateListener {
+            override fun onUpdate(configUpdate: ConfigUpdate) {
+                remoteConfig.activate().addOnCompleteListener {
+                    featureFlagsCache = null
+                    onUpdated()
+                }
+            }
+
+            override fun onError(error: FirebaseRemoteConfigException) {
+                // Koneksi real-time putus/gagal -- diemin aja, SDK nyoba
+                // nyambung lagi sendiri. Nilai terakhir tetap dipakai.
+            }
+        })
 }

@@ -28,6 +28,9 @@ class UserPreferencesRepository(private val context: Context) {
         val HERO_INTERVAL_MS = intPreferencesKey("hero_interval_ms")
         val HERO_ITEM_COUNT = intPreferencesKey("hero_item_count")
         val HERO_SOURCE = stringPreferencesKey("hero_source") // "AUTO", "HOT", "POPULAR", "RANDOM"
+
+        // popup_id terakhir yang udah ditutup user (pop up pengumuman Remote Config)
+        val LAST_SEEN_POPUP_ID = stringPreferencesKey("last_seen_popup_id")
     }
 
     val themeModeFlow: Flow<String> = context.dataStore.data.map { prefs ->
@@ -73,6 +76,17 @@ class UserPreferencesRepository(private val context: Context) {
 
     val heroSourceFlow: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[Keys.HERO_SOURCE] ?: "AUTO"
+    }
+
+    // Kosong = belum pernah nutup popup apa pun.
+    val lastSeenPopupIdFlow: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[Keys.LAST_SEEN_POPUP_ID] ?: ""
+    }
+
+    suspend fun setLastSeenPopupId(id: String) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.LAST_SEEN_POPUP_ID] = id
+        }
     }
 
     suspend fun setThemeMode(mode: String) {
