@@ -133,8 +133,14 @@ class SearchViewModel(
                         if (isFirstPage) {
                             allLoadedItems.clear()
                         }
-                        allLoadedItems.addAll(newItems)
-                        hasNextPage = response.next_page != null
+                        // Buang duplikat: kalau server mengabaikan `page` dan
+                        // mengulang isi yang sama, jangan ditampilkan dua kali dan
+                        // berhenti minta halaman berikutnya.
+                        val known = allLoadedItems.mapTo(HashSet()) { it.id }
+                        val fresh = newItems.filter { known.add(it.id) }
+                        allLoadedItems.addAll(fresh)
+                        val onlyDuplicates = newItems.isNotEmpty() && fresh.isEmpty()
+                        hasNextPage = response.next_page != null && !onlyDuplicates
                         nextPageCursor = response.next_page ?: (apiPage + 1)
                         _searchResults.value = Result.Success(allLoadedItems.toList())
                     }

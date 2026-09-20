@@ -373,6 +373,27 @@ class AnimeRepository(
      * endpoint yang cocok buat "tampilkan semua" -- balikin kosong dulu,
      * sama kayak halaman /cari di web referensi yang minta user ngetik dulu.
      */
+    // Sumber daftar "Semua": true = explore/movie dengan keyword kosong,
+    // false = cadangan home/popular. Ditentukan sekali di halaman 0 supaya
+    // halaman berikutnya tidak tercampur dari dua sumber berbeda.
+    @Volatile
+    private var browseViaKeyword: Boolean? = null
+
+    private suspend fun browseAll(sort: String?, page: Int): RawEnvelope? {
+        if (browseViaKeyword == null || page == 0) {
+            val viaKeyword = runCatching {
+                api.exploreByKeyword(keyword = "", sort = sort, page = page)
+            }.getOrNull()
+            browseViaKeyword = viaKeyword != null && movieMaps(viaKeyword).isNotEmpty()
+            if (browseViaKeyword == true) return viaKeyword
+        }
+        return if (browseViaKeyword == true) {
+            api.exploreByKeyword(keyword = "", sort = sort, page = page)
+        } else {
+            runCatching { api.getHomeSection("popular", page) }.getOrNull()
+        }
+    }
+
     private suspend fun runSearch(
         query: String,
         page: Int?,
@@ -388,7 +409,9 @@ class AnimeRepository(
             query.isNotBlank() -> api.exploreByKeyword(keyword = query, sort = apiSort, page = apiPage)
             !genreIn.isNullOrBlank() -> api.exploreByGenre(idGenre = genreIn, sort = apiSort, page = apiPage)
             !type.isNullOrBlank() -> api.exploreByType(type = type, sort = apiSort, page = apiPage)
-            else -> null
+            // "Semua" tanpa kata kunci/genre/tipe: dulu langsung kosong ("Anime
+            // Tidak Ditemukan"). Sekarang tampil daftar jelajah.
+            else -> browseAll(apiSort, apiPage)
         }
 
         if (env == null) {
