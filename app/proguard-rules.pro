@@ -19,3 +19,8 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Jaga model Moshi/Retrofit dari R8 (build perf) -- generic signature & adapter codegen.
+-keepattributes Signature, *Annotation*, InnerClasses, EnclosingMethod
+-keep class com.example.data.model.** { *; }
+-keep,allowobfuscation,allowshrinking class kotlin.coroutines.Continuation

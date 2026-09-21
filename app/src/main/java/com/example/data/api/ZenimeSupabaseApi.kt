@@ -9,7 +9,6 @@ import com.example.data.model.CoinPackagesResponse
 import com.example.data.model.PremiumPackagesResponse
 import com.example.data.model.PremiumStatusResponse
 import com.example.data.model.TopSupportersResponse
-import com.example.data.model.UserNumbersResponse
 import com.example.data.model.ZenimeCodeResponse
 import retrofit2.Response
 import retrofit2.http.Body
@@ -27,9 +26,6 @@ interface ZenimeSupabaseApi {
     @POST("functions/v1/zenime-get-code")
     suspend fun getZenimeCode(@Body body: Map<String, String>): ZenimeCodeResponse
 
-    /** Batch-fetch user_number buat banyak uid sekaligus -- dipakai di Chat Global. */
-    @POST("functions/v1/zenime-get-user-numbers")
-    suspend fun getUserNumbers(@Body body: Map<String, List<String>>): UserNumbersResponse
 
     @POST("functions/v1/zenime-check-premium")
     suspend fun checkPremiumStatus(@Body body: Map<String, String>): PremiumStatusResponse
@@ -92,6 +88,13 @@ interface ZenimeSupabaseApi {
     suspend fun getChatProfilesByUids(
         @Query("firebase_uid") firebaseUidIn: String,
         @Query("select") select: String = "firebase_uid,username_color"
+    ): List<ChatProfile>
+
+    /** Batch-fetch user_number (ID urut) buat sekumpulan uid -- dipakai "#ID" di bubble Chat Global. */
+    @GET("rest/v1/chat_profiles")
+    suspend fun getChatProfileUserNumbers(
+        @Query("firebase_uid") firebaseUidIn: String,
+        @Query("select") select: String = "firebase_uid,user_number"
     ): List<ChatProfile>
 
     // on_conflict + Prefer=merge-duplicates -> upsert berdasarkan firebase_uid (primary key).

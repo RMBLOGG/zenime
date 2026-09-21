@@ -21,7 +21,10 @@ data class ChatProfile(
     // dialog "Edit Profil" di Chat Global, dan kepake di SEMUA bubble chat
     // dia (punya sendiri maupun yang dilihat orang lain).
     @Json(name = "username_color") val usernameColor: String? = null,
-    @Json(name = "updated_at") val updatedAt: String? = null
+    @Json(name = "updated_at") val updatedAt: String? = null,
+    // ID urut user (disalin dari profiles.user_number lewat trigger SQL) --
+    // dipakai buat nampilin "#ID" di Chat Global tanpa Edge Function.
+    @Json(name = "user_number") val userNumber: Long? = null
 )
 
 /** Body buat upsert profil (insert kalau belum ada, update kalau udah ada). */

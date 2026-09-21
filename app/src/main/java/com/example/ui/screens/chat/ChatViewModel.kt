@@ -332,7 +332,14 @@ class ChatViewModel(
 
         userNumberCheckedUids += newUids
         viewModelScope.launch {
-            val numbers = premiumRepository.getUserNumbersForUids(newUids).getOrDefault(emptyMap())
+            val result = premiumRepository.getUserNumbersForUids(newUids)
+            if (result.isFailure) {
+                // Gagal (network/server) -> lepas tanda "sudah dicek" biar dicoba lagi
+                // di refresh berikutnya, bukan hilang permanen sampai app di-restart.
+                userNumberCheckedUids -= newUids.toSet()
+                return@launch
+            }
+            val numbers = result.getOrDefault(emptyMap())
             newUids.forEach { uid -> userNumberCache[uid] = numbers[uid] }
             _uiState.value = _uiState.value.copy(
                 userNumbersByUid = userNumberCache.filterValues { it != null }.mapValues { it.value!! }
