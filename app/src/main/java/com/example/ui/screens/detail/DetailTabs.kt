@@ -3,7 +3,9 @@ package com.example.ui.screens.detail
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -15,6 +17,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -73,6 +77,29 @@ import com.example.ui.theme.ZenimePrimary
 import kotlinx.coroutines.delay
 import java.util.Locale
 
+/**
+ * Transisi antar-tab: SATU progres (0 -> 1) dipakai bersama oleh semua item isi
+ * tab, jadi seluruh isi tab bergeser + memudar masuk sebagai satu halaman.
+ * [direction] +1 = pindah ke tab di kanan (isi baru datang dari kanan),
+ * -1 = pindah ke tab di kiri.
+ */
+class TabSlide(
+    val progress: Animatable<Float, AnimationVector1D>,
+    val direction: Int
+)
+
+/** Geser + fade sesuai [TabSlide]; murni di layer grafis, tanpa rekomposisi. */
+fun Modifier.tabSlide(slide: TabSlide?): Modifier =
+    if (slide == null) {
+        this
+    } else {
+        this.graphicsLayer {
+            val p = slide.progress.value
+            alpha = p
+            translationX = (1f - p) * slide.direction * 56.dp.toPx()
+        }
+    }
+
 // ---------------------------------------------------------------------------
 // Baris tab. Tiap tab: warna teks berubah halus + garis bawah yang "tumbuh"
 // dari tengah saat dipilih.
@@ -115,7 +142,7 @@ fun DetailTabRow(
                         maxLines = 1,
                         style = MaterialTheme.typography.labelLarge.copy(
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                            fontSize = 13.sp
+                            fontSize = 12.sp
                         )
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -142,15 +169,10 @@ fun DetailTabRow(
 @Composable
 fun TabContentEnter(
     modifier: Modifier = Modifier,
+    slide: TabSlide? = null,
     content: @Composable () -> Unit
 ) {
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { visible = true }
-    AnimatedVisibility(
-        visible = visible,
-        modifier = modifier,
-        enter = fadeIn(tween(280)) + slideInVertically(tween(280)) { it / 12 }
-    ) {
+    Box(modifier = modifier.tabSlide(slide)) {
         content()
     }
 }
@@ -333,7 +355,8 @@ fun LazyListScope.cuplixTabItems(
     state: PagedTabState<CuplixItem>,
     onClipClick: (String) -> Unit,
     onLoadMore: () -> Unit,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    tabSlide: TabSlide? = null
 ) {
     pagedGridItems(
         keyPrefix = "cuplix",
@@ -342,7 +365,8 @@ fun LazyListScope.cuplixTabItems(
         columns = 2,
         spacing = 12.dp,
         onLoadMore = onLoadMore,
-        onRetry = onRetry
+        onRetry = onRetry,
+        tabSlide = tabSlide
     ) { clip ->
         CuplixCard(clip = clip, onClick = { onClipClick(clip.id) })
     }
@@ -418,7 +442,8 @@ fun LazyListScope.galleryTabItems(
     emptyMessage: String,
     onImageClick: (GalleryImage) -> Unit,
     onLoadMore: () -> Unit,
-    onRetry: () -> Unit
+    onRetry: () -> Unit,
+    tabSlide: TabSlide? = null
 ) {
     pagedGridItems(
         keyPrefix = keyPrefix,
@@ -427,7 +452,8 @@ fun LazyListScope.galleryTabItems(
         columns = columns,
         spacing = 10.dp,
         onLoadMore = onLoadMore,
-        onRetry = onRetry
+        onRetry = onRetry,
+        tabSlide = tabSlide
     ) { image ->
         GalleryCard(
             image = image,
@@ -603,19 +629,22 @@ private fun <T> LazyListScope.pagedGridItems(
     spacing: Dp,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
+    tabSlide: TabSlide? = null,
     itemContent: @Composable (T) -> Unit
 ) {
     if (state.items.isEmpty()) {
         // Memuat / galat / kosong.
         item(key = "${keyPrefix}_status") {
-            PagedTabHost(state = state, emptyMessage = emptyMessage, onRetry = onRetry) { }
+            Box(modifier = Modifier.tabSlide(tabSlide)) {
+                PagedTabHost(state = state, emptyMessage = emptyMessage, onRetry = onRetry) { }
+            }
         }
         return
     }
 
     val rows = state.items.chunked(columns)
     itemsIndexed(rows, key = { index, _ -> "${keyPrefix}_row_$index" }) { rowIndex, rowItems ->
-        GridRowEnter(animate = rowIndex < 4, delayMs = rowIndex * 60L) {
+        GridRowEnter(animate = rowIndex < 4, delayMs = rowIndex * 60L, slide = tabSlide) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -633,7 +662,7 @@ private fun <T> LazyListScope.pagedGridItems(
         }
     }
     item(key = "${keyPrefix}_footer") {
-        Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+        Box(modifier = Modifier.tabSlide(tabSlide).padding(horizontal = 20.dp)) {
             LoadMoreFooter(state = state, onLoadMore = onLoadMore)
         }
     }
@@ -647,6 +676,7 @@ private fun <T> LazyListScope.pagedGridItems(
 private fun GridRowEnter(
     animate: Boolean,
     delayMs: Long,
+    slide: TabSlide? = null,
     content: @Composable () -> Unit
 ) {
     var played by rememberSaveable { mutableStateOf(!animate) }
@@ -659,10 +689,12 @@ private fun GridRowEnter(
         }
     }
     Box(
-        modifier = Modifier.graphicsLayer {
-            alpha = progress.value
-            translationY = (1f - progress.value) * 24.dp.toPx()
-        }
+        modifier = Modifier
+            .tabSlide(slide)
+            .graphicsLayer {
+                alpha = progress.value
+                translationY = (1f - progress.value) * 24.dp.toPx()
+            }
     ) {
         content()
     }
@@ -721,4 +753,177 @@ private fun formatCount(raw: String?): String {
         n >= 1_000 -> String.format(Locale.US, "%.1frb", n / 1_000.0).replace(".0", "")
         else -> n.toString()
     }
+}
+
+// ---------------------------------------------------------------------------
+// Info: genre, sinopsis, judul alternatif, dan rincian (tipe, status, tahun, ...)
+// Semua datanya sudah ada di respons detail -- tidak ada panggilan API tambahan.
+// ---------------------------------------------------------------------------
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun InfoTabContent(anime: AnimeItem) {
+    var expanded by remember { mutableStateOf(false) }
+
+    val genres = anime.genre.orEmpty().split(",").map { it.trim() }.filter { it.isNotBlank() }
+    val synopsis = anime.synopsis.orEmpty()
+        .replace("\r\n", "\n").replace("\r", "\n")
+        .replace(Regex("\n{3,}"), "\n\n")
+        .trim()
+    val synonyms = anime.synonyms.orEmpty().split(";").map { it.trim() }.filter { it.isNotBlank() }
+    val rows = buildInfoRows(anime)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        if (genres.isNotEmpty()) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                genres.forEach { genre ->
+                    Text(
+                        text = genre,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .border(1.dp, CardOutlineBorder, RoundedCornerShape(50))
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+            }
+        }
+
+        if (synopsis.isNotBlank()) {
+            InfoSection(title = "Sinopsis") {
+                Text(
+                    text = synopsis,
+                    style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 21.sp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = if (expanded) Int.MAX_VALUE else 5,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.animateContentSize(animationSpec = tween(250))
+                )
+                if (synopsis.length > 220) {
+                    TextButton(onClick = { expanded = !expanded }) {
+                        Text(
+                            text = if (expanded) "Tutup" else "Baca selengkapnya",
+                            color = ZenimePrimary
+                        )
+                    }
+                }
+            }
+        }
+
+        if (synonyms.isNotEmpty()) {
+            InfoSection(title = "Judul alternatif") {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    synonyms.forEach { name ->
+                        Text(
+                            text = name,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        if (rows.isNotEmpty()) {
+            InfoSection(title = "Rincian") {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                        .border(1.dp, CardOutlineBorder, RoundedCornerShape(14.dp))
+                        .padding(horizontal = 16.dp, vertical = 6.dp)
+                ) {
+                    rows.forEachIndexed { index, (label, value) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(0.38f)
+                            )
+                            Text(
+                                text = value,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(0.62f)
+                            )
+                        }
+                        if (index < rows.lastIndex) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(CardOutlineBorder.copy(alpha = 0.5f))
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        if (genres.isEmpty() && synopsis.isBlank() && synonyms.isEmpty() && rows.isEmpty()) {
+            Text(
+                text = "Belum ada informasi untuk anime ini.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 24.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun InfoSection(title: String, content: @Composable () -> Unit) {
+    Column {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        content()
+    }
+}
+
+private fun buildInfoRows(anime: AnimeItem): List<Pair<String, String>> {
+    fun String?.clean(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
+    fun number(raw: String?): String? {
+        val n = raw.clean()?.toLongOrNull() ?: return null
+        return String.format(Locale.US, "%,d", n).replace(',', '.')
+    }
+
+    val aired = listOfNotNull(anime.aired_start.clean(), anime.aired_end.clean())
+        .filter { !it.startsWith("0000") }
+        .joinToString(" - ")
+        .takeIf { it.isNotEmpty() }
+
+    val day = anime.day.clean()?.let {
+        if (it.equals("RANDOM", ignoreCase = true)) "Tidak tentu"
+        else it.lowercase().replaceFirstChar { c -> c.uppercase() }
+    }
+
+    return listOfNotNull(
+        anime.type.clean()?.let { "Tipe" to it },
+        anime.status.clean()?.let { "Status" to it.lowercase().replaceFirstChar { c -> c.uppercase() } },
+        anime.year.clean()?.let { "Tahun" to it },
+        anime.studio.clean()?.let { "Studio" to it },
+        aired?.let { "Tayang" to it },
+        day?.let { "Hari tayang" to it },
+        number(anime.views)?.let { "Views" to it },
+        number(anime.favorites)?.let { "Favorit" to it }
+    )
 }

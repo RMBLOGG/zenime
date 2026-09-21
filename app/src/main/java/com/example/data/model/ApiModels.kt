@@ -20,7 +20,10 @@ data class AnimeItem(
     @Json(name = "image_cover") val image_cover: String? = null,
     @Json(name = "aired_start") val aired_start: String? = null,
     @Json(name = "time") val time: String? = null,
-    @Json(name = "key_time") val key_time: String? = null
+    @Json(name = "key_time") val key_time: String? = null,
+    // Dipakai tab Info di halaman detail (sudah ada di respons movie/detail).
+    @Json(name = "studio") val studio: String? = null,
+    @Json(name = "aired_end") val aired_end: String? = null
 )
 
 @JsonClass(generateAdapter = true)

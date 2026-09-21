@@ -3,6 +3,14 @@ package com.example.ui.screens.detail
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.animateContentSize
@@ -133,6 +141,24 @@ fun DetailScreen(
     // Tab aktif disimpan sebagai nama enum supaya selamat dari rotasi layar.
     var selectedTabName by rememberSaveable { mutableStateOf(DetailTab.EPISODE.name) }
     val selectedTab = DetailTab.values().firstOrNull { it.name == selectedTabName } ?: DetailTab.EPISODE
+
+    // Pindah tab (klik ATAU geser): satu progres 0->1 dipakai semua isi tab supaya
+    // bergeser masuk dari arah yang sesuai. Progres di-nol-kan SEBELUM tab diganti,
+    // jadi tidak ada satu frame pun isi baru tampil penuh lalu berkedip.
+    val tabScope = rememberCoroutineScope()
+    val tabTransition = remember { Animatable(1f) }
+    var tabDirection by remember { mutableIntStateOf(1) }
+    val tabSlide = remember(tabDirection) { TabSlide(tabTransition, tabDirection) }
+    val selectTab: (DetailTab) -> Unit = { tab ->
+        if (tab != selectedTab) {
+            tabScope.launch {
+                tabDirection = if (tab.ordinal > selectedTab.ordinal) 1 else -1
+                tabTransition.snapTo(0f)
+                selectedTabName = tab.name
+                tabTransition.animateTo(1f, tween(300, easing = FastOutSlowInEasing))
+            }
+        }
+    }
     LaunchedEffect(selectedTab) { viewModel.ensureTabLoaded(selectedTab) }
 
     var episodeToDeleteDownload by remember { mutableStateOf<String?>(null) }
@@ -218,7 +244,34 @@ fun DetailScreen(
                     LazyColumn(
                         state = episodeListState,
                         contentPadding = PaddingValues(bottom = 36.dp),
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            // Geser kiri/kanan = pindah tab. Geseran vertikal tetap
+                            // milik LazyColumn (detektor ini baru aktif untuk gerak
+                            // horizontal), jadi scroll biasa tidak terganggu.
+                            .pointerInput(selectedTab) {
+                                val threshold = 64.dp.toPx()
+                                var total = 0f
+                                detectHorizontalDragGestures(
+                                    onDragStart = { total = 0f },
+                                    onDragEnd = {
+                                        val tabs = DetailTab.values()
+                                        val index = selectedTab.ordinal
+                                        if (total <= -threshold && index < tabs.lastIndex) {
+                                            selectTab(tabs[index + 1])
+                                        }
+                                        if (total >= threshold && index > 0) {
+                                            selectTab(tabs[index - 1])
+                                        }
+                                        total = 0f
+                                    },
+                                    onDragCancel = { total = 0f },
+                                    onHorizontalDrag = { change, dragAmount ->
+                                        total += dragAmount
+                                        change.consume()
+                                    }
+                                )
+                            }
                     ) {
                         // 1. FULL-BLEED Poster / Artwork at top 55% of screen
                         item {
@@ -380,7 +433,7 @@ fun DetailScreen(
                         item(key = "detail_tabs") {
                             DetailTabRow(
                                 selected = selectedTab,
-                                onSelect = { selectedTabName = it.name }
+                                onSelect = selectTab
                             )
                         }
 
@@ -425,7 +478,8 @@ fun DetailScreen(
                                         onUpgradeClick()
                                     }
                                 },
-                                onDeleteDownloadClick = { ep -> episodeToDeleteDownload = ep.id }
+                                onDeleteDownloadClick = { ep -> episodeToDeleteDownload = ep.id },
+                                tabSlide = tabSlide
                             )
                             if (isLoadingMoreEpisodes) {
                                 item {
@@ -454,7 +508,7 @@ fun DetailScreen(
                             }
                             when (selectedTab) {
                                 DetailTab.SEASON -> item(key = "tab_content_SEASON") {
-                                    TabContentEnter {
+                                    TabContentEnter(slide = tabSlide) {
                                         SeasonTabContent(
                                             state = seasonsState,
                                             currentAnimeId = viewModel.animeId,
@@ -467,7 +521,8 @@ fun DetailScreen(
                                     state = cuplixState,
                                     onClipClick = onCuplixClick,
                                     onLoadMore = { viewModel.loadMoreCuplix() },
-                                    onRetry = { viewModel.retryTab(DetailTab.CUPLIX) }
+                                    onRetry = { viewModel.retryTab(DetailTab.CUPLIX) },
+                                    tabSlide = tabSlide
                                 )
                                 DetailTab.COVER -> galleryTabItems(
                                     keyPrefix = "cover",
@@ -477,7 +532,8 @@ fun DetailScreen(
                                     emptyMessage = "Belum ada cover kiriman pengguna.",
                                     onImageClick = { galleryPreview = it },
                                     onLoadMore = { viewModel.loadMoreCovers() },
-                                    onRetry = { viewModel.retryTab(DetailTab.COVER) }
+                                    onRetry = { viewModel.retryTab(DetailTab.COVER) },
+                                    tabSlide = tabSlide
                                 )
                                 DetailTab.POSTER -> galleryTabItems(
                                     keyPrefix = "poster",
@@ -487,8 +543,14 @@ fun DetailScreen(
                                     emptyMessage = "Belum ada poster kiriman pengguna.",
                                     onImageClick = { galleryPreview = it },
                                     onLoadMore = { viewModel.loadMorePosters() },
-                                    onRetry = { viewModel.retryTab(DetailTab.POSTER) }
+                                    onRetry = { viewModel.retryTab(DetailTab.POSTER) },
+                                    tabSlide = tabSlide
                                 )
+                                DetailTab.INFO -> item(key = "tab_content_INFO") {
+                                    TabContentEnter(slide = tabSlide) {
+                                        InfoTabContent(anime = anime)
+                                    }
+                                }
                                 DetailTab.EPISODE -> Unit
                             }
                         }

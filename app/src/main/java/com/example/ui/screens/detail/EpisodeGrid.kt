@@ -70,12 +70,14 @@ fun LazyListScope.episodeGridItems(
     isPremium: Boolean,
     onEpisodeClick: (EpisodeItem) -> Unit,
     onDownloadClick: (EpisodeItem) -> Unit,
-    onDeleteDownloadClick: (EpisodeItem) -> Unit
+    onDeleteDownloadClick: (EpisodeItem) -> Unit,
+    tabSlide: TabSlide? = null
 ) {
     val rows = episodes.chunked(EPISODE_COLUMNS)
     itemsIndexed(rows, key = { _, row -> "ep_row_${row.first().id}" }) { _, row ->
         Row(
             modifier = Modifier
+                .tabSlide(tabSlide)
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 12.dp),

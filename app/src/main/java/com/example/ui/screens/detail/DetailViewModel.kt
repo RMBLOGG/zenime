@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 
 /** Tab di halaman detail. EPISODE = isi lama (genre, sinopsis, daftar episode). */
 enum class DetailTab(val label: String) {
+    INFO("Info"),
     EPISODE("Episode"),
     SEASON("Season"),
     CUPLIX("Cuplix"),
@@ -148,7 +149,7 @@ class DetailViewModel(
             DetailTab.CUPLIX -> cuplixPager.ensureLoaded()
             DetailTab.COVER -> coverPager.ensureLoaded()
             DetailTab.POSTER -> posterPager.ensureLoaded()
-            DetailTab.EPISODE -> Unit
+            DetailTab.EPISODE, DetailTab.INFO -> Unit
         }
     }
 
@@ -158,7 +159,7 @@ class DetailViewModel(
             DetailTab.CUPLIX -> cuplixPager.retry()
             DetailTab.COVER -> coverPager.retry()
             DetailTab.POSTER -> posterPager.retry()
-            DetailTab.EPISODE -> Unit
+            DetailTab.EPISODE, DetailTab.INFO -> Unit
         }
     }
 
