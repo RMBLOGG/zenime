@@ -60,7 +60,7 @@ object NetworkModule {
     }
 
     /**
-     * Nempelin id_user/key_client/apk_ver ke request data/manra/* --
+     * Nempelin id_user/key_client/apk_ver ke request data/manra/... --
      * niru CommonParamsInterceptor app Animein asli (hasil decompile),
      * tapi sengaja dibatasin cuma ke path Manra (bukan global kayak
      * aslinya) biar endpoint lain yang udah jalan normal gak keganggu.

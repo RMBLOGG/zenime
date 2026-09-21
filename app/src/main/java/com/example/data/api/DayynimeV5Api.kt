@@ -86,10 +86,10 @@ interface DayynimeV5Api {
 
     // ---- Device-auth Manra (niru StartActivity app Animein asli) ----
     // Dipanggil sekali (hasilnya di-cache) oleh ManraAuthManager sebelum
-    // request data/manra/* mana pun. Field: token (FCM token), apk (versi
+    // request data/manra/... mana pun. Field: token (FCM token), apk (versi
     // APK). Balikannya (diasumsikan) data.user.id + data.user.key_client,
     // yang lalu ditempelin sebagai id_user/key_client di tiap request
-    // data/manra/* -- lihat ManraAuthManager & manraParamsInterceptor.
+    // data/manra/... -- lihat ManraAuthManager & manraParamsInterceptor.
     @FormUrlEncoded
     @POST("3/2/user/auth/device")
     suspend fun authDeviceRaw(@FieldMap params: Map<String, String>): RawEnvelope

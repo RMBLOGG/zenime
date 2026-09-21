@@ -8,7 +8,7 @@ import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.runBlocking
 
 /**
- * Device-auth khusus buat endpoint Manra (data/manra/*), niru alur yang
+ * Device-auth khusus buat endpoint Manra (data/manra/...), niru alur yang
  * ditemukan di StartActivity app Animein asli (hasil decompile APK):
  *
  *   1. Ambil token Firebase Cloud Messaging.
@@ -17,7 +17,7 @@ import kotlinx.coroutines.runBlocking
  *   3. Respons-nya (diasumsikan sama bentuknya kayak respons auth/login &
  *      auth/google, yang paling jelas kebaca di decompile) berisi
  *      data.user.id dan data.user.key_client.
- *   4. Dua nilai itu + versi APK ditempelin ke SETIAP request data/manra/*
+ *   4. Dua nilai itu + versi APK ditempelin ke SETIAP request data/manra/...
  *      (sebagai query param buat GET, field form buat POST) -- niru
  *      CommonParamsInterceptor yang di app asli jalan global ke semua
  *      request, tapi di sini sengaja dibatasin cuma ke path Manra biar gak
