@@ -392,6 +392,15 @@ private fun ChatBubble(
                     ) {
                         if (isOwnMessage) {
                             Spacer(modifier = Modifier.weight(1f, fill = true))
+                            if (senderUserNumber != null) {
+                                Text(
+                                    text = "#$senderUserNumber",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(end = 3.dp)
+                                )
+                            }
                             if (isSenderPremium) {
                                 Icon(
                                     imageVector = Icons.Filled.Verified,
@@ -400,15 +409,6 @@ private fun ChatBubble(
                                     modifier = Modifier
                                         .padding(end = 3.dp)
                                         .size(17.dp)
-                                )
-                            }
-                            if (senderUserNumber != null) {
-                                Text(
-                                    text = "#$senderUserNumber",
-                                    color = Color.White.copy(alpha = 0.5f),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 1,
-                                    modifier = Modifier.padding(end = 4.dp)
                                 )
                             }
                             Text(

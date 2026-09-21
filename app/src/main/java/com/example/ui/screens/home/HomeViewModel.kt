@@ -122,6 +122,24 @@ class HomeViewModel(
         loadManra()
         loadProfileHeader()
         loadHeroLeaderboard()
+        prefetchChat()
+    }
+
+    /**
+     * Prefetch pesan Chat Global ke cache sesi biar pas user buka Chat,
+     * pesan langsung tampil tanpa nunggu spinner. Diam-diam gagal.
+     */
+    private fun prefetchChat() {
+        if (firebaseUid == null || com.example.ui.screens.chat.ChatSessionCache.messages.isNotEmpty()) return
+        viewModelScope.launch {
+            try {
+                val messages = chatRepository.getMessages()
+                if (com.example.ui.screens.chat.ChatSessionCache.messages.isEmpty()) {
+                    com.example.ui.screens.chat.ChatSessionCache.messages = messages
+                }
+            } catch (_: Exception) {
+            }
+        }
     }
 
     /**

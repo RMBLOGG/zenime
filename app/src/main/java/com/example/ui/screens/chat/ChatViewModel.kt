@@ -128,7 +128,17 @@ class ChatViewModel(
             displayUsername = fallbackUsername,
             // null = belum ada foto custom -> UI nampilin GeneratedAvatar
             // (avatar warna + inisial), bukan foto Google.
-            displayAvatarUrl = null
+            displayAvatarUrl = null,
+            // Kalau pernah dimuat sebelumnya di sesi ini, langsung tampilin
+            // pesan + badge dari cache (tanpa spinner); fetch terbaru jalan
+            // di belakang dan nimpa.
+            messages = ChatSessionCache.messages,
+            isLoading = ChatSessionCache.messages.isEmpty(),
+            premiumUids = ChatSessionCache.premiumUids,
+            clanTagsByUid = ChatSessionCache.clanTagsByUid,
+            xpLevelsByUid = ChatSessionCache.xpLevelsByUid,
+            usernameColorsByUid = ChatSessionCache.usernameColorsByUid,
+            userNumbersByUid = ChatSessionCache.userNumbersByUid
         )
     )
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -142,28 +152,32 @@ class ChatViewModel(
     // Cache status premium per firebase_uid biar gak nge-hit zenime-check-premium
     // berkali-kali buat pengirim yang sama. Sekali dicek, hasilnya dipakai
     // terus selama sesi chat ini kebuka.
-    private val premiumStatusCache = mutableMapOf<String, Boolean>()
+    private val premiumStatusCache = mutableMapOf<String, Boolean>().apply {
+        ChatSessionCache.premiumUids.forEach { put(it, true) }
+    }
     private val checkedUids = mutableSetOf<String>()
 
     // Sama pola kayak cache premium di atas, tapi buat tag clan. `null` di
     // value artinya "udah dicek, ternyata gak gabung clan manapun" -- beda
     // sama "belum pernah dicek sama sekali" (uid gak ada di map ini).
-    private val clanTagCache = mutableMapOf<String, String?>()
+    private val clanTagCache = mutableMapOf<String, String?>().apply { putAll(ChatSessionCache.clanTagsByUid) }
     private val clanCheckedUids = mutableSetOf<String>()
 
     // Sama pola kayak cache clan di atas, tapi buat level XP nonton.
-    private val xpLevelCache = mutableMapOf<String, Int?>()
+    private val xpLevelCache = mutableMapOf<String, Int?>().apply { putAll(ChatSessionCache.xpLevelsByUid) }
     private val xpCheckedUids = mutableSetOf<String>()
 
     // Sama pola kayak cache clan/xp di atas, tapi buat warna username custom.
-    private val usernameColorCache = mutableMapOf<String, String?>()
+    private val usernameColorCache = mutableMapOf<String, String?>().apply { putAll(ChatSessionCache.usernameColorsByUid) }
     private val usernameColorCheckedUids = mutableSetOf<String>()
 
     // Sama pola kayak cache di atas, tapi buat user_number (ID urut ala Aniku).
-    private val userNumberCache = mutableMapOf<String, Long?>()
+    private val userNumberCache = mutableMapOf<String, Long?>().apply { putAll(ChatSessionCache.userNumbersByUid) }
     private val userNumberCheckedUids = mutableSetOf<String>()
 
     init {
+        // Simpen tiap perubahan (pesan + badge) ke cache sesi biar buka chat berikutnya instan.
+        viewModelScope.launch { _uiState.collect { ChatSessionCache.save(it) } }
         loadProfileAndPremiumStatus(fallbackUsername)
         // Full load sekali di awal (isi riwayat pesan), abis itu pesan baru
         // masuk lewat Realtime -- bukan polling ulang tiap beberapa detik.
