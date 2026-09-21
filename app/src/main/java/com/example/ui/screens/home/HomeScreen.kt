@@ -5,7 +5,11 @@ import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -46,6 +50,7 @@ import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Movie
@@ -83,6 +88,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -90,6 +96,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -103,6 +110,7 @@ import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.model.AnimeItem
 import com.example.data.model.BacakomikListItem
 import com.example.data.model.Clan
+import com.example.data.model.TopSupporter
 import com.example.data.model.UserXpDisplay
 import com.example.ui.components.AnimePosterCard
 import com.example.ui.components.ComicPosterCard
@@ -310,7 +318,8 @@ fun HomeScreen(
                                     onAnimeClick = onAnimeClick,
                                     leaderboard = heroLeaderboard,
                                     onXpLeaderboardClick = onXpLeaderboardClick,
-                                    onClanLeaderboardClick = onClanClick
+                                    onClanLeaderboardClick = onClanClick,
+                                    onSupportClick = onDonationClick
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
                             }
@@ -872,14 +881,18 @@ fun FullBleedHeroBannerCarousel(
     intervalMs: Long = 4500L,
     leaderboard: HeroLeaderboardUiState? = null,
     onXpLeaderboardClick: () -> Unit = {},
-    onClanLeaderboardClick: () -> Unit = {}
+    onClanLeaderboardClick: () -> Unit = {},
+    onSupportClick: () -> Unit = {}
 ) {
     if (bannerItems.isEmpty()) return
 
     val context = LocalContext.current
     val showLeaderboard = leaderboard != null &&
         (leaderboard.topXp.isNotEmpty() || leaderboard.topClans.isNotEmpty())
-    val pageCount = if (showLeaderboard) 2 else 1
+    val showSupport = leaderboard != null && leaderboard.topSupport.isNotEmpty()
+    val leaderboardPage = if (showLeaderboard) 1 else -1
+    val supportPage = if (showSupport) 1 + (if (showLeaderboard) 1 else 0) else -1
+    val pageCount = 1 + (if (showLeaderboard) 1 else 0) + (if (showSupport) 1 else 0)
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { pageCount })
 
     var animeIndex by remember { mutableIntStateOf(0) }
@@ -920,8 +933,8 @@ fun FullBleedHeroBannerCarousel(
                 .padding(horizontal = 16.dp)
                 .height(232.dp)
         ) { page ->
-            if (page == 0) {
-                HeroAutoPosterSlide(
+            when (page) {
+                0 -> HeroAutoPosterSlide(
                     bannerItems = bannerItems,
                     currentIndex = safeIndex,
                     intervalMs = intervalMs,
@@ -929,8 +942,13 @@ fun FullBleedHeroBannerCarousel(
                     onAnimeClick = onAnimeClick,
                     modifier = Modifier.fillMaxSize()
                 )
-            } else {
-                HeroLeaderboardSlide(
+                supportPage -> HeroSupportSlide(
+                    supporters = leaderboard?.topSupport ?: emptyList(),
+                    shape = heroShape,
+                    modifier = Modifier.fillMaxSize(),
+                    onSupportClick = onSupportClick
+                )
+                else -> HeroLeaderboardSlide(
                     leaderboard = leaderboard ?: HeroLeaderboardUiState(isLoading = false),
                     shape = heroShape,
                     modifier = Modifier.fillMaxSize(),
@@ -941,7 +959,8 @@ fun FullBleedHeroBannerCarousel(
         }
 
         // Dot indikator di tengah bawah kartu (1 dot = 1 slide). Dot
-        // leaderboard berwarna kuning biar kebaca beda dari slide anime.
+        // leaderboard kuning, dot support merah muda -- biar kebaca beda
+        // dari slide anime & satu sama lain.
         if (pageCount > 1) {
             val scope = rememberCoroutineScope()
             Row(
@@ -953,7 +972,8 @@ fun FullBleedHeroBannerCarousel(
             ) {
                 repeat(pageCount) { index ->
                     val selected = pagerState.currentPage == index
-                    val isLeaderboardDot = index == 1
+                    val isLeaderboardDot = index == leaderboardPage
+                    val isSupportDot = index == supportPage
                     val dotWidth by animateDpAsState(
                         targetValue = if (selected) 24.dp else 7.dp,
                         label = "hero_dot_width"
@@ -961,7 +981,9 @@ fun FullBleedHeroBannerCarousel(
                     val dotColor by animateColorAsState(
                         targetValue = when {
                             selected && isLeaderboardDot -> StarYellow
+                            selected && isSupportDot -> ZenimePrimary
                             selected -> ZenimePrimary
+                            isSupportDot -> ZenimePrimary.copy(alpha = 0.4f)
                             else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
                         },
                         label = "hero_dot_color"
@@ -1222,12 +1244,16 @@ fun CrunchyrollHeroCarousel(
     intervalMs: Long = 4500L,
     leaderboard: HeroLeaderboardUiState? = null,
     onXpLeaderboardClick: () -> Unit = {},
-    onClanLeaderboardClick: () -> Unit = {}
+    onClanLeaderboardClick: () -> Unit = {},
+    onSupportClick: () -> Unit = {}
 ) {
     if (bannerItems.isEmpty()) return
 
     val showLeaderboard = leaderboard != null && (leaderboard.topXp.isNotEmpty() || leaderboard.topClans.isNotEmpty())
-    val pageCount = bannerItems.size + if (showLeaderboard) 1 else 0
+    val showSupport = leaderboard != null && leaderboard.topSupport.isNotEmpty()
+    val leaderboardPage = if (showLeaderboard) bannerItems.size else -1
+    val supportPage = if (showSupport) bannerItems.size + (if (showLeaderboard) 1 else 0) else -1
+    val pageCount = bannerItems.size + (if (showLeaderboard) 1 else 0) + (if (showSupport) 1 else 0)
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { pageCount })
 
     LaunchedEffect(pageCount, autoplay, intervalMs) {
@@ -1249,7 +1275,7 @@ fun CrunchyrollHeroCarousel(
             state = pagerState,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (showLeaderboard && pagerState.currentPage == pageCount - 1) 300.dp else 450.dp)
+                .height(if (pagerState.currentPage >= bannerItems.size) 300.dp else 450.dp)
         ) { page ->
             if (page < bannerItems.size) {
                 val anime = bannerItems[page]
@@ -1399,6 +1425,15 @@ fun CrunchyrollHeroCarousel(
                         }
                     }
                 }
+            } else if (page == supportPage) {
+                HeroSupportSlide(
+                    supporters = leaderboard?.topSupport ?: emptyList(),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 20.dp, vertical = 6.dp),
+                    onSupportClick = onSupportClick
+                )
             } else {
                 HeroLeaderboardSlide(
                     leaderboard = leaderboard ?: HeroLeaderboardUiState(isLoading = false),
@@ -1423,7 +1458,8 @@ fun CrunchyrollHeroCarousel(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 repeat(pageCount) { index ->
-                    val isLeaderboardDot = showLeaderboard && index == pageCount - 1
+                    val isLeaderboardDot = index == leaderboardPage
+                    val isSupportDot = index == supportPage
                     Box(
                         modifier = Modifier
                             .padding(end = 5.dp)
@@ -1435,18 +1471,26 @@ fun CrunchyrollHeroCarousel(
                                     index == pagerState.currentPage && isLeaderboardDot -> StarYellow
                                     index == pagerState.currentPage -> ZenimePrimary
                                     isLeaderboardDot -> StarYellow.copy(alpha = 0.45f)
+                                    isSupportDot -> ZenimePrimary.copy(alpha = 0.45f)
                                     else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
                                 }
                             )
                     )
                 }
             }
-            if (showLeaderboard) {
+            if (showLeaderboard || showSupport) {
                 val scope = rememberCoroutineScope()
                 HeroCarouselModeSwitch(
-                    isLeaderboard = pagerState.currentPage == pageCount - 1,
+                    activeTarget = when (pagerState.currentPage) {
+                        leaderboardPage -> HeroCarouselTarget.LEADERBOARD
+                        supportPage -> HeroCarouselTarget.SUPPORT
+                        else -> HeroCarouselTarget.ANIME
+                    },
+                    showLeaderboard = showLeaderboard,
+                    showSupport = showSupport,
                     onAnimeClick = { scope.launch { pagerState.animateScrollToPage(0) } },
-                    onLeaderboardClick = { scope.launch { pagerState.animateScrollToPage(pageCount - 1) } }
+                    onLeaderboardClick = { scope.launch { pagerState.animateScrollToPage(leaderboardPage) } },
+                    onSupportClick = { scope.launch { pagerState.animateScrollToPage(supportPage) } }
                 )
             }
         }
@@ -1468,12 +1512,16 @@ fun DayynimeHeroCarousel(
     intervalMs: Long = 4500L,
     leaderboard: HeroLeaderboardUiState? = null,
     onXpLeaderboardClick: () -> Unit = {},
-    onClanLeaderboardClick: () -> Unit = {}
+    onClanLeaderboardClick: () -> Unit = {},
+    onSupportClick: () -> Unit = {}
 ) {
     if (bannerItems.isEmpty()) return
 
     val showLeaderboard = leaderboard != null && (leaderboard.topXp.isNotEmpty() || leaderboard.topClans.isNotEmpty())
-    val pageCount = bannerItems.size + if (showLeaderboard) 1 else 0
+    val showSupport = leaderboard != null && leaderboard.topSupport.isNotEmpty()
+    val leaderboardPage = if (showLeaderboard) bannerItems.size else -1
+    val supportPage = if (showSupport) bannerItems.size + (if (showLeaderboard) 1 else 0) else -1
+    val pageCount = bannerItems.size + (if (showLeaderboard) 1 else 0) + (if (showSupport) 1 else 0)
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { pageCount })
 
     LaunchedEffect(pageCount, autoplay, intervalMs) {
@@ -1560,6 +1608,13 @@ fun DayynimeHeroCarousel(
                         }
                     }
                 }
+            } else if (page == supportPage) {
+                HeroSupportSlide(
+                    supporters = leaderboard?.topSupport ?: emptyList(),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    onSupportClick = onSupportClick
+                )
             } else {
                 HeroLeaderboardSlide(
                     leaderboard = leaderboard ?: HeroLeaderboardUiState(isLoading = false),
@@ -1574,7 +1629,7 @@ fun DayynimeHeroCarousel(
         Spacer(modifier = Modifier.height(10.dp))
 
         // Dot indicator BULAT KECIL -- bukan bar panjang, sesuai referensi asli.
-        // Tombol switch anime/leaderboard nempel di ujung kanan.
+        // Tombol switch anime/leaderboard/support nempel di ujung kanan.
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -1585,7 +1640,8 @@ fun DayynimeHeroCarousel(
             ) {
                 repeat(pageCount) { index ->
                     val active = index == pagerState.currentPage
-                    val isLeaderboardDot = showLeaderboard && index == pageCount - 1
+                    val isLeaderboardDot = index == leaderboardPage
+                    val isSupportDot = index == supportPage
                     Box(
                         modifier = Modifier
                             .padding(horizontal = 3.dp)
@@ -1596,18 +1652,26 @@ fun DayynimeHeroCarousel(
                                     active && isLeaderboardDot -> StarYellow
                                     active -> ZenimePrimary
                                     isLeaderboardDot -> StarYellow.copy(alpha = 0.4f)
+                                    isSupportDot -> ZenimePrimary.copy(alpha = 0.4f)
                                     else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
                                 }
                             )
                     )
                 }
             }
-            if (showLeaderboard) {
+            if (showLeaderboard || showSupport) {
                 val scope = rememberCoroutineScope()
                 HeroCarouselModeSwitch(
-                    isLeaderboard = pagerState.currentPage == pageCount - 1,
+                    activeTarget = when (pagerState.currentPage) {
+                        leaderboardPage -> HeroCarouselTarget.LEADERBOARD
+                        supportPage -> HeroCarouselTarget.SUPPORT
+                        else -> HeroCarouselTarget.ANIME
+                    },
+                    showLeaderboard = showLeaderboard,
+                    showSupport = showSupport,
                     onAnimeClick = { scope.launch { pagerState.animateScrollToPage(0) } },
-                    onLeaderboardClick = { scope.launch { pagerState.animateScrollToPage(pageCount - 1) } }
+                    onLeaderboardClick = { scope.launch { pagerState.animateScrollToPage(leaderboardPage) } },
+                    onSupportClick = { scope.launch { pagerState.animateScrollToPage(supportPage) } }
                 )
             }
         }
@@ -1644,21 +1708,22 @@ private fun DayynimeMetaChip(icon: androidx.compose.ui.graphics.vector.ImageVect
     }
 }
 
+/** Tujuan slide yang lagi aktif di Hero Carousel -- dipakai [HeroCarouselModeSwitch]. */
+private enum class HeroCarouselTarget { ANIME, LEADERBOARD, SUPPORT }
+
 /**
- * Slide "TOP LEADERBOARD" yang nempel jadi page terakhir di Hero Carousel --
- * dua kolom: TOP XP (nonton) & TOP CLAN, nyontek layout referensi (card navy,
- * kolom dipisah garis vertikal, avatar + rank + angka). Tap header kolom buat
- * ke halaman leaderboard lengkap, tap card kosong gak ngapa-ngapain.
- */
-/**
- * Tombol switch kecil (pill 2 segmen) buat lompat langsung antara halaman
- * anime & slide leaderboard di Hero Carousel, tanpa harus swipe manual.
+ * Tombol switch kecil (pill 2-3 segmen, tergantung slide apa aja yang
+ * tersedia) buat lompat langsung antara halaman anime, slide leaderboard,
+ * & slide Top Support di Hero Carousel, tanpa harus swipe manual.
  */
 @Composable
 private fun HeroCarouselModeSwitch(
-    isLeaderboard: Boolean,
+    activeTarget: HeroCarouselTarget,
+    showLeaderboard: Boolean,
+    showSupport: Boolean,
     onAnimeClick: () -> Unit,
     onLeaderboardClick: () -> Unit,
+    onSupportClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -1672,8 +1737,8 @@ private fun HeroCarouselModeSwitch(
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(50))
-                .background(if (!isLeaderboard) ZenimePrimary else Color.Transparent)
-                .clickable(enabled = isLeaderboard, onClick = onAnimeClick)
+                .background(if (activeTarget == HeroCarouselTarget.ANIME) ZenimePrimary else Color.Transparent)
+                .clickable(enabled = activeTarget != HeroCarouselTarget.ANIME, onClick = onAnimeClick)
                 .padding(horizontal = 8.dp, vertical = 5.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -1684,25 +1749,51 @@ private fun HeroCarouselModeSwitch(
                 modifier = Modifier.size(13.dp)
             )
         }
-        Spacer(modifier = Modifier.width(2.dp))
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(50))
-                .background(if (isLeaderboard) StarYellow else Color.Transparent)
-                .clickable(enabled = !isLeaderboard, onClick = onLeaderboardClick)
-                .padding(horizontal = 8.dp, vertical = 5.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.EmojiEvents,
-                contentDescription = "Leaderboard",
-                tint = if (isLeaderboard) Color(0xFF15213B) else Color.White,
-                modifier = Modifier.size(13.dp)
-            )
+        if (showLeaderboard) {
+            Spacer(modifier = Modifier.width(2.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(if (activeTarget == HeroCarouselTarget.LEADERBOARD) StarYellow else Color.Transparent)
+                    .clickable(enabled = activeTarget != HeroCarouselTarget.LEADERBOARD, onClick = onLeaderboardClick)
+                    .padding(horizontal = 8.dp, vertical = 5.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.EmojiEvents,
+                    contentDescription = "Leaderboard",
+                    tint = if (activeTarget == HeroCarouselTarget.LEADERBOARD) Color(0xFF15213B) else Color.White,
+                    modifier = Modifier.size(13.dp)
+                )
+            }
+        }
+        if (showSupport) {
+            Spacer(modifier = Modifier.width(2.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(if (activeTarget == HeroCarouselTarget.SUPPORT) ZenimePrimary else Color.Transparent)
+                    .clickable(enabled = activeTarget != HeroCarouselTarget.SUPPORT, onClick = onSupportClick)
+                    .padding(horizontal = 8.dp, vertical = 5.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Favorite,
+                    contentDescription = "Top Support",
+                    tint = Color.White,
+                    modifier = Modifier.size(13.dp)
+                )
+            }
         }
     }
 }
 
+/**
+ * Slide "TOP LEADERBOARD" yang nempel jadi page terakhir di Hero Carousel --
+ * dua kolom: TOP XP (nonton) & TOP CLAN, nyontek layout referensi (card navy,
+ * kolom dipisah garis vertikal, avatar + rank + angka). Tap header kolom buat
+ * ke halaman leaderboard lengkap, tap card kosong gak ngapa-ngapain.
+ */
 @Composable
 private fun HeroLeaderboardSlide(
     leaderboard: HeroLeaderboardUiState,
@@ -1969,6 +2060,244 @@ private fun HeroLeaderboardRankBadge(rank: Int) {
     }
 }
 
+private val PodiumGold = Color(0xFFFFD54A)
+private val PodiumSilver = Color(0xFFC7CDD8)
+private val PodiumBronze = Color(0xFFCE8946)
+
+/**
+ * Slide "TOP SUPPORT" -- podium 3 besar donatur SociaBuzz, nempel jadi page
+ * terakhir di Hero Carousel (sesudah slide leaderboard kalau ada). Nuansa
+ * crimson senada branding "Dukung Kami", beda dari nuansa navy/kuning slide
+ * leaderboard biar kerasa jadi bagian terpisah. Bar podium tumbuh masuk pas
+ * slide ini pertama kali dirender, & lencana juara #1 berdenyut pelan --
+ * tap di mana aja di kartu buat ke halaman Dukung Kami lengkap.
+ */
+@Composable
+private fun HeroSupportSlide(
+    supporters: List<TopSupporter>,
+    shape: androidx.compose.ui.graphics.Shape,
+    modifier: Modifier = Modifier,
+    onSupportClick: () -> Unit = {}
+) {
+    val top3 = remember(supporters) { supporters.take(3) }
+
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0xFF2A1018), Color(0xFF0C1526))
+                )
+            )
+            .border(width = 1.dp, color = ZenimePrimary.copy(alpha = 0.22f), shape = shape)
+            .clickable(onClick = onSupportClick)
+    ) {
+        Column(modifier = Modifier.fillMaxSize().padding(18.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.Favorite,
+                    contentDescription = null,
+                    tint = ZenimePrimary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(7.dp))
+                Text(
+                    text = "TOP SUPPORT",
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 0.6.sp,
+                        fontSize = 14.sp
+                    ),
+                    color = ZenimePrimary
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = "Lihat semua Top Support",
+                    tint = ZenimePrimary.copy(alpha = 0.65f),
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Text(
+                text = "Donatur SociaBuzz teratas",
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.White.copy(alpha = 0.45f)
+            )
+
+            Box(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                if (top3.isEmpty()) {
+                    Text(
+                        text = "Belum ada donatur tercatat.\nJadilah yang pertama lewat SociaBuzz!",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.5f),
+                        textAlign = TextAlign.Center
+                    )
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        top3.getOrNull(1)?.let { supporter ->
+                            PodiumColumn(
+                                rank = 2,
+                                supporter = supporter,
+                                barHeight = 46.dp,
+                                growDelayMs = 90,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        top3.getOrNull(0)?.let { supporter ->
+                            PodiumColumn(
+                                rank = 1,
+                                supporter = supporter,
+                                barHeight = 66.dp,
+                                growDelayMs = 0,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        top3.getOrNull(2)?.let { supporter ->
+                            PodiumColumn(
+                                rank = 3,
+                                supporter = supporter,
+                                barHeight = 32.dp,
+                                growDelayMs = 180,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Satu kolom podium -- avatar bercincin warna rank, nama, nominal donasi,
+ * lalu balok podium yang tumbuh dari bawah dengan delay bertahap per rank
+ * (juara 1 duluan) biar keliatan hidup, bukan langsung muncul jadi.
+ */
+@Composable
+private fun PodiumColumn(
+    rank: Int,
+    supporter: TopSupporter,
+    barHeight: Dp,
+    growDelayMs: Int,
+    modifier: Modifier = Modifier
+) {
+    val rankColor = when (rank) {
+        1 -> PodiumGold
+        2 -> PodiumSilver
+        else -> PodiumBronze
+    }
+    val avatarSize = if (rank == 1) 46.dp else 36.dp
+
+    var grown by remember(supporter.rank, rank) { mutableStateOf(false) }
+    LaunchedEffect(supporter.rank, rank) { grown = true }
+    val animatedHeight by animateDpAsState(
+        targetValue = if (grown) barHeight else 0.dp,
+        animationSpec = tween(durationMillis = 500, delayMillis = growDelayMs),
+        label = "podium_bar_height"
+    )
+
+    // Denyut pelan lencana juara #1 -- satu-satunya yang punya mahkota.
+    val infiniteTransition = rememberInfiniteTransition(label = "podium_crown_pulse")
+    val crownPulse by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.15f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "podium_crown_pulse_scale"
+    )
+
+    Column(
+        modifier = modifier.padding(horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(contentAlignment = Alignment.TopCenter) {
+            if (rank == 1) {
+                Icon(
+                    imageVector = Icons.Default.WorkspacePremium,
+                    contentDescription = "Juara 1",
+                    tint = PodiumGold,
+                    modifier = Modifier
+                        .size(16.dp)
+                        .offset(y = (-14).dp)
+                        .graphicsLayer {
+                            scaleX = crownPulse
+                            scaleY = crownPulse
+                        }
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .padding(top = if (rank == 1) 8.dp else 0.dp)
+                    .size(avatarSize)
+                    .clip(CircleShape)
+                    .border(2.dp, rankColor, CircleShape)
+            ) {
+                if (!supporter.avatarUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(supporter.avatarUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize().clip(CircleShape)
+                    )
+                } else {
+                    GeneratedAvatar(seed = supporter.name, label = supporter.name, size = avatarSize)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = supporter.name,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+            color = Color.White.copy(alpha = 0.92f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text(
+            text = "Rp" + (formatCountLabel(supporter.totalAmount.toString()) ?: supporter.totalAmount.toString()),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
+            color = rankColor,
+            maxLines = 1
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.7f)
+                .height(animatedHeight)
+                .clip(RoundedCornerShape(topStart = 8.dp, topEnd = 8.dp))
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(rankColor, rankColor.copy(alpha = 0.55f))
+                    )
+                ),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Text(
+                text = rank.toString(),
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
+                color = Color(0xFF15213B),
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+    }
+}
+
 /**
  * Switcher gaya Hero Carousel -- baca preferensi "Gaya Tampilan" dari
  * Pengaturan (FULL_BLEED / CRUNCHYROLL / DAYYNIME) dan render composable
@@ -1987,7 +2316,8 @@ fun HeroBannerCarousel(
     modifier: Modifier = Modifier,
     leaderboard: HeroLeaderboardUiState? = null,
     onXpLeaderboardClick: () -> Unit = {},
-    onClanLeaderboardClick: () -> Unit = {}
+    onClanLeaderboardClick: () -> Unit = {},
+    onSupportClick: () -> Unit = {}
 ) {
     when (style) {
         "CRUNCHYROLL" -> CrunchyrollHeroCarousel(
@@ -1998,7 +2328,8 @@ fun HeroBannerCarousel(
             intervalMs = intervalMs,
             leaderboard = leaderboard,
             onXpLeaderboardClick = onXpLeaderboardClick,
-            onClanLeaderboardClick = onClanLeaderboardClick
+            onClanLeaderboardClick = onClanLeaderboardClick,
+            onSupportClick = onSupportClick
         )
         "DAYYNIME" -> DayynimeHeroCarousel(
             bannerItems = bannerItems,
@@ -2008,7 +2339,8 @@ fun HeroBannerCarousel(
             intervalMs = intervalMs,
             leaderboard = leaderboard,
             onXpLeaderboardClick = onXpLeaderboardClick,
-            onClanLeaderboardClick = onClanLeaderboardClick
+            onClanLeaderboardClick = onClanLeaderboardClick,
+            onSupportClick = onSupportClick
         )
         else -> FullBleedHeroBannerCarousel(
             bannerItems = bannerItems,
@@ -2018,7 +2350,8 @@ fun HeroBannerCarousel(
             intervalMs = intervalMs,
             leaderboard = leaderboard,
             onXpLeaderboardClick = onXpLeaderboardClick,
-            onClanLeaderboardClick = onClanLeaderboardClick
+            onClanLeaderboardClick = onClanLeaderboardClick,
+            onSupportClick = onSupportClick
         )
     }
 }

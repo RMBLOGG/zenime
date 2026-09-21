@@ -11,6 +11,7 @@ import com.example.data.model.Clan
 import com.example.data.model.CuplixItem
 import com.example.data.model.ManraItem
 import com.example.data.model.HomeResponse
+import com.example.data.model.TopSupporter
 import com.example.data.model.UserXpDisplay
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.ChatRepository
@@ -18,6 +19,7 @@ import com.example.data.repository.ClanRepository
 import com.example.data.repository.CoinRepository
 import com.example.data.repository.ComicRepository
 import com.example.data.repository.PremiumRepository
+import com.example.data.repository.SupportRepository
 import com.example.data.repository.XpRepository
 import com.example.ui.screens.cuplix.CuplixViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,6 +54,7 @@ class HomeViewModel(
     private val coinRepository: CoinRepository = CoinRepository(),
     private val xpRepository: XpRepository = XpRepository(),
     private val clanRepository: ClanRepository = ClanRepository(),
+    private val supportRepository: SupportRepository = SupportRepository(),
     private val firebaseUid: String? = null
 ) : ViewModel() {
 
@@ -225,7 +228,7 @@ class HomeViewModel(
         }
     }
 
-    /** Narik top 4 XP & top 4 Clan buat slide leaderboard di Hero Carousel. */
+    /** Narik top 4 XP, top 4 Clan, & top 3 Support buat slide-slide leaderboard di Hero Carousel. */
     private fun loadHeroLeaderboard() {
         viewModelScope.launch {
             val topXp = xpRepository.getLeaderboardDisplay()
@@ -240,20 +243,28 @@ class HomeViewModel(
                 ?.take(4)
                 ?: emptyList()
 
+            val topSupport = supportRepository.getTopSupporters()
+                .getOrNull()
+                ?.sortedByDescending { it.totalAmount }
+                ?.take(3)
+                ?: emptyList()
+
             _heroLeaderboard.value = HeroLeaderboardUiState(
                 isLoading = false,
                 topXp = topXp,
-                topClans = topClans
+                topClans = topClans,
+                topSupport = topSupport
             )
         }
     }
 }
 
-/** State buat slide "Top Leaderboard" (Top XP + Top Clan) di Hero Carousel. */
+/** State buat slide "Top Leaderboard" (Top XP + Top Clan) & "Top Support" di Hero Carousel. */
 data class HeroLeaderboardUiState(
     val isLoading: Boolean = true,
     val topXp: List<UserXpDisplay> = emptyList(),
-    val topClans: List<Clan> = emptyList()
+    val topClans: List<Clan> = emptyList(),
+    val topSupport: List<TopSupporter> = emptyList()
 )
 
 /** Sisa hari dari expires_at ISO string; null kalau formatnya gak valid. */
