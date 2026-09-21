@@ -13,6 +13,13 @@ import com.example.data.model.CuplixItem
 import com.example.data.model.CuplixPage
 import com.example.data.model.GalleryImage
 import com.example.data.model.GalleryKind
+import com.example.data.model.ManraCast
+import com.example.data.model.ManraChapter
+import com.example.data.model.ManraChoice
+import com.example.data.model.ManraDetail
+import com.example.data.model.ManraItem
+import com.example.data.model.ManraLine
+import com.example.data.model.ManraPage
 import com.example.data.model.EpisodeDetail
 import com.example.data.model.EpisodeItem
 import com.example.data.model.GenreItem
@@ -744,6 +751,194 @@ class AnimeRepository(
         is Double -> if (this % 1.0 == 0.0) toLong().toString() else toString()
         is Number -> toString()
         is Boolean -> toString()
+        else -> null
+    }
+
+    // ---- Manra ---------------------------------------------------------------
+    /** Daftar Manra (beranda: sort=popular, limit=20). Halaman mulai dari 1. */
+    suspend fun getManraPage(
+        page: Int,
+        sort: String = "popular",
+        limit: Int = 20
+    ): Result<ManraPage> = withContext(Dispatchers.IO) {
+        try {
+            val env = api.getManraListRaw(
+                mapOf("page" to page.toString(), "limit" to limit.toString(), "sort" to sort)
+            )
+            val data = env.data
+            val items = asMapList(data?.get("items")).mapNotNull { parseManraItem(it) }
+            val hasNext = flexibleBool(asMap(data?.get("pagination"))?.get("has_next"))
+                ?: (items.size >= limit)
+            Result.Success(ManraPage(items = items, hasNext = hasNext))
+        } catch (e: Exception) {
+            Result.Error(e, tabError(e, "Gagal memuat Manra"))
+        }
+    }
+
+    suspend fun getManraDetail(manraId: String): Result<ManraDetail> = withContext(Dispatchers.IO) {
+        try {
+            val data = api.getManraDetailRaw(mapOf("id_manra" to manraId)).data
+            val manra = asMap(data?.get("manra")) ?: data ?: emptyMap()
+            val item = parseManraItem(manra) ?: parseManraItem(manra + ("id" to manraId))
+                ?: return@withContext Result.Error(
+                    IllegalStateException("Manra kosong"),
+                    "Manra tidak ditemukan."
+                )
+            val chapters = asMapList(data?.get("chapters")).mapNotNull { c ->
+                val id = (c["id_manra_chapter"].asText() ?: c["id"].asText())
+                    ?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                ManraChapter(
+                    id = id,
+                    sequence = c["sequence"].asText() ?: c["index"].asText(),
+                    title = c["title"].asText().orEmpty(),
+                    release = c["release"].asText() ?: c["date"].asText(),
+                    views = c["views"].asText(),
+                    likes = c["likes"].asText(),
+                    imageUrl = assetUrl(c["image"].asText() ?: c["image_url"].asText()),
+                    isFinished = flexibleBool(c["is_finished"]) == true,
+                    isLocked = flexibleBool(c["locked"]) == true ||
+                        flexibleBool(c["is_locked"]) == true ||
+                        flexibleBool(c["is_open"]) == false
+                )
+            }
+            val casts = asMapList(data?.get("casts")).mapNotNull { c ->
+                val id = (c["id_manra_cast"].asText() ?: c["id_manra_npc"].asText() ?: c["id"].asText())
+                    ?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                ManraCast(
+                    id = id,
+                    name = (c["name"].asText() ?: c["full_name"].asText()).orEmpty(),
+                    role = c["role"].asText(),
+                    likes = c["likes"].asText(),
+                    imageUrl = assetUrl(c["image"].asText() ?: c["image_url"].asText())
+                )
+            }
+            Result.Success(ManraDetail(item = item, chapters = chapters, casts = casts))
+        } catch (e: Exception) {
+            Result.Error(e, tabError(e, "Gagal memuat Manra"))
+        }
+    }
+
+    /** Baris-baris adegan satu chapter. [lastLineId] = lanjutan setelah memilih. */
+    suspend fun getManraChapterLines(
+        chapterId: String,
+        lastLineId: String? = null
+    ): Result<List<ManraLine>> = withContext(Dispatchers.IO) {
+        try {
+            val params = HashMap<String, String>()
+            params["id_manra_chapter"] = chapterId
+            if (lastLineId != null) params["id_last_line"] = lastLineId
+            var lines = parseManraLines(api.getManraChapterPlayRaw(params).data)
+            // Server mungkin mengharapkan id_last_line selalu ada: coba lagi dengan 0.
+            if (lines.isEmpty() && lastLineId == null) {
+                params["id_last_line"] = "0"
+                lines = parseManraLines(api.getManraChapterPlayRaw(params).data)
+            }
+            Result.Success(lines)
+        } catch (e: Exception) {
+            Result.Error(e, tabError(e, "Gagal memuat chapter"))
+        }
+    }
+
+    /** Menyimpan pilihan di server. Kemungkinan butuh login Animein -> bisa gagal. */
+    suspend fun chooseManraOption(
+        manraId: String,
+        chapterId: String,
+        lineId: String,
+        choiceId: String
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val env = api.manraChapterChoose(
+                mapOf(
+                    "id_manra" to manraId,
+                    "id_manra_chapter" to chapterId,
+                    "id_manra_chapter_line" to lineId,
+                    "id_manra_chapter_line_choose" to choiceId
+                )
+            )
+            if (env.error == true) {
+                Result.Error(IllegalStateException("Pilihan ditolak server"), "Pilihan tidak tersimpan.")
+            } else {
+                Result.Success(Unit)
+            }
+        } catch (e: Exception) {
+            Result.Error(e, tabError(e, "Pilihan tidak tersimpan"))
+        }
+    }
+
+    private fun parseManraLines(data: Map<String, Any?>?): List<ManraLine> =
+        asMapList(data?.get("lines")).mapNotNull { l ->
+            val id = (l["id_manra_chapter_line"].asText() ?: l["id"].asText())
+                ?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            val choices = asMapList(l["choices"] ?: l["choose_list"]).mapNotNull { c ->
+                val choiceId = (c["id_manra_chapter_line_choose"].asText() ?: c["id"].asText())
+                    ?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                ManraChoice(
+                    id = choiceId,
+                    text = (c["text"].asText() ?: c["choice_text"].asText()).orEmpty(),
+                    flag = c["flag"].asText()
+                )
+            }
+            ManraLine(
+                id = id,
+                type = (l["type"].asText() ?: "NARRATION").uppercase(),
+                text = l["text"].asText()?.takeIf { it.isNotBlank() },
+                imageBg = assetUrl(l["image_bg"].asText()),
+                videoUrl = assetUrl(l["video_url"].asText()),
+                npcImage = assetUrl(
+                    l["npc_image"].asText() ?: l["image_npc"].asText() ?: l["npc_pose_url"].asText()
+                ),
+                npcName = (l["npc_name"].asText() ?: l["npc_name_full"].asText() ?: l["name"].asText())
+                    ?.takeIf { it.isNotBlank() },
+                choices = choices
+            )
+        }
+
+    private fun parseManraItem(raw: Map<String, Any?>): ManraItem? {
+        val id = (raw["id_manra"].asText() ?: raw["id"].asText())?.takeIf { it.isNotBlank() }
+            ?: return null
+        return ManraItem(
+            id = id,
+            title = raw["title"].asText().orEmpty(),
+            genres = genreNames(raw["genres"]),
+            status = raw["status"].asText(),
+            mode = raw["mode"].asText(),
+            synopsis = raw["synopsis"].asText(),
+            author = raw["author"].asText()?.takeIf { it.isNotBlank() && it != "-" },
+            viewsText = raw["views_text"].asText()?.takeIf { it.isNotBlank() } ?: raw["views"].asText(),
+            likesText = raw["likes_text"].asText()?.takeIf { it.isNotBlank() } ?: raw["likes"].asText(),
+            imagePoster = assetUrl(raw["image_poster"].asText()),
+            imageCover = assetUrl(raw["image_cover"].asText()),
+            chapterCount = raw["chapter_count"].asText()?.toIntOrNull()
+        )
+    }
+
+    // "genres" bisa berupa daftar objek {name} atau string biasa.
+    private fun genreNames(value: Any?): String? = when (value) {
+        is String -> value.takeIf { it.isNotBlank() }
+        is List<*> -> value.mapNotNull { g ->
+            when (g) {
+                is String -> g
+                else -> asMap(g)?.get("name").asText()
+            }
+        }.filter { it.isNotBlank() }.joinToString(", ").takeIf { it.isNotBlank() }
+        else -> null
+    }
+
+    private fun assetUrl(path: String?): String? = when {
+        path.isNullOrBlank() -> null
+        path.startsWith("http") -> path
+        path.startsWith("/") -> "https://xyz-api.animein.net$path"
+        else -> null
+    }
+
+    private fun flexibleBool(value: Any?): Boolean? = when (value) {
+        is Boolean -> value
+        is Number -> value.toInt() != 0
+        is String -> when (value.trim().lowercase()) {
+            "1", "y", "yes", "true" -> true
+            "0", "n", "no", "false", "" -> false
+            else -> null
+        }
         else -> null
     }
 

@@ -1,7 +1,10 @@
 package com.example.data.api
 
 import com.example.data.model.RawEnvelope
+import retrofit2.http.FieldMap
+import retrofit2.http.FormUrlEncoded
 import retrofit2.http.GET
+import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.QueryMap
@@ -80,6 +83,25 @@ interface DayynimeV5Api {
     // ---- Link streaming episode ----
     @GET("3/2/episode/streamnew/{id}")
     suspend fun getStreamRaw(@Path("id") id: String): RawEnvelope
+
+    // ---- Manra (cerita interaktif / visual novel buatan pengguna) ----
+    // "data/..." tanpa prefix 3/2. Daftar: page (mulai 1), limit, sort=popular.
+    @GET("data/manra/list")
+    suspend fun getManraListRaw(@QueryMap params: Map<String, String>): RawEnvelope
+
+    // Query: id_manra
+    @GET("data/manra/detail")
+    suspend fun getManraDetailRaw(@QueryMap params: Map<String, String>): RawEnvelope
+
+    // Query: id_manra_chapter, id_last_line (lanjutan setelah pilihan)
+    @GET("data/manra/chapter/play")
+    suspend fun getManraChapterPlayRaw(@QueryMap params: Map<String, String>): RawEnvelope
+
+    // Field: id_manra, id_manra_chapter, id_manra_chapter_line, id_manra_chapter_line_choose.
+    // Kemungkinan butuh sesi login Animein (belum terverifikasi).
+    @FormUrlEncoded
+    @POST("data/manra/chapter/choose")
+    suspend fun manraChapterChoose(@FieldMap params: Map<String, String>): RawEnvelope
 
     // ---- Tab halaman detail: Cuplix / Cover / Poster per anime ----
     // Cuplix per anime ("data/..." tanpa prefix 3/2). Query: id_movie, page, type.

@@ -112,6 +112,7 @@ import com.example.ui.components.LevelBadge
 import com.example.data.model.CuplixItem
 import com.example.ui.components.AnimeCoverBannerSection
 import com.example.ui.components.AnimeRankedSection
+import com.example.ui.components.ManraHomeSection
 import com.example.ui.components.SectionHeader
 import com.example.ui.components.ShimmerBanner
 import com.example.ui.components.ShimmerHorizontalSection
@@ -143,6 +144,7 @@ fun HomeScreen(
     onXpLeaderboardClick: () -> Unit = {},
     // null = buka feed dari klip pertama; non-null = langsung ke klip itu.
     onCuplixClick: (startClipId: String?) -> Unit = {},
+    onManraClick: (manraId: String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val homeState by viewModel.homeState.collectAsStateWithLifecycle()
@@ -150,6 +152,7 @@ fun HomeScreen(
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val profileState by viewModel.profileState.collectAsStateWithLifecycle()
     val cuplixClips by viewModel.cuplixClips.collectAsStateWithLifecycle()
+    val manraItems by viewModel.manraItems.collectAsStateWithLifecycle()
     val heroStyle by viewModel.heroStyle.collectAsStateWithLifecycle()
     val heroAutoplay by viewModel.heroAutoplay.collectAsStateWithLifecycle()
     val heroIntervalMs by viewModel.heroIntervalMs.collectAsStateWithLifecycle()
@@ -419,6 +422,17 @@ fun HomeScreen(
                                         onAnimeClick = onAnimeClick
                                     )
                                 }
+                            }
+                        }
+
+                        // Section "Baca Manra" (cerita interaktif) -- di bawah Terpopuler.
+                        if (manraItems.isNotEmpty()) {
+                            item {
+                                ManraHomeSection(
+                                    title = "Baca Manra",
+                                    items = manraItems,
+                                    onManraClick = onManraClick
+                                )
                             }
                         }
 

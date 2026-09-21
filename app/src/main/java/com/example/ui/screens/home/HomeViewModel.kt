@@ -9,6 +9,7 @@ import com.example.data.local.WatchHistoryEntity
 import com.example.data.model.BacakomikListItem
 import com.example.data.model.Clan
 import com.example.data.model.CuplixItem
+import com.example.data.model.ManraItem
 import com.example.data.model.HomeResponse
 import com.example.data.model.UserXpDisplay
 import com.example.data.repository.AnimeRepository
@@ -97,6 +98,10 @@ class HomeViewModel(
     private val _cuplixClips = MutableStateFlow<List<CuplixItem>>(emptyList())
     val cuplixClips: StateFlow<List<CuplixItem>> = _cuplixClips.asStateFlow()
 
+    // Section "Baca Manra" (data/manra/list). Gagal/kosong -> section tidak tampil.
+    private val _manraItems = MutableStateFlow<List<ManraItem>>(emptyList())
+    val manraItems: StateFlow<List<ManraItem>> = _manraItems.asStateFlow()
+
     private val _profileState = MutableStateFlow(HomeProfileUiState())
     val profileState: StateFlow<HomeProfileUiState> = _profileState.asStateFlow()
 
@@ -110,6 +115,7 @@ class HomeViewModel(
         loadHome()
         loadComicLatest()
         loadCuplix()
+        loadManra()
         loadProfileHeader()
         loadHeroLeaderboard()
     }
@@ -153,6 +159,20 @@ class HomeViewModel(
                 coinBalance = balanceResult.getOrNull() ?: 0L,
                 level = myXp?.level ?: 1
             )
+        }
+    }
+
+    private fun loadManra() {
+        viewModelScope.launch {
+            // Halaman list Manra diperkirakan mulai dari 1; kalau kosong coba 0.
+            var result = repository.getManraPage(page = 1)
+            if (result is Result.Success && result.data.items.isEmpty()) {
+                val alt = repository.getManraPage(page = 0)
+                if (alt is Result.Success && alt.data.items.isNotEmpty()) result = alt
+            }
+            if (result is Result.Success) {
+                _manraItems.value = result.data.items.take(12)
+            }
         }
     }
 

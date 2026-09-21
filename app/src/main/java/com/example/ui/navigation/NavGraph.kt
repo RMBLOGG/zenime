@@ -105,6 +105,10 @@ import com.example.ui.screens.comic.ComicScreen
 import com.example.ui.screens.comic.ComicViewModel
 import com.example.ui.screens.cuplix.CuplixScreen
 import com.example.ui.screens.cuplix.CuplixViewModel
+import com.example.ui.screens.manra.ManraDetailScreen
+import com.example.ui.screens.manra.ManraDetailViewModel
+import com.example.ui.screens.manra.ManraReaderScreen
+import com.example.ui.screens.manra.ManraReaderViewModel
 import com.example.ui.screens.detail.DetailScreen
 import com.example.ui.screens.detail.DetailViewModel
 import com.example.ui.screens.favorites.FavoritesHistoryScreen
@@ -190,6 +194,15 @@ sealed class Screen(
 
     data object ManageClan : Screen("clan/{clanId}/manage") {
         fun createRoute(clanId: String) = "clan/$clanId/manage"
+    }
+
+    // Manra: cerita interaktif (visual novel). Tidak masuk bottom bar -> layar penuh.
+    data object ManraDetail : Screen("manra/{manraId}") {
+        fun createRoute(manraId: String) = "manra/$manraId"
+    }
+
+    data object ManraReader : Screen("manra_read/{manraId}/{chapterId}") {
+        fun createRoute(manraId: String, chapterId: String) = "manra_read/$manraId/$chapterId"
     }
 
     data object Detail : Screen("detail/{animeId}") {
@@ -483,6 +496,9 @@ fun ZenimeAppNavHost(
                     },
                     onCuplixClick = { startClipId ->
                         navController.navigate(Screen.Cuplix.createRoute(startClipId))
+                    },
+                    onManraClick = { manraId ->
+                        navController.navigate(Screen.ManraDetail.createRoute(manraId))
                     }
                 )
             }
@@ -518,6 +534,45 @@ fun ZenimeAppNavHost(
                     onEpisodeClick = { episodeId, animeId ->
                         navController.navigate(Screen.Player.createRoute(episodeId, animeId))
                     }
+                )
+            }
+
+            // Manra -- detail (info, chapter, karakter)
+            composable(
+                route = Screen.ManraDetail.route,
+                arguments = listOf(navArgument("manraId") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val manraId = backStackEntry.arguments?.getString("manraId") ?: ""
+                val manraDetailViewModel: ManraDetailViewModel = viewModel(
+                    factory = viewModelFactory { initializer { ManraDetailViewModel(repository, manraId) } }
+                )
+                ManraDetailScreen(
+                    viewModel = manraDetailViewModel,
+                    onBackClick = { navController.popBackStack() },
+                    onChapterClick = { chapterId ->
+                        navController.navigate(Screen.ManraReader.createRoute(manraId, chapterId))
+                    }
+                )
+            }
+
+            // Manra -- pembaca chapter (visual novel)
+            composable(
+                route = Screen.ManraReader.route,
+                arguments = listOf(
+                    navArgument("manraId") { type = NavType.StringType },
+                    navArgument("chapterId") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val manraId = backStackEntry.arguments?.getString("manraId") ?: ""
+                val chapterId = backStackEntry.arguments?.getString("chapterId") ?: ""
+                val manraReaderViewModel: ManraReaderViewModel = viewModel(
+                    factory = viewModelFactory {
+                        initializer { ManraReaderViewModel(repository, manraId, chapterId) }
+                    }
+                )
+                ManraReaderScreen(
+                    viewModel = manraReaderViewModel,
+                    onBackClick = { navController.popBackStack() }
                 )
             }
 
