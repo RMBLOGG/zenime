@@ -228,8 +228,10 @@ class HomeViewModel(
         }
     }
 
-    /** Narik top 4 XP, top 4 Clan, & top 3 Support buat slide-slide leaderboard di Hero Carousel. */
-    private fun loadHeroLeaderboard() {
+    /** Narik top 4 XP, top 4 Clan, & top 3 Support buat slide-slide leaderboard di Hero Carousel.
+     * Public -- dipanggil ulang dari pull-to-refresh & pas Beranda balik ke foreground (ON_RESUME),
+     * soalnya XP/Clan/Support bisa berubah dari aksi user lain, bukan cuma aksi kita sendiri. */
+    fun loadHeroLeaderboard() {
         viewModelScope.launch {
             val topXp = xpRepository.getLeaderboardDisplay()
                 .getOrNull()

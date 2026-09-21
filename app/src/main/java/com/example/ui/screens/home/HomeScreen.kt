@@ -74,6 +74,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -91,6 +92,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -99,6 +101,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.imageLoader
@@ -169,13 +173,32 @@ fun HomeScreen(
     val heroLeaderboard by viewModel.heroLeaderboard.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
 
+    // Slide TOP SUPPORT/LEADERBOARD bisa berubah dari aksi user lain
+    // (donasi lewat SociaBuzz, XP/Clan orang lain) -- bukan cuma dari aksi
+    // kita sendiri di app, jadi ditarik ulang tiap Beranda balik ke
+    // foreground (mis. abis dari browser SociaBuzz), gak harus nunggu
+    // relog/buka-tutup app dulu buat keliatan datanya update.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.loadHeroLeaderboard()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         modifier = modifier
     ) { innerPadding ->
         PullToRefreshBox(
             isRefreshing = false,
-            onRefresh = { viewModel.loadHome() },
+            onRefresh = {
+                viewModel.loadHome()
+                viewModel.loadHeroLeaderboard()
+            },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
