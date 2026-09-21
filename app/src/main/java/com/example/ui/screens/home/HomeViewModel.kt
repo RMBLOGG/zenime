@@ -43,7 +43,8 @@ data class HomeProfileUiState(
     val isPremium: Boolean = false,
     val premiumDaysLeft: Long? = null,
     val coinBalance: Long = 0L,
-    val level: Int = 1
+    val level: Int = 1,
+    val clanTag: String? = null
 )
 
 class HomeViewModel(
@@ -148,6 +149,7 @@ class HomeViewModel(
             val identityResult = premiumRepository.getProfileIdentity(uid).getOrNull()
             val balanceResult = coinRepository.getBalance(uid)
             val myXp = xpRepository.getMyXp(uid).getOrNull()
+            val clanTag = clanRepository.getClanTagsForUids(listOf(uid)).getOrNull()?.get(uid)
 
             _profileState.value = _profileState.value.copy(
                 isLoading = false,
@@ -160,7 +162,8 @@ class HomeViewModel(
                 isPremium = premiumStatus?.isPremium ?: false,
                 premiumDaysLeft = daysLeft,
                 coinBalance = balanceResult.getOrNull() ?: 0L,
-                level = myXp?.level ?: 1
+                level = myXp?.level ?: 1,
+                clanTag = clanTag
             )
         }
     }

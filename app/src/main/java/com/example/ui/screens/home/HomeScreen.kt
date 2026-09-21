@@ -120,6 +120,7 @@ import com.example.ui.components.AnimePosterCard
 import com.example.ui.components.ComicPosterCard
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.GeneratedAvatar
+import com.example.ui.components.ClanRainbowBadge
 import com.example.ui.components.LevelBadge
 import com.example.data.model.CuplixItem
 import com.example.ui.components.AnimeCoverBannerSection
@@ -740,6 +741,7 @@ private fun HomeProfileHeader(
                 Spacer(modifier = Modifier.width(12.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
+                    // Baris 1: username + badge Lv + badge clan (sejajar)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = state.username.ifBlank { "Pengguna Zenime" },
@@ -749,19 +751,16 @@ private fun HomeProfileHeader(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
                         )
-                        if (!state.zenimeCode.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        LevelBadge(level = state.level)
+                        if (!state.clanTag.isNullOrBlank()) {
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "#${state.zenimeCode}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            ClanRainbowBadge(text = state.clanTag)
                         }
                     }
+                    // Baris 2: ID user
                     if (state.userNumber != null) {
-                        Spacer(modifier = Modifier.height(2.dp))
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = "ID #${state.userNumber}",
                             style = MaterialTheme.typography.labelSmall,
@@ -770,8 +769,17 @@ private fun HomeProfileHeader(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    Spacer(modifier = Modifier.height(5.dp))
-                    LevelBadge(level = state.level)
+                    // Baris 3: zenime code (pindah ke bawah ID)
+                    if (!state.zenimeCode.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "#${state.zenimeCode}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
 
                 Box(
