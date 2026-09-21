@@ -8,6 +8,7 @@ import com.example.data.model.CoinBalanceResponse
 import com.example.data.model.CoinPackagesResponse
 import com.example.data.model.PremiumPackagesResponse
 import com.example.data.model.PremiumStatusResponse
+import com.example.data.model.TopSupportersResponse
 import com.example.data.model.UserNumbersResponse
 import com.example.data.model.ZenimeCodeResponse
 import retrofit2.Response
@@ -32,6 +33,11 @@ interface ZenimeSupabaseApi {
 
     @POST("functions/v1/zenime-check-premium")
     suspend fun checkPremiumStatus(@Body body: Map<String, String>): PremiumStatusResponse
+
+    // --- Top Support (donatur SociaBuzz) ---
+
+    @GET("functions/v1/zenime-top-supporters")
+    suspend fun getTopSupporters(): TopSupportersResponse
 
     // --- ZCoin ---
 

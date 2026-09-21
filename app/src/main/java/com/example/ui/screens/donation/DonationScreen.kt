@@ -47,13 +47,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.ui.components.ZenimeHeader
 import com.example.ui.components.ZenimeScreenTitle
@@ -71,10 +74,13 @@ import com.example.ui.theme.ZenimePrimary
  */
 @Composable
 fun DonationScreen(
+    viewModel: TopSupportViewModel,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showQrisDialog by remember { mutableStateOf(false) }
 
     if (showQrisDialog) {
@@ -151,8 +157,24 @@ fun DonationScreen(
                 title = "SociaBuzz",
                 subtitle = "Kartu kredit, PayPal, QRIS/e-wallet",
                 buttonLabel = "Buka SociaBuzz",
-                onClick = { openUrl(DonationConfig.SOCIABUZZ_URL) }
+                onClick = {
+                    // Salin kode Zenime dulu biar tinggal tempel di kolom pesan SociaBuzz.
+                    val code = uiState.zenimeCode
+                    if (code != null) {
+                        clipboardManager.setText(AnnotatedString(code))
+                        Toast.makeText(
+                            context,
+                            "Kode Zenime disalin -- tempel di kolom pesan SociaBuzz",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                    openUrl(DonationConfig.SOCIABUZZ_URL)
+                }
             )
+
+            uiState.zenimeCode?.let { code ->
+                SupportCodeCard(zenimeCode = code)
+            }
 
             DonationMethodCard(
                 icon = Icons.Filled.Favorite,
@@ -162,6 +184,12 @@ fun DonationScreen(
                 subtitle = "QRIS, GoPay/OVO, DANA/ShopeePay, Transfer Bank",
                 buttonLabel = "Buka Trakteer",
                 onClick = { openUrl(DonationConfig.TRAKTEER_URL) }
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+            TopSupportSection(
+                uiState = uiState,
+                onRetry = viewModel::loadTopSupporters
             )
 
             Spacer(modifier = Modifier.height(4.dp))

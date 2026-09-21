@@ -82,6 +82,7 @@ import com.example.data.repository.ChatRepository
 import com.example.data.repository.ComicRepository
 import com.example.data.repository.CoinRepository
 import com.example.data.repository.PremiumRepository
+import com.example.data.repository.SupportRepository
 import com.example.ui.screens.chat.ChatScreen
 import com.example.ui.screens.chat.ChatViewModel
 import com.example.ui.screens.clan.ClanScreen
@@ -122,6 +123,7 @@ import com.example.ui.screens.player.PlayerViewModel
 import com.example.ui.screens.player.PremiumGate
 import com.example.ui.screens.coin.CoinScreen
 import com.example.ui.screens.donation.DonationScreen
+import com.example.ui.screens.donation.TopSupportViewModel
 import com.example.ui.screens.coin.CoinViewModel
 import com.example.ui.screens.premium.PremiumPromoDialog
 import com.example.ui.screens.premium.PremiumScreen
@@ -734,7 +736,14 @@ fun ZenimeAppNavHost(
             // Halaman donasi penuh -- QRIS, SociaBuzz, Trakteer, Crypto.
             // Konsepnya niru halaman "Donators Hall of Fame" Sankanime.
             composable(Screen.Donation.route) {
+                val uid = currentUser?.uid
+                val topSupportViewModel: TopSupportViewModel = viewModel(
+                    factory = viewModelFactory {
+                        initializer { TopSupportViewModel(SupportRepository(), PremiumRepository(), uid) }
+                    }
+                )
                 DonationScreen(
+                    viewModel = topSupportViewModel,
                     onBackClick = { navController.popBackStack() }
                 )
             }
