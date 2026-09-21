@@ -81,6 +81,7 @@ import com.example.data.repository.AuthRepository
 import com.example.data.repository.ChatRepository
 import com.example.data.repository.ComicRepository
 import com.example.data.repository.CoinRepository
+import com.example.data.local.PremiumStatusCache
 import com.example.data.repository.PremiumRepository
 import com.example.data.repository.SupportRepository
 import com.example.ui.screens.chat.ChatScreen
@@ -905,8 +906,14 @@ fun ZenimeAppNavHost(
                 arguments = listOf(navArgument("animeId") { type = NavType.StringType })
             ) { backStackEntry ->
                 val animeId = backStackEntry.arguments?.getString("animeId") ?: ""
+                val detailContext = LocalContext.current
                 val detailViewModel = remember(animeId, currentUser?.uid) {
-                    DetailViewModel(repository, animeId, currentUser?.uid)
+                    DetailViewModel(
+                        repository,
+                        animeId,
+                        currentUser?.uid,
+                        statusCache = PremiumStatusCache(detailContext)
+                    )
                 }
                 DetailScreen(
                     viewModel = detailViewModel,

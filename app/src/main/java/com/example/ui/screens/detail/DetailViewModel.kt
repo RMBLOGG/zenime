@@ -12,6 +12,7 @@ import com.example.data.model.GalleryKind
 import com.example.data.model.EpisodeItem
 import com.example.data.model.StreamServer
 import com.example.data.repository.AnimeRepository
+import com.example.data.local.PremiumStatusCache
 import com.example.data.repository.PremiumRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,7 +47,12 @@ data class PagedTabState<T>(
 class DetailViewModel(
     private val repository: AnimeRepository,
     val animeId: String,
-    private val firebaseUid: String? = null
+    private val firebaseUid: String? = null,
+    // Nullable & default null biar caller lama tetap kompilasi. Tanpa ini,
+    // status premium cuma bisa keisi setelah round-trip ke server -- makanya
+    // episode kelihatan kekunci sesaat pas Detail baru dibuka (lihat
+    // loadPremiumStatus di bawah).
+    private val statusCache: PremiumStatusCache? = null
 ) : ViewModel() {
 
     // Dipakai buat nge-lock episode di luar trial gratis (lihat
@@ -340,10 +346,21 @@ class DetailViewModel(
         val uid = firebaseUid
         if (uid.isNullOrBlank()) return
         viewModelScope.launch {
-            PremiumRepository().checkPremiumStatus(uid)
-                .onSuccess { _isPremium.value = it.isPremium }
-                // Gagal cek (misal offline) -- biarin default false (non-premium)
-                // biar UI konservatif nge-lock, bukan malah nampilin semua kebuka.
+            // Seed INSTAN dari cache lokal dulu (baca DataStore, gak nunggu
+            // jaringan) -- biar episode premium user gak kelihatan kekunci
+            // sesaat cuma gara-gara nunggu checkPremiumStatus() ke server.
+            // Cache ini juga yang otomatis nolak diri sendiri kalau premium-nya
+            // udah kadaluarsa (lihat PremiumStatusCache.getValidOfflineStatus).
+            statusCache?.getValidOfflineStatus()?.let { _isPremium.value = it }
+
+            PremiumRepository(statusCache).checkPremiumStatus(uid)
+                .onSuccess {
+                    _isPremium.value = it.isPremium
+                    statusCache?.save(it.isPremium, it.expiresAt)
+                }
+                // Gagal cek (misal offline) -- biarin nilai dari cache (atau
+                // default false kalau gak ada cache) apa adanya, biar UI
+                // konservatif nge-lock, bukan malah nampilin semua kebuka.
         }
     }
 
