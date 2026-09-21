@@ -59,6 +59,52 @@ object NetworkModule {
         }
     }
 
+    /**
+     * Nempelin id_user/key_client/apk_ver ke request data/manra/* --
+     * niru CommonParamsInterceptor app Animein asli (hasil decompile),
+     * tapi sengaja dibatasin cuma ke path Manra (bukan global kayak
+     * aslinya) biar endpoint lain yang udah jalan normal gak keganggu.
+     * Nilainya didapat dari ManraAuthManager (device-auth otomatis, gak
+     * perlu login manual) -- lihat komentar di file itu.
+     */
+    private val manraParamsInterceptor = okhttp3.Interceptor { chain ->
+        val request = chain.request()
+        if (!request.url.encodedPath.contains("data/manra")) {
+            return@Interceptor chain.proceed(request)
+        }
+
+        ManraAuthManager.ensureAuthBlocking()
+        val idUser = ManraAuthManager.currentIdUser()
+        val keyClient = ManraAuthManager.currentKeyClient()
+        val apkVer = ManraAuthManager.apkVersion()
+
+        val newRequestBuilder = request.newBuilder()
+
+        if (request.method == "GET" || request.method == "DELETE") {
+            val urlBuilder = request.url.newBuilder()
+                .addQueryParameter("apk_ver", apkVer)
+            if (keyClient != null) urlBuilder.addQueryParameter("key_client", keyClient)
+            if (idUser != null) urlBuilder.addQueryParameter("id_user", idUser)
+            newRequestBuilder.url(urlBuilder.build())
+        } else {
+            val body = request.body
+            if (body is okhttp3.FormBody) {
+                val newBody = okhttp3.FormBody.Builder()
+                for (i in 0 until body.size) {
+                    newBody.addEncoded(body.encodedName(i), body.encodedValue(i))
+                }
+                newBody.addEncoded("apk_ver", apkVer)
+                if (keyClient != null) newBody.addEncoded("key_client", keyClient)
+                if (idUser != null) newBody.addEncoded("id_user", idUser)
+                newRequestBuilder.method(request.method, newBody.build())
+            }
+            // Kalau body-nya bukan FormBody (mis. multipart), dibiarin apa
+            // adanya -- belum ada request Manra yang butuh multipart.
+        }
+
+        chain.proceed(newRequestBuilder.build())
+    }
+
     val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             // Server sumber kadang lambat / memutus koneksi sesaat. GET itu aman
@@ -78,6 +124,7 @@ object NetworkModule {
                 }
             }
             .addInterceptor(dynamicBaseUrlInterceptor)
+            .addInterceptor(manraParamsInterceptor)
             .addInterceptor { chain ->
                 val request = chain.request().newBuilder()
                     .header("Referer", "https://animeinweb.com/")
