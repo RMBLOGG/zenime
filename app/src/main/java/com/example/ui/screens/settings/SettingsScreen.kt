@@ -782,7 +782,7 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.height(14.dp))
 
                             listOf(
-                                Triple("FULL_BLEED", "Full Bleed (Default)", "Banner besar penuh layar, info di bawah"),
+                                Triple("FULL_BLEED", "Poster Otomatis (Default)", "Poster anime ganti sendiri + slide Top Leaderboard"),
                                 Triple("CRUNCHYROLL", "Crunchyroll Style", "Sinopsis + tombol \"Mulai Menonton\" & bookmark"),
                                 Triple("DAYYNIME", "Dayynime Style", "Peek carousel dengan chip info, bisa digeser")
                             ).forEach { (key, label, desc) ->

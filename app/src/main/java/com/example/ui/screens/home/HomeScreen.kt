@@ -1,5 +1,16 @@
 package com.example.ui.screens.home
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -44,6 +55,7 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -59,6 +71,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -69,16 +82,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import coil.imageLoader
 import coil.request.ImageRequest
 import com.example.R
 import com.example.data.common.Result
@@ -821,6 +837,17 @@ private fun formatCountLabel(raw: String?): String? {
     }
 }
 
+/**
+ * Hero Carousel gaya "Poster Otomatis" (default).
+ *
+ * Pager luar cuma punya 2 slide:
+ *  1. Slide anime -- SATU kartu yang isinya poster/cover anime ganti-ganti
+ *     sendiri (crossfade + zoom pelan). Peringkat & judul ikut beranimasi.
+ *  2. Slide Top Leaderboard (Top XP + Top Clan) -- tinggal geser ke kiri.
+ *
+ * Rotasi anime otomatis berhenti selama user lagi geser / ada di slide
+ * leaderboard, jadi gak kebuang percuma.
+ */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun FullBleedHeroBannerCarousel(
@@ -835,174 +862,59 @@ fun FullBleedHeroBannerCarousel(
 ) {
     if (bannerItems.isEmpty()) return
 
-    // Slide leaderboard ditambahin sebagai page TERAKHIR di pager yang sama,
-    // jadi tinggal di-swipe dari banner biasa -- gak perlu ke Pengaturan.
-    val showLeaderboard = leaderboard != null && (leaderboard.topXp.isNotEmpty() || leaderboard.topClans.isNotEmpty())
-    val pageCount = bannerItems.size + if (showLeaderboard) 1 else 0
+    val context = LocalContext.current
+    val showLeaderboard = leaderboard != null &&
+        (leaderboard.topXp.isNotEmpty() || leaderboard.topClans.isNotEmpty())
+    val pageCount = if (showLeaderboard) 2 else 1
     val pagerState = androidx.compose.foundation.pager.rememberPagerState(pageCount = { pageCount })
 
-    LaunchedEffect(pageCount, autoplay, intervalMs) {
-        if (autoplay && pageCount > 1) {
-            while (true) {
-                delay(intervalMs)
-                val next = (pagerState.currentPage + 1) % pageCount
-                pagerState.animateScrollToPage(next)
-            }
+    var animeIndex by remember { mutableIntStateOf(0) }
+    // Jaga-jaga kalau jumlah item berkurang (mis. ganti sumber banner).
+    val safeIndex = if (animeIndex in bannerItems.indices) animeIndex else 0
+
+    // Rotasi otomatis poster anime di slide pertama.
+    val isAnimeSlideActive = pagerState.currentPage == 0 && !pagerState.isScrollInProgress
+    LaunchedEffect(bannerItems.size, autoplay, intervalMs, isAnimeSlideActive) {
+        if (!autoplay || bannerItems.size <= 1 || !isAnimeSlideActive) return@LaunchedEffect
+        while (true) {
+            delay(intervalMs)
+            animeIndex = (animeIndex + 1) % bannerItems.size
         }
     }
 
-    val heroShape = RoundedCornerShape(20.dp)
+    // Preload gambar berikutnya biar crossfade-nya mulus (gak muncul kosong dulu).
+    LaunchedEffect(safeIndex, bannerItems.size) {
+        if (bannerItems.size > 1) {
+            val next = bannerItems[(safeIndex + 1) % bannerItems.size]
+            context.imageLoader.enqueue(
+                ImageRequest.Builder(context)
+                    .data(next.image_cover ?: next.image_poster)
+                    .build()
+            )
+        }
+    }
+
+    val heroShape = RoundedCornerShape(24.dp)
 
     Column(modifier = modifier.fillMaxWidth()) {
         androidx.compose.foundation.pager.HorizontalPager(
             state = pagerState,
+            userScrollEnabled = pageCount > 1,
+            pageSpacing = 12.dp,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
-                .height(290.dp)
+                .height(232.dp)
         ) { page ->
-            if (page < bannerItems.size) {
-                val currentAnime = bannerItems[page]
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(heroShape)
-                        .clickable { onAnimeClick(currentAnime.id) }
-                ) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(currentAnime.image_cover ?: currentAnime.image_poster)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = currentAnime.title ?: "Hero Banner",
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(
-                                Brush.verticalGradient(
-                                    colors = listOf(
-                                        Color.Transparent,
-                                        Color(0xFF0B0E14).copy(alpha = 0.3f),
-                                        Color(0xFF0B0E14).copy(alpha = 0.85f),
-                                        Color(0xFF0B0E14)
-                                    )
-                                )
-                            )
-                    )
-
-                    formatCountLabel(currentAnime.views)?.let { viewsLabel ->
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Color.Black.copy(alpha = 0.55f),
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(12.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "$viewsLabel views",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = Color.White
-                                )
-                            }
-                        }
-                    }
-
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = Color.Black.copy(alpha = 0.55f),
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(12.dp)
-                    ) {
-                        Text(
-                            text = "#${page + 1}",
-                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = StarYellow,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(horizontal = 20.dp, vertical = 16.dp)
-                            .fillMaxWidth(0.72f)
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = ZenimePrimary
-                            ) {
-                                Text(
-                                    text = "TRENDING \uD83D\uDD25",
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                )
-                            }
-                            currentAnime.type?.let { type ->
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = type,
-                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
-                                    color = Color.White.copy(alpha = 0.85f)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Text(
-                            text = currentAnime.title ?: "Tanpa Judul",
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.ExtraBold,
-                                fontSize = 22.sp,
-                                lineHeight = 28.sp
-                            ),
-                            color = Color.White,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    Surface(
-                        shape = CircleShape,
-                        color = ZenimePrimary,
-                        shadowElevation = 12.dp,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = 20.dp, bottom = 16.dp)
-                            .size(56.dp)
-                            .clickable { onAnimeClick(currentAnime.id) }
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.PlayArrow,
-                                contentDescription = "Mainkan Anime",
-                                tint = Color.White,
-                                modifier = Modifier.size(32.dp)
-                            )
-                        }
-                    }
-                }
+            if (page == 0) {
+                HeroAutoPosterSlide(
+                    bannerItems = bannerItems,
+                    currentIndex = safeIndex,
+                    intervalMs = intervalMs,
+                    shape = heroShape,
+                    onAnimeClick = onAnimeClick,
+                    modifier = Modifier.fillMaxSize()
+                )
             } else {
                 HeroLeaderboardSlide(
                     leaderboard = leaderboard ?: HeroLeaderboardUiState(isLoading = false),
@@ -1014,49 +926,269 @@ fun FullBleedHeroBannerCarousel(
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
-
-        // Pager dots -- dipindah di bawah gambar (bukan numpuk di atas
-        // gambar kayak versi lama) soalnya sekarang ada slide leaderboard
-        // yang gak punya judul buat naronya. Tombol switch anime/leaderboard
-        // nempel di ujung kanan baris yang sama.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        // Dot indikator di tengah bawah kartu (1 dot = 1 slide). Dot
+        // leaderboard berwarna kuning biar kebaca beda dari slide anime.
+        if (pageCount > 1) {
+            val scope = rememberCoroutineScope()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 repeat(pageCount) { index ->
-                    val isLeaderboardDot = showLeaderboard && index == pageCount - 1
+                    val selected = pagerState.currentPage == index
+                    val isLeaderboardDot = index == 1
+                    val dotWidth by animateDpAsState(
+                        targetValue = if (selected) 24.dp else 7.dp,
+                        label = "hero_dot_width"
+                    )
+                    val dotColor by animateColorAsState(
+                        targetValue = when {
+                            selected && isLeaderboardDot -> StarYellow
+                            selected -> ZenimePrimary
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+                        },
+                        label = "hero_dot_color"
+                    )
                     Box(
                         modifier = Modifier
-                            .padding(end = 6.dp)
-                            .height(6.dp)
-                            .width(if (index == pagerState.currentPage) 20.dp else 6.dp)
-                            .clip(RoundedCornerShape(3.dp))
-                            .background(
-                                when {
-                                    index == pagerState.currentPage && isLeaderboardDot -> StarYellow
-                                    index == pagerState.currentPage -> ZenimePrimary
-                                    isLeaderboardDot -> StarYellow.copy(alpha = 0.45f)
-                                    else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
-                                }
-                            )
+                            .padding(horizontal = 3.dp)
+                            .height(7.dp)
+                            .width(dotWidth)
+                            .clip(CircleShape)
+                            .background(dotColor)
+                            .clickable { scope.launch { pagerState.animateScrollToPage(index) } }
                     )
                 }
             }
-            if (showLeaderboard) {
-                val scope = rememberCoroutineScope()
-                HeroCarouselModeSwitch(
-                    isLeaderboard = pagerState.currentPage == pageCount - 1,
-                    onAnimeClick = { scope.launch { pagerState.animateScrollToPage(0) } },
-                    onLeaderboardClick = { scope.launch { pagerState.animateScrollToPage(pageCount - 1) } }
+        }
+    }
+}
+
+/**
+ * Slide anime di Hero Carousel: satu kartu, gambar ganti sendiri mengikuti
+ * [currentIndex]. Layout ngikutin referensi -- chip views di kiri atas,
+ * badge peringkat + judul rata tengah di bawah -- ditambah indikator
+ * rotasi kecil di kanan atas. Seluruh kartu bisa di-tap buat buka anime.
+ */
+@Composable
+private fun HeroAutoPosterSlide(
+    bannerItems: List<AnimeItem>,
+    currentIndex: Int,
+    intervalMs: Long,
+    shape: androidx.compose.ui.graphics.Shape,
+    onAnimeClick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val current = bannerItems[currentIndex]
+
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(Color(0xFF0B0E14))
+            .clickable { onAnimeClick(current.id) }
+    ) {
+        // 1. Gambar: crossfade antar anime + zoom pelan (Ken Burns).
+        Crossfade(
+            targetState = currentIndex,
+            animationSpec = tween(durationMillis = 700),
+            label = "hero_poster"
+        ) { index ->
+            val anime = bannerItems.getOrNull(index) ?: current
+            HeroKenBurnsImage(
+                model = anime.image_cover ?: anime.image_poster,
+                contentDescription = anime.title,
+                durationMs = intervalMs.toInt() + 700
+            )
+        }
+
+        // 2. Scrim: atas tipis (biar chip kebaca), bawah tebal (biar judul kebaca).
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        0f to Color.Black.copy(alpha = 0.35f),
+                        0.28f to Color.Transparent,
+                        0.5f to Color(0xFF0B0E14).copy(alpha = 0.35f),
+                        1f to Color(0xFF0B0E14).copy(alpha = 0.96f)
+                    )
                 )
+        )
+
+        // 3. Chip views (kiri atas).
+        AnimatedContent(
+            targetState = currentIndex,
+            transitionSpec = { fadeIn(tween(400)) togetherWith fadeOut(tween(250)) },
+            label = "hero_views",
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(12.dp)
+        ) { index ->
+            val viewsLabel = formatCountLabel(bannerItems.getOrNull(index)?.views)
+            if (viewsLabel != null) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.Black.copy(alpha = 0.5f)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "$viewsLabel views",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White
+                        )
+                    }
+                }
+            }
+        }
+
+        // 4. Indikator rotasi (kanan atas) -- nunjukin ini poster ke berapa.
+        if (bannerItems.size > 1) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = Color.Black.copy(alpha = 0.5f),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 11.dp)
+                ) {
+                    bannerItems.indices.forEach { index ->
+                        val active = index == currentIndex
+                        val barWidth by animateDpAsState(
+                            targetValue = if (active) 16.dp else 5.dp,
+                            label = "hero_bar_width"
+                        )
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 2.dp)
+                                .height(4.dp)
+                                .width(barWidth)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = if (active) 0.95f else 0.35f))
+                        )
+                    }
+                }
+            }
+        }
+
+        // 5. Peringkat + judul (tengah bawah), muncul naik pelan tiap ganti anime.
+        AnimatedContent(
+            targetState = currentIndex,
+            transitionSpec = {
+                (fadeIn(tween(500, delayMillis = 200)) +
+                    slideInVertically(tween(500, delayMillis = 200)) { it / 4 }) togetherWith
+                    fadeOut(tween(250))
+            },
+            contentAlignment = Alignment.BottomCenter,
+            label = "hero_caption",
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(124.dp)
+        ) { index ->
+            val anime = bannerItems.getOrNull(index) ?: current
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 20.dp, bottom = 18.dp)
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = Color.Black.copy(alpha = 0.55f),
+                    border = BorderStroke(1.dp, StarYellow.copy(alpha = 0.35f))
+                ) {
+                    Text(
+                        text = "#${index + 1}",
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 15.sp
+                        ),
+                        color = StarYellow,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = anime.title ?: "Tanpa Judul",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 20.sp,
+                        lineHeight = 26.sp,
+                        textAlign = TextAlign.Center
+                    ),
+                    color = Color.White,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                val meta = listOfNotNull(anime.type, anime.status).joinToString(" \u2022 ")
+                if (meta.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = meta.uppercase(),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontWeight = FontWeight.Medium,
+                            letterSpacing = 0.8.sp
+                        ),
+                        color = Color.White.copy(alpha = 0.7f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
+}
+
+/** Gambar hero dengan zoom pelan 1.0 -> 1.08 selama poster ini tampil. */
+@Composable
+private fun HeroKenBurnsImage(
+    model: Any?,
+    contentDescription: String?,
+    durationMs: Int,
+    modifier: Modifier = Modifier
+) {
+    val scale = remember { Animatable(1f) }
+    LaunchedEffect(model) {
+        scale.snapTo(1f)
+        scale.animateTo(
+            targetValue = 1.08f,
+            animationSpec = tween(durationMillis = durationMs, easing = LinearEasing)
+        )
+    }
+    AsyncImage(
+        model = ImageRequest.Builder(LocalContext.current)
+            .data(model)
+            .crossfade(true)
+            .build(),
+        contentDescription = contentDescription ?: "Hero Banner",
+        contentScale = ContentScale.Crop,
+        modifier = modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                scaleX = scale.value
+                scaleY = scale.value
+            }
+    )
 }
 
 /**
