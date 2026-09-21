@@ -14,16 +14,18 @@ Paste seluruh isinya di SQL Editor -> Run.
 - `zenime-top-supporters`    -> isi dari `functions/zenime-top-supporters/index.ts`
 
 ## 4. Tambah secret di Edge Functions -> Secrets
-- `SOCIABUZZ_WEBHOOK_TOKEN` = string acak panjang buatanmu (contoh: 32 karakter huruf+angka)
+- `SOCIABUZZ_WEBHOOK_TOKEN` = isi kolom **Webhook Token** yang sudah dibuatkan SociaBuzz
+  (formatnya `sbwhook-...`; salin persis dari halaman Webhook TRIBE, jangan bikin sendiri)
 
 ## 5. Pasang webhook di SociaBuzz
 TRIBE -> Edit & Settings -> Integrations -> Webhook:
-- Activate Webhook Integration: ON
+- Aktifkan Integrasi Webhook: On
 - Webhook URL:
-  `https://lryvtlnozwixjnuwfexj.supabase.co/functions/v1/sociabuzz-webhook?token=ISI_TOKEN_KAMU`
-- Webhook Token: isi token yang sama
-- Webhook HTTP Test Response: isi `200` kalau kolomnya minta kode HTTP
-- Klik "Test Notification"
+  `https://lryvtlnozwixjnuwfexj.supabase.co/functions/v1/sociabuzz-webhook?token=TOKEN_DARI_KOLOM_WEBHOOK_TOKEN`
+- Webhook Token: biarkan (sudah terisi otomatis)
+- Webhook HTTP Test Response: biarkan kosong -- kolom ini kemungkinan menampilkan balasan
+  dari server kita setelah "Test Notifikasi" (sukses = `{"ok":true,...}`)
+- Simpan, lalu klik "Test Notifikasi"
 
 ## 6. Cek payload asli
 ```sql

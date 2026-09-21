@@ -83,7 +83,7 @@ fun DonationSection(onClick: () -> Unit, modifier: Modifier = Modifier) {
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                 )
                 Text(
-                    "Bantu jaga server tetap nyala -- QRIS, SociaBuzz, Trakteer",
+                    "Bantu jaga server tetap nyala -- lewat SociaBuzz",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

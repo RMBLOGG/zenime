@@ -80,7 +80,7 @@ fun SupportCodeCard(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                "Tulis kode Zenime kamu di kolom pesan saat donasi lewat SociaBuzz. Username dan foto profilmu akan otomatis muncul di daftar.",
+                "Kode ini otomatis terisi di kolom pesan saat kamu donasi lewat tombol SociaBuzz di atas. Jangan dihapus ya, supaya username dan foto profilmu muncul di daftar.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

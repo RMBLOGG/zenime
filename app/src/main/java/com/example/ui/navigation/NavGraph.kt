@@ -733,7 +733,7 @@ fun ZenimeAppNavHost(
                 }
             }
 
-            // Halaman donasi penuh -- QRIS, SociaBuzz, Trakteer, Crypto.
+            // Halaman donasi penuh -- SociaBuzz + daftar Top Support.
             // Konsepnya niru halaman "Donators Hall of Fame" Sankanime.
             composable(Screen.Donation.route) {
                 val uid = currentUser?.uid

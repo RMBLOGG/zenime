@@ -1,10 +1,6 @@
 package com.example.ui.screens.donation
 
-import android.content.ActivityNotFoundException
-import android.content.Intent
-import android.net.Uri
 import android.widget.Toast
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,16 +23,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,30 +38,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.R
 import com.example.ui.components.ZenimeHeader
 import com.example.ui.components.ZenimeScreenTitle
 import com.example.ui.theme.CardOutlineBorder
 import com.example.ui.theme.ZenimeBackgroundDark
-import com.example.ui.theme.ZenimePrimary
 
 /**
- * Halaman donasi penuh -- konsepnya niru "Donators Hall of Fame" ala
- * Sankanime (satu halaman berisi beberapa metode pembayaran), tapi versi
- * native & lebih ringkas: tiap metode jadi kartu, di-tap langsung buka
- * dialog QRIS atau browser ke link donasi terkait.
+ * Halaman donasi penuh -- lewat SociaBuzz, plus daftar Top Support (donatur
+ * terbanyak). Kode Zenime user disalin otomatis pas buka SociaBuzz, tinggal
+ * ditempel di kolom pesan supaya donasinya nyambung ke akun.
  *
  * Ganti nilai di [DonationConfig] kalau username/link donasinya beda.
  */
@@ -81,18 +67,20 @@ fun DonationScreen(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var showQrisDialog by remember { mutableStateOf(false) }
+    var showSociaBuzz by remember { mutableStateOf(false) }
 
-    if (showQrisDialog) {
-        QrisDonationDialog(onDismiss = { showQrisDialog = false })
-    }
-
-    fun openUrl(url: String) {
-        try {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-        } catch (e: ActivityNotFoundException) {
-            Toast.makeText(context, "Tidak ada browser untuk membuka link ini", Toast.LENGTH_SHORT).show()
-        }
+    // SociaBuzz dibuka di dalam aplikasi supaya kolom pesan bisa terisi kode Zenime otomatis.
+    if (showSociaBuzz) {
+        SociaBuzzDonateScreen(
+            url = DonationConfig.SOCIABUZZ_URL,
+            zenimeCode = uiState.zenimeCode,
+            onClose = {
+                showSociaBuzz = false
+                viewModel.loadTopSupporters()
+            },
+            modifier = modifier
+        )
+        return
     }
 
     Scaffold(
@@ -141,50 +129,31 @@ fun DonationScreen(
             }
 
             DonationMethodCard(
-                icon = Icons.Filled.QrCode2,
-                iconTint = ZenimePrimary,
-                tag = "Lokal \u00b7 Indonesia",
-                title = "QRIS",
-                subtitle = "GoPay, OVO, DANA, ShopeePay, m-Banking",
-                buttonLabel = "Tampilkan QRIS",
-                onClick = { showQrisDialog = true }
-            )
-
-            DonationMethodCard(
                 icon = Icons.Filled.Favorite,
                 iconTint = Color(0xFF00B2FF),
                 tag = "Global",
                 title = "SociaBuzz",
                 subtitle = "Kartu kredit, PayPal, QRIS/e-wallet",
-                buttonLabel = "Buka SociaBuzz",
+                buttonLabel = "Donasi via SociaBuzz",
                 onClick = {
-                    // Salin kode Zenime dulu biar tinggal tempel di kolom pesan SociaBuzz.
+                    // Kode juga disalin ke clipboard sebagai cadangan, kalau pengisian
+                    // otomatis di kolom pesan gagal user tinggal tempel manual.
                     val code = uiState.zenimeCode
                     if (code != null) {
                         clipboardManager.setText(AnnotatedString(code))
                         Toast.makeText(
                             context,
-                            "Kode Zenime disalin -- tempel di kolom pesan SociaBuzz",
-                            Toast.LENGTH_LONG
+                            "Kode Zenime akan terisi otomatis di kolom pesan",
+                            Toast.LENGTH_SHORT
                         ).show()
                     }
-                    openUrl(DonationConfig.SOCIABUZZ_URL)
+                    showSociaBuzz = true
                 }
             )
 
             uiState.zenimeCode?.let { code ->
                 SupportCodeCard(zenimeCode = code)
             }
-
-            DonationMethodCard(
-                icon = Icons.Filled.Favorite,
-                iconTint = Color(0xFFFF4949),
-                tag = "Lokal \u00b7 Indonesia",
-                title = "Trakteer",
-                subtitle = "QRIS, GoPay/OVO, DANA/ShopeePay, Transfer Bank",
-                buttonLabel = "Buka Trakteer",
-                onClick = { openUrl(DonationConfig.TRAKTEER_URL) }
-            )
 
             Spacer(modifier = Modifier.height(6.dp))
             TopSupportSection(
@@ -207,8 +176,7 @@ fun DonationScreen(
 /** Objek konfigurasi sentral biar gampang diganti kalau username/link-nya beda. */
 object DonationConfig {
     const val APP_NAME = "Zenime"
-    const val SOCIABUZZ_URL = "https://sociabuzz.com/Dayynime/tribe"
-    const val TRAKTEER_URL = "https://trakteer.id/Dayynimee"
+    const val SOCIABUZZ_URL = "https://sociabuzz.com/Dayynime/support"
 }
 
 @Composable
@@ -278,64 +246,6 @@ private fun DonationMethodCard(
                 tint = iconTint,
                 modifier = Modifier.size(18.dp)
             )
-        }
-    }
-}
-
-/** Popup QRIS -- dipindah dari [com.example.ui.screens.home.DonationSection] biar bisa dipakai di sini juga. */
-@Composable
-private fun QrisDonationDialog(onDismiss: () -> Unit) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-        ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(20.dp)
-            ) {
-                Text(
-                    "Dukung ${DonationConfig.APP_NAME}",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Image(
-                    painter = painterResource(id = R.drawable.qris_donasi),
-                    contentDescription = "QRIS donasi",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                )
-
-                Text(
-                    "Scan pakai aplikasi e-wallet atau m-banking apa saja",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp)
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
-                    Text("Tutup")
-                }
-            }
         }
     }
 }
