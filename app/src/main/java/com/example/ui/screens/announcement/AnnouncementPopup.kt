@@ -144,19 +144,22 @@ fun AnnouncementPopupHost(
         dismiss()
     }
 
-    BackHandler(enabled = visible) { dismiss() }
+    // Sengaja TIDAK menutup popup lewat tombol back -- cuma diserap biar
+    // gak nembus nutup Activity/nav di belakangnya. Hanya X yang menutup.
+    BackHandler(enabled = visible) { }
 
     val clamped = progress.coerceIn(0f, 1f)
     val scrimInteraction = remember { MutableInteractionSource() }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Scrim -- tap di luar kartu = tutup.
+        // Scrim -- cuma nyerap tap biar gak "tembus" ke konten di belakang.
+        // Sengaja TIDAK menutup popup; hanya tombol X yang boleh menutup.
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .graphicsLayer { alpha = clamped }
                 .background(Color.Black.copy(alpha = 0.65f))
-                .clickable(interactionSource = scrimInteraction, indication = null) { dismiss() }
+                .clickable(interactionSource = scrimInteraction, indication = null) { }
         )
 
         Box(

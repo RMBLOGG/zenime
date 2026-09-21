@@ -120,7 +120,6 @@ import com.example.ui.components.AnimePosterCard
 import com.example.ui.components.ComicPosterCard
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.GeneratedAvatar
-import com.example.ui.components.ClanRainbowBadge
 import com.example.ui.components.LevelBadge
 import com.example.data.model.CuplixItem
 import com.example.ui.components.AnimeCoverBannerSection
@@ -753,10 +752,6 @@ private fun HomeProfileHeader(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         LevelBadge(level = state.level)
-                        if (!state.clanTag.isNullOrBlank()) {
-                            Spacer(modifier = Modifier.width(6.dp))
-                            ClanRainbowBadge(text = state.clanTag)
-                        }
                     }
                     // Baris 2: ID user
                     if (state.userNumber != null) {
