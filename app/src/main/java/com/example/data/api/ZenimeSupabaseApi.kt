@@ -84,17 +84,25 @@ interface ZenimeSupabaseApi {
     ): List<ChatProfile>
 
     /**
-     * Batch-fetch warna username + user_number (ID urut) sekaligus dalam SATU
-     * request buat sekumpulan uid -- dipake ngerender warna custom + "#ID" di
-     * bubble Chat Global. Sebelumnya ini 2 request terpisah (getChatProfilesByUids
-     * + getChatProfileUserNumbers) padahal sama-sama nge-query chat_profiles
+     * Batch-fetch warna username + user_number (ID urut) + avatar_url
+     * TERKINI sekaligus dalam SATU request buat sekumpulan uid -- dipake
+     * ngerender warna custom + "#ID" + foto profil di bubble Chat Global.
+     * Sebelumnya ini 2 request terpisah (getChatProfilesByUids +
+     * getChatProfileUserNumbers) padahal sama-sama nge-query chat_profiles
      * dengan filter uid yang identik -- digabung biar badge di Chat Global
      * gak nunggu 2 round-trip buat data yang bisa diambil sekali jalan.
+     *
+     * avatar_url ditambahin di sini karena avatar yang tersimpan di baris
+     * PESAN (`chat_messages.avatar_url`) itu SNAPSHOT pas pesan dikirim --
+     * kalau user pasang/ganti foto profil SETELAH kirim pesan lama, pesan
+     * lama itu tetap nunjukin foto lama (atau kosong) selamanya. Fetch ini
+     * dipakai buat NIMPA tampilan avatar di bubble pakai foto TERBARU,
+     * konsisten sama yang kelihatan di Top XP / Top Support / dll.
      */
     @GET("rest/v1/chat_profiles")
     suspend fun getChatProfileBadgeDataByUids(
         @Query("firebase_uid") firebaseUidIn: String,
-        @Query("select") select: String = "firebase_uid,username_color,user_number"
+        @Query("select") select: String = "firebase_uid,username_color,user_number,avatar_url"
     ): List<ChatProfile>
 
     // on_conflict + Prefer=merge-duplicates -> upsert berdasarkan firebase_uid (primary key).

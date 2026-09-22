@@ -230,6 +230,9 @@ fun ChatScreen(
                                     senderLevel = uiState.xpLevelsByUid[message.firebaseUid],
                                     senderUsernameColor = uiState.usernameColorsByUid[message.firebaseUid],
                                     senderUserNumber = uiState.userNumbersByUid[message.firebaseUid],
+                                    // Foto profil TERKINI (kalau udah kefetch) -- nimpa avatar_url lama
+                                    // yang ke-nempel di baris pesan, biar konsisten sama Top XP/Top Support.
+                                    senderAvatarUrl = uiState.avatarUrlsByUid[message.firebaseUid] ?: message.avatarUrl,
                                     isDeleting = uiState.deletingMessageId == message.id,
                                     ownAvatarUrl = uiState.displayAvatarUrl,
                                     onReply = { viewModel.setReplyTarget(message) },
@@ -337,6 +340,7 @@ private fun ChatBubble(
     senderLevel: Int?,
     senderUsernameColor: String?,
     senderUserNumber: Long?,
+    senderAvatarUrl: String?,
     isDeleting: Boolean,
     ownAvatarUrl: String?,
     onReply: () -> Unit,
@@ -350,7 +354,7 @@ private fun ChatBubble(
         horizontalArrangement = if (isOwnMessage) Arrangement.End else Arrangement.Start
     ) {
         if (!isOwnMessage) {
-            ChatAvatar(url = message.avatarUrl, seed = message.firebaseUid, label = message.username)
+            ChatAvatar(url = senderAvatarUrl, seed = message.firebaseUid, label = message.username)
             Spacer(modifier = Modifier.width(8.dp))
         }
 

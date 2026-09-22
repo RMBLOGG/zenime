@@ -89,6 +89,12 @@ data class ChatUiState(
     // buat nampilin "#196" di samping badge Premium/username di bubble chat.
     val userNumbersByUid: Map<String, Long> = emptyMap(),
 
+    // Foto profil TERKINI per firebase_uid pengirim -- NIMPA avatar_url yang
+    // ke-nempel di baris pesan (snapshot pas pesan itu dikirim). Tanpa ini,
+    // pesan lama dari user yang belum punya/baru ganti foto bakal nunjukin
+    // avatar kosong/lama selamanya walau fotonya di Top XP dll udah kelihatan.
+    val avatarUrlsByUid: Map<String, String> = emptyMap(),
+
     // --- Pesan Suara (VN) -- kirim khusus Premium, dengerin/play terbuka
     // buat semua user (lihat catatan di ChatRepository.sendVoiceMessage).
     val isRecording: Boolean = false,
@@ -139,7 +145,8 @@ class ChatViewModel(
             clanTagsByUid = ChatSessionCache.clanTagsByUid,
             xpLevelsByUid = ChatSessionCache.xpLevelsByUid,
             usernameColorsByUid = ChatSessionCache.usernameColorsByUid,
-            userNumbersByUid = ChatSessionCache.userNumbersByUid
+            userNumbersByUid = ChatSessionCache.userNumbersByUid,
+            avatarUrlsByUid = ChatSessionCache.avatarUrlsByUid
         )
     )
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -173,6 +180,7 @@ class ChatViewModel(
 
     // Sama pola kayak cache di atas, tapi buat user_number (ID urut ala Aniku).
     private val userNumberCache = mutableMapOf<String, Long?>().apply { putAll(ChatSessionCache.userNumbersByUid) }
+    private val chatAvatarCache = mutableMapOf<String, String?>().apply { putAll(ChatSessionCache.avatarUrlsByUid) }
 
     // Warna username + user_number sekarang diambil BERBARENGAN lewat 1 request
     // (lihat ChatRepository.getChatBadgeDataForUids) -- sebelumnya 2 request
@@ -222,6 +230,7 @@ class ChatViewModel(
             chatBadgeCheckedUids += firebaseUid
             usernameColorCache[firebaseUid] = profile?.usernameColor
             userNumberCache[firebaseUid] = profile?.userNumber
+            chatAvatarCache[firebaseUid] = resolvedAvatarUrl
 
             _uiState.value = _uiState.value.copy(
                 displayUsername = profile?.username?.ifBlank { fallbackUsername } ?: fallbackUsername,
@@ -231,7 +240,8 @@ class ChatViewModel(
                 isPremium = isPremium,
                 premiumUids = premiumUidsSnapshot(),
                 usernameColorsByUid = usernameColorCache.filterValues { it != null }.mapValues { it.value!! },
-                userNumbersByUid = userNumberCache.filterValues { it != null }.mapValues { it.value!! }
+                userNumbersByUid = userNumberCache.filterValues { it != null }.mapValues { it.value!! },
+                avatarUrlsByUid = chatAvatarCache.filterValues { it != null }.mapValues { it.value!! }
             )
         }
     }
@@ -346,10 +356,12 @@ class ChatViewModel(
             newUids.forEach { uid ->
                 usernameColorCache[uid] = data.usernameColors[uid]
                 userNumberCache[uid] = data.userNumbers[uid]
+                chatAvatarCache[uid] = data.avatarUrls[uid]
             }
             _uiState.value = _uiState.value.copy(
                 usernameColorsByUid = usernameColorCache.filterValues { it != null }.mapValues { it.value!! },
-                userNumbersByUid = userNumberCache.filterValues { it != null }.mapValues { it.value!! }
+                userNumbersByUid = userNumberCache.filterValues { it != null }.mapValues { it.value!! },
+                avatarUrlsByUid = chatAvatarCache.filterValues { it != null }.mapValues { it.value!! }
             )
         }
     }

@@ -158,19 +158,23 @@ class ChatRepository(
      */
     suspend fun getChatBadgeDataForUids(uids: List<String>): ChatBadgeData {
         val distinctUids = uids.filter { it.isNotBlank() }.distinct()
-        if (distinctUids.isEmpty()) return ChatBadgeData(emptyMap(), emptyMap())
+        if (distinctUids.isEmpty()) return ChatBadgeData(emptyMap(), emptyMap(), emptyMap())
 
         val filter = "in.(${distinctUids.joinToString(",")})"
         val rows = api.getChatProfileBadgeDataByUids(firebaseUidIn = filter)
         return ChatBadgeData(
             usernameColors = rows.mapNotNull { p -> p.usernameColor?.let { p.firebaseUid to it } }.toMap(),
-            userNumbers = rows.mapNotNull { p -> p.userNumber?.let { p.firebaseUid to it } }.toMap()
+            userNumbers = rows.mapNotNull { p -> p.userNumber?.let { p.firebaseUid to it } }.toMap(),
+            // Foto profil TERKINI, buat nimpa avatar_url lama yang ke-nempel
+            // di baris pesan (lihat catatan di ZenimeSupabaseApi.getChatProfileBadgeDataByUids).
+            avatarUrls = rows.mapNotNull { p -> p.avatarUrl?.let { p.firebaseUid to it } }.toMap()
         )
     }
 }
 
-/** Hasil [ChatRepository.getChatBadgeDataForUids] -- warna username + user_number per uid. */
+/** Hasil [ChatRepository.getChatBadgeDataForUids] -- warna username + user_number + avatar_url terkini per uid. */
 data class ChatBadgeData(
     val usernameColors: Map<String, String>,
-    val userNumbers: Map<String, Long>
+    val userNumbers: Map<String, Long>,
+    val avatarUrls: Map<String, String> = emptyMap()
 )
