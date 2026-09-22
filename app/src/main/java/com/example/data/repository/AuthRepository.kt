@@ -3,6 +3,9 @@ package com.example.data.repository
 import android.content.Context
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialProviderConfigurationException
+import androidx.credentials.exceptions.NoCredentialException
 import com.example.R
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -109,6 +112,24 @@ class AuthRepository(
             val user = authResult.user
                 ?: return Result.failure(IllegalStateException("Login berhasil tapi data user kosong"))
             Result.success(user)
+        } catch (e: NoCredentialException) {
+            // Sistem gak nemu akun Google SAMA SEKALI di HP ini. Ini bukan
+            // masalah config di sisi kita (SHA-1/OAuth client) -- itu bakal
+            // muncul sebagai error lain. Ini murni: gak ada akun Google
+            // ke-daftar di HP tsb, jadi gak ada yang bisa dipilih.
+            Result.failure(
+                Exception("Tidak ada akun Google di HP ini. Buka Pengaturan HP > Akun, tambahkan akun Google, lalu coba login lagi.")
+            )
+        } catch (e: GetCredentialProviderConfigurationException) {
+            // Google Play Services gak ke-install / versinya kadaluarsa /
+            // gak kompatibel di HP ini (umum di HP custom ROM/tanpa GMS).
+            Result.failure(
+                Exception("Google Play Services di HP ini bermasalah atau belum diperbarui. Update dulu lewat Play Store, lalu coba lagi.")
+            )
+        } catch (e: GetCredentialCancellationException) {
+            // User nutup sheet pilih akun sendiri -- bukan error, jangan
+            // ditampilin sebagai pesan error yang bikin bingung.
+            Result.failure(Exception("Login dibatalkan."))
         } catch (e: Exception) {
             Result.failure(e)
         }

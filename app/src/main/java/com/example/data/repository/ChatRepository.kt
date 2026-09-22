@@ -151,6 +151,20 @@ class ChatRepository(
         getChatBadgeDataForUids(uids).usernameColors
 
     /**
+     * Batch-fetch profil (username + avatar_url) buat sekumpulan uid
+     * SEKALIGUS dalam 1 request -- pengganti pola lama yang manggil
+     * getProfile(uid) SATU-SATU di dalam loop (dipakai di daftar member
+     * clan, donasi hari ini, & request join -- itu penyebab utama
+     * layar-layar itu lama banget kalau membernya banyak).
+     */
+    suspend fun getProfilesForUids(uids: List<String>): Map<String, ChatProfile> {
+        val distinctUids = uids.filter { it.isNotBlank() }.distinct()
+        if (distinctUids.isEmpty()) return emptyMap()
+        val filter = "in.(${distinctUids.joinToString(",")})"
+        return api.getChatProfileBadgeDataByUids(firebaseUidIn = filter).associateBy { it.firebaseUid }
+    }
+
+    /**
      * Warna username + user_number sekaligus dalam satu request (lihat catatan
      * di [com.example.data.api.ZenimeSupabaseApi.getChatProfileBadgeDataByUids]).
      * Dipakai berbarengan dari [ChatViewModel] biar 2 badge itu keisi dari

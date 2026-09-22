@@ -10,6 +10,7 @@ import com.example.data.repository.XpRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 enum class ClanTab { MEMBERS, DONATION_TODAY }
@@ -88,30 +89,49 @@ class ClanViewModel(
                 return@launch
             }
 
-            val members = repository.getMembers(clanId).getOrDefault(emptyList())
-            val donations = repository.getTodayDonations(clanId).getOrDefault(emptyList())
-            val cta = resolveCta(members)
-            // Level per member (badge "Lv.X") -- data XP-nya sama kayak yang dipakai
-            // di Chat Global & Leaderboard XP, biar konsisten di seluruh app.
-            val levels = if (members.isNotEmpty()) {
-                xpRepository.getLevelsForUids(members.map { it.firebaseUid }).getOrDefault(emptyMap())
-            } else {
-                emptyMap()
+            // Daftar member wajib duluan (donasi & level butuh daftar uid-nya),
+            // tapi cek keanggotaan sendiri (buat CTA) gak saling butuh sama
+            // member -- jalan BARENGAN, bukan berurutan.
+            val membersDeferred = async { repository.getMembers(clanId).getOrDefault(emptyList()) }
+            val myMembershipDeferred = async { repository.getMyMembership(firebaseUid).getOrNull() }
+
+            val members = membersDeferred.await()
+            val myMembership = myMembershipDeferred.await()
+            val cta = resolveCta(members, myMembership)
+
+            // Donasi hari ini & level per member juga gak saling butuh --
+            // ditarik BARENGAN. getTodayDonations dikasih tau role member yang
+            // UDAH ada di atas, biar dia gak nge-fetch ulang daftar member yang
+            // sama (sebelumnya ini request dobel percuma).
+            val donationsDeferred = async {
+                repository.getTodayDonations(
+                    clanId,
+                    knownRoleByUid = members.associate { it.firebaseUid to it.role }
+                ).getOrDefault(emptyList())
+            }
+            val levelsDeferred = async {
+                if (members.isNotEmpty()) {
+                    xpRepository.getLevelsForUids(members.map { it.firebaseUid }).getOrDefault(emptyMap())
+                } else {
+                    emptyMap()
+                }
             }
 
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 clan = clan,
                 members = members,
-                memberLevels = levels,
-                donationsToday = donations,
+                memberLevels = levelsDeferred.await(),
+                donationsToday = donationsDeferred.await(),
                 cta = cta
             )
         }
     }
 
-    private suspend fun resolveCta(members: List<ClanMemberDisplay>): ClanMembershipCta {
-        val myMembership = repository.getMyMembership(firebaseUid).getOrNull()
+    private suspend fun resolveCta(
+        members: List<ClanMemberDisplay>,
+        myMembership: com.example.data.model.ClanMember?
+    ): ClanMembershipCta {
         return when {
             myMembership == null -> {
                 val pending = repository.getMyJoinRequestPending(clanId).getOrDefault(false)

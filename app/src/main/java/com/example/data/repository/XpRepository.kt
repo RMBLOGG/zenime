@@ -76,47 +76,38 @@ class XpRepository(
     }
 
     /**
-     * Leaderboard (total_xp kumulatif, TIDAK reset -- fungsinya sama kayak
-     * sebelumnya) -- digabung username/avatar dari chat_profiles DAN tag
-     * clan (buat chip di desain podium/list), mencakup SEMUA user yang
-     * tercatat di chat_profiles (bukan cuma yang udah punya baris di
-     * user_xp). User yang belum pernah nonton otomatis 0 XP/Level 1 dan
-     * nangkring di bawah, bukan hilang dari daftar.
+     * Top 100 leaderboard (total_xp kumulatif, TIDAK reset), digabung
+     * username/avatar dari chat_profiles + tag clan + status Premium.
      *
-     * Catatan: "semua user" di sini terbatas ke yang udah tercatat di
-     * chat_profiles (kebentuk begitu user buka Profil/Chat minimal sekali) --
-     * gak ada tabel "semua user terdaftar" tersendiri yang bisa dibaca lewat
-     * PostgREST (daftar user Firebase Auth sendiri gak bisa di-query dari
-     * client), jadi ini proxy terbaik yang ada.
+     * DIBATASIN ke top 100 (limit dari xpApi.getLeaderboard()) -- gak lagi
+     * nyakup SEMUA user terdaftar (termasuk yang 0 XP nangkring di bawah
+     * kayak sebelumnya). Alasannya dua: (1) diminta biar list-nya gak
+     * kepanjangan buat leaderboard yang cuma relevan buat top performer,
+     * dan (2) performa -- sebelumnya ini narik profil SEMUA user (bisa
+     * ratusan) buat 1 leaderboard, sekarang cuma narik profil buat 100 uid
+     * yang beneran tampil, lewat 1 request batch (bukan lagi getAllProfiles
+     * yang berat).
      */
     suspend fun getLeaderboardDisplay(): Result<List<UserXpDisplay>> = runCatching {
-        val profiles = chatRepository.getAllProfiles()
-        val xpByUid = xpApi.getLeaderboard().associateBy { it.firebaseUid }
+        val topXp = xpApi.getLeaderboard()
+        val relevantUids = topXp.map { it.firebaseUid }
 
-        // Tag clan & status Premium CUMA dicek buat uid yang punya baris di
-        // user_xp (yang beneran nangkring di leaderboard, dibatasin ~100
-        // teratas -- lihat limit di ZenimeXpApi.getLeaderboard), BUKAN buat
-        // SEMUA user terdaftar.
-        //
-        // Sebelumnya ini ngecek premium SATU-SATU ke server buat tiap profil
-        // (bisa ratusan user, termasuk yang 0 XP di paling bawah dan gak
-        // kepake badge-nya), padahal koneksi HTTP cuma ngizinin ~5 request
-        // bareng ke host yang sama -- sisanya ngantre. Itu yang bikin
-        // Leaderboard XP muter lama banget pas dibuka.
-        val relevantUids = xpByUid.keys.toList()
+        // Profil, tag clan, & status Premium buat 100 uid ini SEKALIGUS
+        // BARENGAN (bukan berurutan) -- masing-masing 1 request batch.
+        val profiles = chatRepository.getProfilesForUids(relevantUids)
         val clanTags = clanRepository.getClanTagsForUids(relevantUids).getOrDefault(emptyMap())
         val premiumUids = premiumRepository.getPremiumStatusForUids(relevantUids)
 
-        profiles.map { profile ->
-            val xp = xpByUid[profile.firebaseUid]
+        topXp.map { xp ->
+            val profile = profiles[xp.firebaseUid]
             UserXpDisplay(
-                firebaseUid = profile.firebaseUid,
-                totalXp = xp?.totalXp ?: 0L,
-                level = xp?.level ?: 1,
-                username = profile.username.ifBlank { "Pengguna" },
-                avatarUrl = profile.avatarUrl,
-                clanTag = clanTags[profile.firebaseUid],
-                isPremium = premiumUids[profile.firebaseUid] == true
+                firebaseUid = xp.firebaseUid,
+                totalXp = xp.totalXp,
+                level = xp.level,
+                username = profile?.username?.ifBlank { "Pengguna" } ?: "Pengguna",
+                avatarUrl = profile?.avatarUrl,
+                clanTag = clanTags[xp.firebaseUid],
+                isPremium = premiumUids[xp.firebaseUid] == true
             )
         }.sortedByDescending { it.totalXp }
     }

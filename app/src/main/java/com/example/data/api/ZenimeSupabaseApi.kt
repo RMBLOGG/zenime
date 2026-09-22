@@ -102,7 +102,7 @@ interface ZenimeSupabaseApi {
     @GET("rest/v1/chat_profiles")
     suspend fun getChatProfileBadgeDataByUids(
         @Query("firebase_uid") firebaseUidIn: String,
-        @Query("select") select: String = "firebase_uid,username_color,user_number,avatar_url"
+        @Query("select") select: String = "firebase_uid,username,username_color,user_number,avatar_url"
     ): List<ChatProfile>
 
     // on_conflict + Prefer=merge-duplicates -> upsert berdasarkan firebase_uid (primary key).

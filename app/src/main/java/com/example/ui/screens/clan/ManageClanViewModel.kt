@@ -9,6 +9,7 @@ import com.example.data.repository.ClanRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 enum class ManageClanTab { SETTINGS, REQUESTS, MEMBERS }
@@ -49,8 +50,11 @@ class ManageClanViewModel(
                 return@launch
             }
 
-            val members = repository.getMembers(clanId).getOrDefault(emptyList())
-            val pending = repository.getPendingJoinRequests(clanId).getOrDefault(emptyList())
+            // Member & pending request gak saling butuh -- ditarik BARENGAN.
+            val membersDeferred = async { repository.getMembers(clanId).getOrDefault(emptyList()) }
+            val pendingDeferred = async { repository.getPendingJoinRequests(clanId).getOrDefault(emptyList()) }
+            val members = membersDeferred.await()
+            val pending = pendingDeferred.await()
 
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
@@ -119,11 +123,33 @@ class ManageClanViewModel(
         }
     }
 
+    /**
+     * Approve/reject SATU request. Sebelumnya sukses -> panggil loadAll()
+     * lagi (reload semua: clan + member + SEMUA pending request dari nol,
+     * lewat jalur yang tadinya lambat) -- padahal cukup buang baris yang
+     * baru diproses dari daftar lokal. Sekarang: update state LANGSUNG,
+     * tanpa nunggu round-trip lagi, jadi kelihatan instan.
+     */
     fun respondToRequest(requestId: String, approve: Boolean) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(actionInFlightId = requestId)
             repository.respondJoinRequest(requestId, approve)
-                .onSuccess { loadAll() }
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        actionInFlightId = null,
+                        pendingRequests = _uiState.value.pendingRequests.filterNot { it.requestId == requestId }
+                    )
+                    // Kalau di-approve, ada member baru -- tarik ulang daftar
+                    // member doang DI BELAKANG LAYAR (gak nyalain isLoading,
+                    // gak ngeblok UI), biar tab Member ikut update tanpa bikin
+                    // user nunggu.
+                    if (approve) {
+                        val refreshedMembers = repository.getMembers(clanId).getOrNull()
+                        if (refreshedMembers != null) {
+                            _uiState.value = _uiState.value.copy(members = refreshedMembers)
+                        }
+                    }
+                }
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
                         actionInFlightId = null,
@@ -133,11 +159,17 @@ class ManageClanViewModel(
         }
     }
 
+    /** Sama kayak respondToRequest() -- update state lokal langsung, gak loadAll() ulang. */
     fun kickMember(targetUid: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(actionInFlightId = targetUid)
             repository.kickMember(clanId, targetUid)
-                .onSuccess { loadAll() }
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        actionInFlightId = null,
+                        members = _uiState.value.members.filterNot { it.firebaseUid == targetUid }
+                    )
+                }
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(
                         actionInFlightId = null,

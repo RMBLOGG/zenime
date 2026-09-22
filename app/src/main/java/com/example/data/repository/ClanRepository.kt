@@ -72,7 +72,16 @@ class ClanRepository(
      * Ranking "Donasi Hari Ini" -- ambil log donasi hari ini (waktu device),
      * jumlahin per user, urutin dari yang paling besar.
      */
-    suspend fun getTodayDonations(clanId: String): Result<List<ClanDonationEntry>> = runCatching {
+    /**
+     * @param knownRoleByUid Map uid->role dari daftar member yang UDAH
+     * ke-fetch caller (mis. dari getMembers()) -- kalau diisi, fungsi ini
+     * GAK nge-fetch ulang getClanMembers (request yang sama, dobel
+     * percuma). Biarin null kalau caller emang belum punya daftar member-nya.
+     */
+    suspend fun getTodayDonations(
+        clanId: String,
+        knownRoleByUid: Map<String, String>? = null
+    ): Result<List<ClanDonationEntry>> = runCatching {
         val startOfToday = LocalDate.now(ZoneId.systemDefault())
             .atStartOfDay(ZoneId.systemDefault())
             .format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)
@@ -84,8 +93,8 @@ class ClanRepository(
                 uid to (entries.sumOf { it.amount } to entries.size)
             }
 
-        val members = clanApi.getClanMembers(clanIdEq = "eq.$clanId")
-        val roleByUid = members.associate { it.firebaseUid to it.role }
+        val roleByUid = knownRoleByUid
+            ?: clanApi.getClanMembers(clanIdEq = "eq.$clanId").associate { it.firebaseUid to it.role }
         val profiles = fetchProfiles(grouped.map { it.first })
 
         grouped.map { (uid, amountAndCount) ->
@@ -132,13 +141,15 @@ class ClanRepository(
         }
     }
 
-    /** Batch-fetch chat_profiles buat sekumpulan uid, dipetakan per firebase_uid. */
-    private suspend fun fetchProfiles(uids: List<String>): Map<String, ChatProfile> {
-        if (uids.isEmpty()) return emptyMap()
-        return uids.distinct()
-            .mapNotNull { uid -> chatRepository.getProfile(uid)?.let { uid to it } }
-            .toMap()
-    }
+    /**
+     * Batch-fetch chat_profiles buat sekumpulan uid, SEKALIGUS dalam 1
+     * request lewat ChatRepository.getProfilesForUids -- sebelumnya ini
+     * manggil getProfile(uid) SATU-SATU di dalam loop biasa (gak paralel
+     * sama sekali), penyebab utama daftar member/donasi/request join clan
+     * lama banget kalau isinya banyak orang.
+     */
+    private suspend fun fetchProfiles(uids: List<String>): Map<String, ChatProfile> =
+        chatRepository.getProfilesForUids(uids)
 
     // --- Aksi (Edge Function) ---
     //
