@@ -1,20 +1,34 @@
 package com.example.util
 
-/** Jumlah episode gratis (episode 1 s/d nilai ini) buat non-premium. */
-const val FREE_EPISODE_LIMIT = 4
+/** Jumlah episode TERBARU (index paling tinggi) yang dikunci buat non-premium. */
+const val LOCKED_LATEST_EPISODES_COUNT = 2
+
+/** Ekstrak angka index dari string index episode, misal "12" -> 12. */
+fun episodeIndexValue(episodeIndex: String?): Int? =
+    episodeIndex?.trim()?.toIntOrNull()
+        ?: Regex("\\d+").find(episodeIndex.orEmpty())?.value?.toIntOrNull()
 
 /**
- * Episode 1 s/d [FREE_EPISODE_LIMIT] BEBAS ditonton non-premium (trial).
- * Episode selanjutnya cuma bisa ditonton member Premium. episodeIndex
- * yang null atau gak kebaca angka dianggap TIDAK terkunci -- daripada
- * salah lock gara-gara gagal parse.
+ * Cari total episode (index tertinggi) dari daftar index string yang ada,
+ * dipakai buat nentuin mana [LOCKED_LATEST_EPISODES_COUNT] episode paling
+ * baru yang harus dikunci. Kalau gak ada index yang kebaca sama sekali,
+ * fallback ke jumlah item di list.
  */
-fun isEpisodeLocked(episodeIndex: String?, isPremium: Boolean): Boolean {
+fun latestEpisodeIndex(episodeIndexes: List<String?>): Int =
+    episodeIndexes.mapNotNull(::episodeIndexValue).maxOrNull() ?: episodeIndexes.size
+
+/**
+ * Semua episode LAMA bebas ditonton non-premium. Cuma
+ * [LOCKED_LATEST_EPISODES_COUNT] episode paling baru (index tertinggi dari
+ * [totalEpisodes]) yang dikunci khusus Premium. episodeIndex yang null atau
+ * gak kebaca angka, atau [totalEpisodes] yang belum kebaca (<= 0), dianggap
+ * TIDAK terkunci -- daripada salah lock gara-gara gagal parse / data belum siap.
+ */
+fun isEpisodeLocked(episodeIndex: String?, totalEpisodes: Int, isPremium: Boolean): Boolean {
     if (isPremium) return false
-    val index = episodeIndex?.trim()?.toIntOrNull()
-        ?: Regex("\\d+").find(episodeIndex.orEmpty())?.value?.toIntOrNull()
-        ?: return false
-    return index > FREE_EPISODE_LIMIT
+    if (totalEpisodes <= 0) return false
+    val index = episodeIndexValue(episodeIndex) ?: return false
+    return index > totalEpisodes - LOCKED_LATEST_EPISODES_COUNT
 }
 
 /** Kualitas maksimal (dalam "p", misal 480 = 480p) yang boleh diputer non-premium. */
@@ -38,6 +52,6 @@ fun isQualityLocked(quality: String?, isPremium: Boolean): Boolean {
 /**
  * Fitur download buat nonton offline khusus premium -- non-premium sama
  * sekali gak boleh download episode manapun, gak peduli episode itu
- * termasuk yang gratis (1-4) ataupun kualitasnya rendah.
+ * termasuk yang lama (unlocked) ataupun kualitasnya rendah.
  */
 fun isDownloadAllowed(isPremium: Boolean): Boolean = isPremium

@@ -22,7 +22,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import com.example.ads.AdManager
 import com.example.data.api.AnnouncementPopup
 import com.example.data.api.GithubUpdateChecker
 import com.example.data.api.NetworkModule
@@ -116,10 +115,6 @@ class MainActivity : ComponentActivity() {
         // runtime-nya kalau di Android 13+ dan belum pernah dikasih.
         setupAnnouncementNotifications(applicationContext)
         requestNotificationPermissionIfNeeded()
-
-        // Init Unity Ads sedini mungkin biar interstitial udah siap kepake
-        // pas user pertama kali buka PlayerScreen.
-        AdManager.initialize(this)
 
         val database = ZenimeDatabase.getInstance(this)
         val userPrefs = UserPreferencesRepository(this)

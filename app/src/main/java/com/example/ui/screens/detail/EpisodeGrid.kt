@@ -48,6 +48,7 @@ import com.example.data.local.DownloadStatus
 import com.example.data.local.DownloadedEpisodeEntity
 import com.example.data.model.EpisodeItem
 import com.example.ui.theme.ZenimePrimary
+import com.example.util.episodeIndexValue
 import com.example.util.isEpisodeLocked
 
 private const val EPISODE_COLUMNS = 3
@@ -73,6 +74,9 @@ fun LazyListScope.episodeGridItems(
     onDeleteDownloadClick: (EpisodeItem) -> Unit,
     tabSlide: TabSlide? = null
 ) {
+    // Index episode paling baru dari seluruh daftar -- dipakai buat nentuin
+    // LOCKED_LATEST_EPISODES_COUNT episode terbaru mana yang dikunci non-premium.
+    val totalEpisodes = episodes.mapNotNull { episodeIndexValue(it.index) }.maxOrNull() ?: episodes.size
     val rows = episodes.chunked(EPISODE_COLUMNS)
     itemsIndexed(rows, key = { _, row -> "ep_row_${row.first().id}" }) { _, row ->
         Row(
@@ -89,7 +93,7 @@ fun LazyListScope.episodeGridItems(
                         episode = ep,
                         imageUrl = ep.resolvedImageUrl ?: fallbackImageUrl,
                         isWatched = watchedEpisodeId == ep.id,
-                        isLocked = isEpisodeLocked(ep.index, isPremium),
+                        isLocked = isEpisodeLocked(ep.index, totalEpisodes, isPremium),
                         downloadEntry = downloads.find { it.episodeId == ep.id },
                         onClick = { onEpisodeClick(ep) },
                         onDownloadClick = { onDownloadClick(ep) },

@@ -153,7 +153,6 @@ import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.example.ads.AdManager
 import com.example.data.common.Result
 import com.example.data.local.DownloadStatus
 import com.example.data.local.DownloadedEpisodeEntity
@@ -163,7 +162,8 @@ import com.example.data.model.EpisodeItem
 import com.example.ui.components.DownloadQualityPickerDialog
 import com.example.ui.components.ErrorStateView
 import com.example.ui.theme.ZenimePrimary
-import com.example.util.FREE_EPISODE_LIMIT
+import com.example.util.LOCKED_LATEST_EPISODES_COUNT
+import com.example.util.episodeIndexValue
 import com.example.util.PipController
 import com.example.util.PlayerFullscreenController
 import com.example.util.findActivity
@@ -246,48 +246,28 @@ fun PlayerScreen(
     // bisa akses judul/index episode buat metadata download.
     val currentEpisodeDetail = (streamState as? Result.Success)?.data?.episode
 
-    // Episode 1-4 gratis, selebihnya cuma buat Premium (lihat isEpisodeLocked)
-    // -- KECUALI non-premium mau nonton rewarded ad buat buka episode ini
-    // (lihat unlockedViaAdEpisodeId). null selama streamState masih Loading
+    // Total episode (index tertinggi) dari daftar episode anime ini, dipakai
+    // buat nentuin mana LOCKED_LATEST_EPISODES_COUNT episode terbaru yang
+    // dikunci. 0 selama episodeListState belum Success -- isEpisodeLocked
+    // otomatis nganggep belum terkunci sampai data ini kebaca.
+    val totalEpisodes = (episodeListState as? Result.Success)?.data
+        ?.mapNotNull { episodeIndexValue(it.index) }
+        ?.maxOrNull() ?: 0
+
+    // Semua episode lama bebas ditonton non-premium, cuma
+    // LOCKED_LATEST_EPISODES_COUNT episode paling baru yang khusus Premium
+    // (lihat isEpisodeLocked). null selama streamState masih Loading
     // (currentEpisodeDetail belum ada) -- dianggap belum terkunci sampai
     // kebukti sebaliknya biar gak salah block pas masih nunggu data kebaca.
-    val isEpisodeLockedByPremium = isEpisodeLocked(currentEpisodeDetail?.index, isPremium)
+    val isEpisodeLockedForUser = isEpisodeLocked(currentEpisodeDetail?.index, totalEpisodes, isPremium)
 
-    // ID episode yang udah "dibeli" pakai nonton rewarded ad. Disimpan per
-    // episodeId (bukan Boolean polos) supaya reset otomatis tiap pindah ke
-    // episode terkunci LAIN -- PlayerScreen memang di-compose ulang dari nol
-    // tiap ganti episode (lihat komentar di atas soal LaunchedEffect(Unit)),
-    // jadi state ini otomatis ke-reset ke null pas layar baru dipasang.
-    var unlockedViaAdEpisodeId by remember { mutableStateOf<String?>(null) }
-    val isEpisodeLockedForUser = isEpisodeLockedByPremium &&
-        unlockedViaAdEpisodeId != currentEpisodeDetail?.id
-
-    // Member Premium bebas iklan -- iklan cuma ditampilin kalau isPremium
-    // false. Ditunggu sampai currentEpisodeDetail kebaca (bukan langsung
-    // LaunchedEffect(Unit)) biar gak sempat nampilin iklan buat episode yang
-    // ternyata terkunci Premium (yang gak akan diputer videonya sama sekali).
-    // Gerbang play video: video BARU boleh mulai muter (playWhenReady) kalau
-    // gate ini true. Tetap false selama iklan interstitial lagi tampil, biar
-    // video-nya nunggu -- bukan langsung jalan bareng iklan di belakang.
-    // Video-nya sendiri tetap boleh disiapin/di-buffer duluan di belakang
-    // layar (lihat LaunchedEffect(selectedServer, ...) di bawah) supaya pas
-    // gate kebuka, video langsung mulus muter tanpa nunggu buffering lagi.
+    // Gerbang play video: dibuka begitu currentEpisodeDetail kebaca (gak ada
+    // lagi iklan interstitial yang perlu ditunggu sebelum mulai muter).
     var adGateOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(currentEpisodeDetail?.id) {
         if (currentEpisodeDetail == null) return@LaunchedEffect
-        if (isPremium || isEpisodeLockedForUser) {
-            adGateOpen = true
-            return@LaunchedEffect
-        }
-        val activity = context.findActivity()
-        if (activity != null) {
-            AdManager.showInterstitial(activity) {
-                adGateOpen = true
-            }
-        } else {
-            adGateOpen = true
-        }
+        adGateOpen = true
     }
 
     var showEpisodeList by remember { mutableStateOf(false) }
@@ -1290,25 +1270,7 @@ fun PlayerScreen(
                         EpisodeLockedContent(
                             episodeIndex = epDetail?.index,
                             onBackClick = onBackClick,
-                            onUpgradeClick = onUpgradeClick,
-                            onWatchAdToUnlock = {
-                                val activity = context.findActivity()
-                                if (activity == null) {
-                                    Toast.makeText(context, "Gagal membuka iklan, coba lagi", Toast.LENGTH_SHORT).show()
-                                    return@EpisodeLockedContent
-                                }
-                                AdManager.showRewarded(activity) { earned ->
-                                    if (earned) {
-                                        unlockedViaAdEpisodeId = currentEpisodeDetail?.id
-                                    } else {
-                                        Toast.makeText(
-                                            context,
-                                            "Iklan belum selesai ditonton, episode masih terkunci",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
-                                }
-                            }
+                            onUpgradeClick = onUpgradeClick
                         )
                     }
                 }
@@ -1367,28 +1329,17 @@ fun PlayerScreen(
 }
 
 /**
- * Layar pengganti video buat episode yang masih terkunci Premium (di luar
- * trial episode 1-[FREE_EPISODE_LIMIT]). Full-screen + background solid
- * biar nutupin sepenuhnya konten di belakangnya, dan clickable kosong biar
- * sentuhan gak nembus ke gesture player di baliknya.
+ * Layar pengganti video buat episode yang masih terkunci Premium ([LOCKED_LATEST_EPISODES_COUNT]
+ * episode paling baru). Full-screen + background solid biar nutupin
+ * sepenuhnya konten di belakangnya, dan clickable kosong biar sentuhan gak
+ * nembus ke gesture player di baliknya.
  */
 @Composable
 private fun EpisodeLockedContent(
     episodeIndex: String?,
     onBackClick: () -> Unit,
-    onUpgradeClick: () -> Unit,
-    onWatchAdToUnlock: () -> Unit
+    onUpgradeClick: () -> Unit
 ) {
-    // Polling ringan tiap 1 detik buat status "rewarded ad siap" -- rewarded
-    // ad di-load async di background (lihat AdManager), jadi status ini bisa
-    // berubah dari belum-siap ke siap SELAMA user lagi liat layar ini.
-    var isAdReady by remember { mutableStateOf(AdManager.isRewardedReady()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            isAdReady = AdManager.isRewardedReady()
-            delay(1000)
-        }
-    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1423,35 +1374,12 @@ private fun EpisodeLockedContent(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Episode 1-$FREE_EPISODE_LIMIT bisa ditonton gratis. Upgrade ke Premium buat lanjut nonton episode ini dan seterusnya, bebas iklan, kualitas HD, dan bisa download offline.",
+                text = "$LOCKED_LATEST_EPISODES_COUNT episode terbaru khusus buat member Premium. Upgrade buat lanjut nonton, bebas iklan, kualitas HD, dan bisa download offline.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(24.dp))
-            Button(
-                onClick = onWatchAdToUnlock,
-                enabled = isAdReady,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White.copy(alpha = 0.12f),
-                    disabledContainerColor = Color.White.copy(alpha = 0.06f)
-                ),
-                shape = RoundedCornerShape(24.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = if (isAdReady) "Tonton Iklan untuk Buka Episode Ini" else "Menyiapkan iklan...",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-            Spacer(modifier = Modifier.height(12.dp))
             Button(
                 onClick = onUpgradeClick,
                 colors = ButtonDefaults.buttonColors(containerColor = PlayerAccent),
