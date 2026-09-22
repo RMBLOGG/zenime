@@ -92,9 +92,20 @@ class XpRepository(
     suspend fun getLeaderboardDisplay(): Result<List<UserXpDisplay>> = runCatching {
         val profiles = chatRepository.getAllProfiles()
         val xpByUid = xpApi.getLeaderboard().associateBy { it.firebaseUid }
-        val clanTags = clanRepository.getClanTagsForUids(profiles.map { it.firebaseUid })
-            .getOrDefault(emptyMap())
-        val premiumUids = premiumRepository.getPremiumStatusForUids(profiles.map { it.firebaseUid })
+
+        // Tag clan & status Premium CUMA dicek buat uid yang punya baris di
+        // user_xp (yang beneran nangkring di leaderboard, dibatasin ~100
+        // teratas -- lihat limit di ZenimeXpApi.getLeaderboard), BUKAN buat
+        // SEMUA user terdaftar.
+        //
+        // Sebelumnya ini ngecek premium SATU-SATU ke server buat tiap profil
+        // (bisa ratusan user, termasuk yang 0 XP di paling bawah dan gak
+        // kepake badge-nya), padahal koneksi HTTP cuma ngizinin ~5 request
+        // bareng ke host yang sama -- sisanya ngantre. Itu yang bikin
+        // Leaderboard XP muter lama banget pas dibuka.
+        val relevantUids = xpByUid.keys.toList()
+        val clanTags = clanRepository.getClanTagsForUids(relevantUids).getOrDefault(emptyMap())
+        val premiumUids = premiumRepository.getPremiumStatusForUids(relevantUids)
 
         profiles.map { profile ->
             val xp = xpByUid[profile.firebaseUid]

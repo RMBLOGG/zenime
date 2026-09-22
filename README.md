@@ -20,3 +20,19 @@ View your app in AI Studio: https://ai.studio/apps/4077fef6-6cf4-49fa-acfb-04769
 5. Remove this line from the app's `build.gradle.kts` file: `signingConfig = signingConfigs.getByName("debugConfig")`
 6. Run the app on an emulator or physical device
 7. If you have already published your app in AI Studio, please [request upload key reset](https://support.google.com/googleplay/android-developer/answer/9842756#zippy=%2Crequest-an-upload-key-reset) in Google Play Console.
+
+
+--------------------------------------------------
+Changelog
+--------------------------------------------------
+
+Zenime v1.8
+
+Redesain
+- Carousel: tampilan carousel beranda didesain ulang
+- Room Chat: tampilan room chat diperbarui
+- Header Profile: tampilan header profil didesain ulang
+- Anime Detail: halaman detail anime didesain ulang
+- Pengumuman Pop Up: tampilan pop up pengumuman diperbarui
+
+Versi: 1.8
