@@ -72,7 +72,7 @@ interface ZenimeSupabaseApi {
     @GET("rest/v1/chat_profiles")
     suspend fun getChatProfile(
         @Query("firebase_uid") firebaseUidEq: String,
-        @Query("select") select: String = "firebase_uid,username,avatar_url,banner_url,username_color,updated_at",
+        @Query("select") select: String = "firebase_uid,username,avatar_url,banner_url,username_color,user_number,updated_at",
         @Query("limit") limit: Int = 1
     ): List<ChatProfile>
 
@@ -83,18 +83,18 @@ interface ZenimeSupabaseApi {
         @Query("limit") limit: Int = 500
     ): List<ChatProfile>
 
-    /** Batch-fetch warna username buat sekumpulan uid sekaligus -- dipake ngerender warna custom di bubble Chat Global. */
+    /**
+     * Batch-fetch warna username + user_number (ID urut) sekaligus dalam SATU
+     * request buat sekumpulan uid -- dipake ngerender warna custom + "#ID" di
+     * bubble Chat Global. Sebelumnya ini 2 request terpisah (getChatProfilesByUids
+     * + getChatProfileUserNumbers) padahal sama-sama nge-query chat_profiles
+     * dengan filter uid yang identik -- digabung biar badge di Chat Global
+     * gak nunggu 2 round-trip buat data yang bisa diambil sekali jalan.
+     */
     @GET("rest/v1/chat_profiles")
-    suspend fun getChatProfilesByUids(
+    suspend fun getChatProfileBadgeDataByUids(
         @Query("firebase_uid") firebaseUidIn: String,
-        @Query("select") select: String = "firebase_uid,username_color"
-    ): List<ChatProfile>
-
-    /** Batch-fetch user_number (ID urut) buat sekumpulan uid -- dipakai "#ID" di bubble Chat Global. */
-    @GET("rest/v1/chat_profiles")
-    suspend fun getChatProfileUserNumbers(
-        @Query("firebase_uid") firebaseUidIn: String,
-        @Query("select") select: String = "firebase_uid,user_number"
+        @Query("select") select: String = "firebase_uid,username_color,user_number"
     ): List<ChatProfile>
 
     // on_conflict + Prefer=merge-duplicates -> upsert berdasarkan firebase_uid (primary key).

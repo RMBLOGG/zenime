@@ -169,11 +169,15 @@ class ChatViewModel(
 
     // Sama pola kayak cache clan/xp di atas, tapi buat warna username custom.
     private val usernameColorCache = mutableMapOf<String, String?>().apply { putAll(ChatSessionCache.usernameColorsByUid) }
-    private val usernameColorCheckedUids = mutableSetOf<String>()
 
     // Sama pola kayak cache di atas, tapi buat user_number (ID urut ala Aniku).
     private val userNumberCache = mutableMapOf<String, Long?>().apply { putAll(ChatSessionCache.userNumbersByUid) }
-    private val userNumberCheckedUids = mutableSetOf<String>()
+
+    // Warna username + user_number sekarang diambil BERBARENGAN lewat 1 request
+    // (lihat ChatRepository.getChatBadgeDataForUids) -- sebelumnya 2 request
+    // terpisah yang bikin badge "#ID" nongol belakangan dari warna nama, padahal
+    // dua-duanya dari tabel chat_profiles yang sama. Satu checked-set buat dua-duanya.
+    private val chatBadgeCheckedUids = mutableSetOf<String>()
 
     init {
         // Simpen tiap perubahan (pesan + badge) ke cache sesi biar buka chat berikutnya instan.
@@ -210,16 +214,12 @@ class ChatViewModel(
             // Sama juga buat warna username sendiri -- langsung di-seed ke
             // cache/uiState biar bubble sendiri langsung kepake warnanya
             // tanpa nunggu round-trip checkUsernameColorsForNewSenders().
-            usernameColorCheckedUids += firebaseUid
+            // Warna username + user_number diri sendiri sekarang udah ikut
+            // ke-select di `getChatProfile` (satu fetch di atas), jadi gak perlu
+            // request batch terpisah lagi khusus buat diri sendiri.
+            chatBadgeCheckedUids += firebaseUid
             usernameColorCache[firebaseUid] = profile?.usernameColor
-
-            // Sama juga buat user_number diri sendiri -- satu request batch
-            // (isinya cuma 1 uid) biar konsisten sama cache lain di atas.
-            val ownUserNumber = premiumRepository.getUserNumbersForUids(listOf(firebaseUid))
-                .getOrNull()
-                ?.get(firebaseUid)
-            userNumberCheckedUids += firebaseUid
-            userNumberCache[firebaseUid] = ownUserNumber
+            userNumberCache[firebaseUid] = profile?.userNumber
 
             _uiState.value = _uiState.value.copy(
                 displayUsername = profile?.username?.ifBlank { fallbackUsername } ?: fallbackUsername,
@@ -313,53 +313,43 @@ class ChatViewModel(
      * daftar pesan (pola persis sama kayak [checkClanTagsForNewSenders],
      * cuma buat warna nama). Fetch dilakuin batch sekali jalan.
      */
-    private fun checkUsernameColorsForNewSenders(messages: List<ChatMessage>) {
-        val newUids = messages
-            .map { it.firebaseUid }
-            .filter { it.isNotBlank() }
-            .distinct()
-            .filterNot { usernameColorCheckedUids.contains(it) }
-        if (newUids.isEmpty()) return
-
-        usernameColorCheckedUids += newUids
-        viewModelScope.launch {
-            val colors = runCatching { repository.getUsernameColorsForUids(newUids) }.getOrDefault(emptyMap())
-            newUids.forEach { uid -> usernameColorCache[uid] = colors[uid] }
-            _uiState.value = _uiState.value.copy(
-                usernameColorsByUid = usernameColorCache.filterValues { it != null }.mapValues { it.value!! }
-            )
-        }
-    }
-
     /**
-     * Cek user_number (ID urut ala Aniku) buat pengirim-pengirim baru yang
-     * muncul di daftar pesan (pola persis sama kayak
-     * [checkUsernameColorsForNewSenders]). Fetch dilakuin batch sekali jalan.
+     * Cek warna username + user_number ("#ID") buat pengirim-pengirim baru
+     * yang muncul di daftar pesan -- SATU request buat dua badge sekaligus
+     * (lihat ChatRepository.getChatBadgeDataForUids), gantiin 2 request
+     * terpisah yang sebelumnya bikin salah satu badge nongol belakangan.
      */
-    private fun checkUserNumbersForNewSenders(messages: List<ChatMessage>) {
+    private fun checkChatBadgesForNewSenders(messages: List<ChatMessage>) {
         val newUids = messages
             .map { it.firebaseUid }
             .filter { it.isNotBlank() }
             .distinct()
-            .filterNot { userNumberCheckedUids.contains(it) }
+            .filterNot { chatBadgeCheckedUids.contains(it) }
         if (newUids.isEmpty()) return
 
-        userNumberCheckedUids += newUids
+        chatBadgeCheckedUids += newUids
         viewModelScope.launch {
-            val result = premiumRepository.getUserNumbersForUids(newUids)
-            if (result.isFailure) {
+            val result = runCatching { repository.getChatBadgeDataForUids(newUids) }
+            val data = result.getOrNull()
+            if (data == null) {
                 // Gagal (network/server) -> lepas tanda "sudah dicek" biar dicoba lagi
                 // di refresh berikutnya, bukan hilang permanen sampai app di-restart.
-                userNumberCheckedUids -= newUids.toSet()
+                chatBadgeCheckedUids -= newUids.toSet()
                 return@launch
             }
-            val numbers = result.getOrDefault(emptyMap())
-            newUids.forEach { uid -> userNumberCache[uid] = numbers[uid] }
+            newUids.forEach { uid ->
+                usernameColorCache[uid] = data.usernameColors[uid]
+                userNumberCache[uid] = data.userNumbers[uid]
+            }
             _uiState.value = _uiState.value.copy(
+                usernameColorsByUid = usernameColorCache.filterValues { it != null }.mapValues { it.value!! },
                 userNumbersByUid = userNumberCache.filterValues { it != null }.mapValues { it.value!! }
             )
         }
     }
+
+    // (checkUserNumbersForNewSenders lama digabung ke checkChatBadgesForNewSenders
+    // di bawah -- warna username & user_number sekarang satu request.)
 
     /** Subscribe ke Supabase Realtime -- gantiin polling PostgREST tiap 3 detik. */
     private fun startRealtime() {
@@ -379,8 +369,7 @@ class ChatViewModel(
                 checkPremiumForNewSenders(listOf(event.message))
                 checkClanTagsForNewSenders(listOf(event.message))
                 checkXpLevelsForNewSenders(listOf(event.message))
-                checkUsernameColorsForNewSenders(listOf(event.message))
-                checkUserNumbersForNewSenders(listOf(event.message))
+                checkChatBadgesForNewSenders(listOf(event.message))
             }
             is ChatRealtimeEvent.Deleted -> {
                 _uiState.value = _uiState.value.copy(
@@ -416,8 +405,7 @@ class ChatViewModel(
             checkPremiumForNewSenders(messages)
             checkClanTagsForNewSenders(messages)
             checkXpLevelsForNewSenders(messages)
-            checkUsernameColorsForNewSenders(messages)
-            checkUserNumbersForNewSenders(messages)
+            checkChatBadgesForNewSenders(messages)
         } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(
                 isLoading = false,

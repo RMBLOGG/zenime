@@ -147,13 +147,30 @@ class ChatRepository(
      * nge-render warna nama di bubble Chat Global (pola sama kayak
      * [ClanRepository.getClanTagsForUids]/[XpRepository.getLevelsForUids]).
      */
-    suspend fun getUsernameColorsForUids(uids: List<String>): Map<String, String> {
+    suspend fun getUsernameColorsForUids(uids: List<String>): Map<String, String> =
+        getChatBadgeDataForUids(uids).usernameColors
+
+    /**
+     * Warna username + user_number sekaligus dalam satu request (lihat catatan
+     * di [com.example.data.api.ZenimeSupabaseApi.getChatProfileBadgeDataByUids]).
+     * Dipakai berbarengan dari [ChatViewModel] biar 2 badge itu keisi dari
+     * SATU fetch, bukan 2 fetch yang nunggu bergantian.
+     */
+    suspend fun getChatBadgeDataForUids(uids: List<String>): ChatBadgeData {
         val distinctUids = uids.filter { it.isNotBlank() }.distinct()
-        if (distinctUids.isEmpty()) return emptyMap()
+        if (distinctUids.isEmpty()) return ChatBadgeData(emptyMap(), emptyMap())
 
         val filter = "in.(${distinctUids.joinToString(",")})"
-        return api.getChatProfilesByUids(firebaseUidIn = filter)
-            .mapNotNull { profile -> profile.usernameColor?.let { color -> profile.firebaseUid to color } }
-            .toMap()
+        val rows = api.getChatProfileBadgeDataByUids(firebaseUidIn = filter)
+        return ChatBadgeData(
+            usernameColors = rows.mapNotNull { p -> p.usernameColor?.let { p.firebaseUid to it } }.toMap(),
+            userNumbers = rows.mapNotNull { p -> p.userNumber?.let { p.firebaseUid to it } }.toMap()
+        )
     }
 }
+
+/** Hasil [ChatRepository.getChatBadgeDataForUids] -- warna username + user_number per uid. */
+data class ChatBadgeData(
+    val usernameColors: Map<String, String>,
+    val userNumbers: Map<String, Long>
+)
