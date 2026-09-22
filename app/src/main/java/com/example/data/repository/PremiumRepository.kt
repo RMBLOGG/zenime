@@ -54,13 +54,20 @@ class PremiumRepository(
         }
     }
 
-    /** Batch-fetch user_number (ID urut) buat banyak uid sekaligus lewat chat_profiles (PostgREST) -- dipakai di Chat Global. */
+    /**
+     * Batch-fetch user_number (ID urut) buat banyak uid sekaligus lewat
+     * chat_profiles (PostgREST). SEKARANG gak dipakai lagi dari Chat Global
+     * (sudah pindah ke ChatRepository.getChatBadgeDataForUids yang ngambil
+     * warna username + user_number bareng dalam 1 request) -- fungsi ini
+     * dibiarin ada buat pemanggil lain di luar Chat yang mungkin masih butuh
+     * user_number sendirian, dan dipindah ke endpoint gabungan yang sama.
+     */
     suspend fun getUserNumbersForUids(firebaseUids: List<String>): Result<Map<String, Long>> {
         val distinctUids = firebaseUids.filter { it.isNotBlank() }.distinct()
         if (distinctUids.isEmpty()) return Result.success(emptyMap())
         return try {
             val filter = "in.(${distinctUids.joinToString(",")})"
-            val rows = api.getChatProfileUserNumbers(firebaseUidIn = filter)
+            val rows = api.getChatProfileBadgeDataByUids(firebaseUidIn = filter)
             Result.success(
                 rows.mapNotNull { row -> row.userNumber?.let { row.firebaseUid to it } }.toMap()
             )
