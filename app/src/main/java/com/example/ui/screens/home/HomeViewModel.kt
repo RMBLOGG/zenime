@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 /**
@@ -154,20 +155,28 @@ class HomeViewModel(
         viewModelScope.launch {
             _profileState.value = _profileState.value.copy(isLoading = true)
 
-            val chatProfile = try {
-                chatRepository.getProfile(uid)
-            } catch (e: Exception) {
-                null
-            }
+            // 6 data ini GAK saling butuh satu sama lain, tapi sebelumnya
+            // ditarik satu-satu (nunggu bergantian) -- jadi total waktu
+            // tunggunya kejumlah dari 6 request, bukan cuma nunggu yang paling
+            // lama. Ini penyebab utama kartu profil di atas Beranda lama
+            // muncul. Sekarang jalan BARENGAN (async + await), total waktunya
+            // jadi cuma sepanjang request yang paling lambat di antara mereka.
+            val chatProfileDeferred = async { runCatching { chatRepository.getProfile(uid) }.getOrNull() }
+            val premiumDeferred = async { premiumRepository.checkPremiumStatus(uid) }
+            val identityDeferred = async { premiumRepository.getProfileIdentity(uid) }
+            val balanceDeferred = async { coinRepository.getBalance(uid) }
+            val myXpDeferred = async { xpRepository.getMyXp(uid) }
+            val clanTagDeferred = async { clanRepository.getClanTagsForUids(listOf(uid)) }
 
-            val premiumResult = premiumRepository.checkPremiumStatus(uid)
+            val chatProfile = chatProfileDeferred.await()
+            val premiumResult = premiumDeferred.await()
             val premiumStatus = premiumResult.getOrNull()
             val daysLeft = premiumStatus?.expiresAt?.let { computeDaysLeft(it) }
 
-            val identityResult = premiumRepository.getProfileIdentity(uid).getOrNull()
-            val balanceResult = coinRepository.getBalance(uid)
-            val myXp = xpRepository.getMyXp(uid).getOrNull()
-            val clanTag = clanRepository.getClanTagsForUids(listOf(uid)).getOrNull()?.get(uid)
+            val identityResult = identityDeferred.await().getOrNull()
+            val balanceResult = balanceDeferred.await()
+            val myXp = myXpDeferred.await().getOrNull()
+            val clanTag = clanTagDeferred.await().getOrNull()?.get(uid)
 
             _profileState.value = _profileState.value.copy(
                 isLoading = false,
@@ -254,19 +263,25 @@ class HomeViewModel(
      * soalnya XP/Clan/Support bisa berubah dari aksi user lain, bukan cuma aksi kita sendiri. */
     fun loadHeroLeaderboard() {
         viewModelScope.launch {
-            val topXp = xpRepository.getLeaderboardDisplay()
+            // Sama kayak loadProfileHeader() di atas: 3 sumber data ini gak
+            // saling butuh, jadi ditarik BARENGAN, bukan satu-satu.
+            val topXpDeferred = async { xpRepository.getLeaderboardDisplay() }
+            val topClansDeferred = async { clanRepository.browseClans() }
+            val topSupportDeferred = async { supportRepository.getTopSupporters() }
+
+            val topXp = topXpDeferred.await()
                 .getOrNull()
                 ?.sortedByDescending { it.totalXp }
                 ?.take(4)
                 ?: emptyList()
 
-            val topClans = clanRepository.browseClans()
+            val topClans = topClansDeferred.await()
                 .getOrNull()
                 ?.sortedWith(compareByDescending<Clan> { it.level }.thenByDescending { it.totalXp })
                 ?.take(4)
                 ?: emptyList()
 
-            val topSupport = supportRepository.getTopSupporters()
+            val topSupport = topSupportDeferred.await()
                 .getOrNull()
                 ?.sortedByDescending { it.totalAmount }
                 ?.take(3)

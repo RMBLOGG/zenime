@@ -16,6 +16,7 @@ import com.example.util.VoiceNoteUploader
 import com.example.util.VoiceRecorder
 import com.example.util.friendlyErrorMessage
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -192,13 +193,14 @@ class ChatViewModel(
 
     private fun loadProfileAndPremiumStatus(fallbackUsername: String) {
         viewModelScope.launch {
-            val profile = try {
-                repository.getProfile(firebaseUid)
-            } catch (e: Exception) {
-                null
-            }
+            // Profil sendiri & status Premium gak saling butuh -- ditarik
+            // bareng, bukan satu-satu, biar header Chat Global gak nunggu
+            // 2 round-trip berturut-turut.
+            val profileDeferred = async { runCatching { repository.getProfile(firebaseUid) }.getOrNull() }
+            val premiumDeferred = async { premiumRepository.checkPremiumStatus(firebaseUid) }
 
-            val premiumResult = premiumRepository.checkPremiumStatus(firebaseUid)
+            val profile = profileDeferred.await()
+            val premiumResult = premiumDeferred.await()
             val isPremium = premiumResult.getOrNull()?.isPremium ?: false
 
             // Avatar sekarang BEBAS semua user (gak perlu premium) -- selalu
