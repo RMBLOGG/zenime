@@ -302,10 +302,14 @@ class ChatViewModel(
 
         checkedUids += newUids
         viewModelScope.launch {
-            newUids.forEach { uid ->
-                val result = premiumRepository.checkPremiumStatus(uid)
-                premiumStatusCache[uid] = result.getOrNull()?.isPremium ?: false
-            }
+            // Sebelumnya ini loop satu-satu per uid (nunggu bergantian) --
+            // penyebab utama chat masih kerasa berat pas banyak pengirim
+            // beda muncul. Sekarang pakai batch helper yang narik status
+            // premium semua uid itu BARENGAN (lihat
+            // PremiumRepository.getPremiumStatusForUids).
+            val premiumTrueUids = runCatching { premiumRepository.getPremiumStatusForUids(newUids) }
+                .getOrDefault(emptyMap())
+            newUids.forEach { uid -> premiumStatusCache[uid] = premiumTrueUids[uid] == true }
             _uiState.value = _uiState.value.copy(premiumUids = premiumUidsSnapshot())
         }
     }
