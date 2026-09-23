@@ -15,11 +15,13 @@ import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withTimeout
 
 /**
  * Bungkus login Google lewat Credential Manager (API resmi Google yang
@@ -89,29 +91,44 @@ class AuthRepository(
         }
 
         return try {
-            val credentialManager = CredentialManager.create(context)
+            // Dibungkus withTimeout: TANPA ini, di koneksi lemot/putus-nyambung
+            // getCredential() atau signInWithCredential().await() bisa nyangkut
+            // tanpa batas waktu -- itu penyebab tombol "Menghubungkan..." macet
+            // permanen yang dilaporkan user (reinstall gak ngaruh krn ini bukan
+            // masalah state lokal, tapi network call yang gak pernah "nyerah").
+            // 20 detik dipilih biar cukup toleran buat koneksi lambat tapi
+            // gak bikin user nunggu kelamaan kalau memang gagal connect.
+            withTimeout(20_000) {
+                val credentialManager = CredentialManager.create(context)
 
-            val googleIdOption = GetGoogleIdOption.Builder()
-                // false = tampilin SEMUA akun Google di device buat dipilih,
-                // bukan cuma yang pernah dipakai login ke app ini sebelumnya.
-                .setFilterByAuthorizedAccounts(false)
-                .setServerClientId(webClientId)
-                .setAutoSelectEnabled(false)
-                .build()
+                val googleIdOption = GetGoogleIdOption.Builder()
+                    // false = tampilin SEMUA akun Google di device buat dipilih,
+                    // bukan cuma yang pernah dipakai login ke app ini sebelumnya.
+                    .setFilterByAuthorizedAccounts(false)
+                    .setServerClientId(webClientId)
+                    .setAutoSelectEnabled(false)
+                    .build()
 
-            val request = GetCredentialRequest.Builder()
-                .addCredentialOption(googleIdOption)
-                .build()
+                val request = GetCredentialRequest.Builder()
+                    .addCredentialOption(googleIdOption)
+                    .build()
 
-            val result = credentialManager.getCredential(context, request)
-            val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(result.credential.data)
+                val result = credentialManager.getCredential(context, request)
+                val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(result.credential.data)
 
-            val firebaseCredential = GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
-            val authResult = firebaseAuth.signInWithCredential(firebaseCredential).await()
+                val firebaseCredential = GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
+                val authResult = firebaseAuth.signInWithCredential(firebaseCredential).await()
 
-            val user = authResult.user
-                ?: return Result.failure(IllegalStateException("Login berhasil tapi data user kosong"))
-            Result.success(user)
+                val user = authResult.user
+                    ?: return@withTimeout Result.failure(IllegalStateException("Login berhasil tapi data user kosong"))
+                Result.success(user)
+            }
+        } catch (e: TimeoutCancellationException) {
+            // Koneksi kelamaan gak respons -- gagalin dengan pesan jelas
+            // daripada biarin spinner nyangkut selamanya.
+            Result.failure(
+                Exception("Koneksi timeout, sinyal internet kamu kemungkinan lemah. Coba lagi di jaringan yang lebih stabil.")
+            )
         } catch (e: NoCredentialException) {
             // Sistem gak nemu akun Google SAMA SEKALI di HP ini. Ini bukan
             // masalah config di sisi kita (SHA-1/OAuth client) -- itu bakal
