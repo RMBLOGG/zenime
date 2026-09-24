@@ -1,5 +1,6 @@
 package com.example.ui.screens.player
 
+import com.example.util.MiniPlayerManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.res.Configuration
@@ -70,7 +71,6 @@ import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.HighQuality
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PictureInPictureAlt
@@ -165,7 +165,6 @@ import com.example.ui.components.ErrorStateView
 import com.example.ui.theme.ZenimePrimary
 import com.example.util.LOCKED_LATEST_EPISODES_COUNT
 import com.example.util.episodeIndexValue
-import com.example.util.MiniPlayerController
 import com.example.util.PipController
 import com.example.util.PlayerFullscreenController
 import com.example.util.findActivity
@@ -275,6 +274,11 @@ fun PlayerScreen(
     var showEpisodeList by remember { mutableStateOf(false) }
     var showDeleteDownloadConfirm by remember { mutableStateOf(false) }
 
+    // Nge-track apakah seek "lanjutin dari terakhir nonton" udah pernah
+    // dijalanin. Cuma sekali di awal -- ganti server/kualitas belakangan
+    // gak boleh nge-reset balik ke posisi lama dari histori.
+    var hasAppliedResume by remember { mutableStateOf(false) }
+
     var isPlaying by remember { mutableStateOf(false) }
     var isBuffering by remember { mutableStateOf(false) }
     var currentPosition by remember { mutableLongStateOf(0L) }
@@ -308,6 +312,28 @@ fun PlayerScreen(
     // Sama kayak kebiasaan YouTube/Netflix.
     BackHandler(enabled = isFullscreen) {
         PlayerFullscreenController.setFullscreen(false)
+    }
+
+    // Flag ini yang mutusin nasib exoPlayer pas composable ini di-dispose:
+    // true = lagi di-minimize ke mini player (JANGAN di-release, serahin ke
+    // MiniPlayerManager), false = keluar normal/ganti episode (release
+    // seperti biasa). Dibaca di DisposableEffect(exoPlayer) onDispose di
+    // bawah, lihat komentar di situ.
+    var isMinimizingToMiniPlayer by remember { mutableStateOf(false) }
+
+    // Back device pas mode PORTRAIT (bukan fullscreen) -- ini yang bikin
+    // mini player-nya kebentuk, ala YouTube/Spotify: video-nya JANGAN
+    // berhenti, cuma nge-collapse jadi kartu kecil ngambang.
+    BackHandler(enabled = !isFullscreen) {
+        isMinimizingToMiniPlayer = true
+        onBackClick()
+    }
+
+    // Tombol back di top bar (IconButton) pun sama -- gak langsung pergi,
+    // tapi minimize dulu.
+    val handleBackButtonClick: () -> Unit = {
+        isMinimizingToMiniPlayer = true
+        onBackClick()
     }
 
     // Auto-masuk fullscreen begitu device fisik di-rotate ke landscape
@@ -419,44 +445,34 @@ fun PlayerScreen(
     // masuk zona outro, gak nge-trigger berkali-kali tiap tick progress.
     var hasAutoSkippedOutro by remember { mutableStateOf(false) }
 
-    // Kalau episode ini SEDANG ngambang di mini player (user baru aja balik
-    // dari layar lain lewat tap mini player, atau navigasi ke episode yang
-    // sama persis), "ambil balik" ExoPlayer yang udah jalan itu -- posisi &
-    // buffer-nya kepake lagi, BUKAN mulai dari nol. remember{} tanpa key
-    // sengaja biar cuma jalan SEKALI (consume() punya efek samping, gak
-    // boleh kepanggil ulang tiap recomposition -- lihat MiniPlayerController).
-    val reusedPlayer = remember { MiniPlayerController.consume(viewModel.episodeId) }
-
-    // Nge-track apakah seek "lanjutin dari terakhir nonton" udah pernah
-    // dijalanin. Cuma sekali di awal -- ganti server/kualitas belakangan
-    // gak boleh nge-reset balik ke posisi lama dari histori. Kalau player-nya
-    // hasil ambil-balik dari mini player, itu udah pernah "siap" sebelumnya
-    // -- anggap resume-nya udah keaplikasiin biar gak seek ulang ke histori.
-    var hasAppliedResume by remember { mutableStateOf(reusedPlayer != null) }
-
-    // Sekali doang: skip LaunchedEffect(selectedServer, ...) yang pertama
-    // kali jalan kalau player-nya hasil ambil-balik (media udah di-prepare
-    // & lagi jalan, gak perlu setMediaSource+prepare ulang dari awal -- itu
-    // bakal bikin rebuffer sia-sia). Kalau nanti user genuinely ganti
-    // server/kualitas, effect itu tetap jalan normal seperti biasa.
-    var skipNextPrepare by remember { mutableStateOf(reusedPlayer != null) }
-
-    // ExoPlayer instance
+    // ExoPlayer instance -- kalau PlayerScreen ini dibuka lagi buat episode
+    // yang SAMA PERSIS kayak yang lagi jalan di mini player (user tap kartu
+    // mini player buat expand), pakai ULANG instance yang sama biar video-nya
+    // nyambung tanpa reload/reset posisi. Ditandain lewat
+    // `reusedFromMiniPlayer` -- dipakai lagi di bawah buat skip re-attach
+    // media source yang pertama kali (lihat LaunchedEffect(selectedServer...)).
+    var reusedFromMiniPlayer by remember { mutableStateOf(false) }
     val exoPlayer = remember {
-        reusedPlayer ?: ExoPlayer.Builder(context).build().apply {
-            // Sengaja false -- video cuma boleh muter kalau adGateOpen true
-            // (lihat LaunchedEffect(adGateOpen) di bawah). Nyiapin/buffer
-            // tetap jalan di belakang layar walau ini false.
-            playWhenReady = false
-        }
-    }
+        val fromMiniPlayer = MiniPlayerManager.consumeForExpand(viewModel.episodeId, viewModel.animeId)
+        if (fromMiniPlayer != null) {
+            reusedFromMiniPlayer = true
+            fromMiniPlayer
+        } else {
+            val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+                .setDefaultRequestProperties(
+                    mapOf(
+                        "Referer" to "https://animeinweb.com/",
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    )
+                )
 
-    // Kalau exoPlayer ini hasil ambil-balik dari mini player yang emang lagi
-    // muter, sinkronin state isPlaying-nya SEKARANG JUGA (bukan nunggu
-    // listener nangkep perubahan, soalnya state "lagi playing" itu gak
-    // berubah lagi -- listener baru di bawah gak bakal dapet callback-nya).
-    LaunchedEffect(Unit) {
-        isPlaying = exoPlayer.isPlaying
+            ExoPlayer.Builder(context).build().apply {
+                // Sengaja false -- video cuma boleh muter kalau adGateOpen true
+                // (lihat LaunchedEffect(adGateOpen) di bawah). Nyiapin/buffer
+                // tetap jalan di belakang layar walau ini false.
+                playWhenReady = false
+            }
+        }
     }
 
     // Auto-hide controls overlay
@@ -526,8 +542,15 @@ fun PlayerScreen(
     // Update MediaSource when selectedServer changes (atau pas file offline
     // episode ini kedetek udah COMPLETED -- lihat pengecekan localFile di bawah).
     LaunchedEffect(selectedServer, downloadEntry?.status, isEpisodeLockedForUser) {
-        if (skipNextPrepare) {
-            skipNextPrepare = false
+        // Kalau exoPlayer ini hasil reuse dari mini player (udah punya media
+        // & lagi muter), JANGAN nge-attach ulang media source begitu
+        // ViewModel baru ini selesai fetch stream URL lagi -- itu bakal
+        // bikin video-nya restart/reset ke posisi 0. Cukup sekali skip di
+        // awal; abis itu balik ke perilaku normal (misal user ganti
+        // kualitas/server manual).
+        if (reusedFromMiniPlayer && exoPlayer.mediaItemCount > 0) {
+            reusedFromMiniPlayer = false
+            hasAppliedResume = true
             return@LaunchedEffect
         }
 
@@ -618,13 +641,20 @@ fun PlayerScreen(
 
         onDispose {
             exoPlayer.removeListener(listener)
-            // Kalau pas dispose ini exoPlayer LAGI dititipin ke mini player
-            // (user baru aja pencet tombol minimize, lihat tombol di top bar
-            // di bawah), JANGAN di-release -- video-nya harus tetap jalan di
-            // mini player. Baru boleh di-release kalau memang lagi gak
-            // ditampung MiniPlayerController sama sekali (keluar player
-            // biasa/back, bukan minimize).
-            if (MiniPlayerController.state.value?.exoPlayer !== exoPlayer) {
+            if (isMinimizingToMiniPlayer) {
+                // Serahin ke MiniPlayerManager -- JANGAN release, video-nya
+                // harus tetep jalan di mini player.
+                MiniPlayerManager.activate(
+                    exoPlayer = exoPlayer,
+                    newInfo = MiniPlayerManager.MiniPlayerInfo(
+                        episodeId = viewModel.episodeId,
+                        animeId = viewModel.animeId,
+                        animeTitle = animeInfo?.title ?: "Anime",
+                        episodeLabel = currentEpisodeDetail?.index?.let { "Episode $it" } ?: "",
+                        posterUrl = animeInfo?.image_poster
+                    )
+                )
+            } else {
                 exoPlayer.release()
             }
         }
@@ -910,7 +940,7 @@ fun PlayerScreen(
                                     PlayerIconButton(
                                         icon = Icons.AutoMirrored.Filled.ArrowBack,
                                         contentDescription = "Kembali",
-                                        onClick = onBackClick,
+                                        onClick = handleBackButtonClick,
                                         modifier = Modifier.testTag("player_back_button")
                                     )
 
@@ -951,29 +981,6 @@ fun PlayerScreen(
                                             )
                                         }
                                     }
-
-                                    Spacer(modifier = Modifier.width(4.dp))
-
-                                    // Mini Player (BEDA sama PiP sistem di bawah) -- video
-                                    // TETAP jalan sebagai jendela kecil ngambang DI DALAM
-                                    // aplikasi, sambil user bebas buka Home/Search/dll.
-                                    // Lihat MiniPlayerController & MiniPlayerBar.
-                                    PlayerIconButton(
-                                        icon = Icons.Default.KeyboardArrowDown,
-                                        contentDescription = "Mini Player",
-                                        onClick = {
-                                            MiniPlayerController.minimize(
-                                                exoPlayer = exoPlayer,
-                                                episodeId = viewModel.episodeId,
-                                                animeId = viewModel.animeId,
-                                                animeTitle = animeInfo?.title ?: "Anime",
-                                                episodeLabel = epDetail?.title?.takeIf { it.isNotBlank() }
-                                                    ?: "Episode ${epDetail?.index ?: ""}",
-                                                posterUrl = animeInfo?.image_poster
-                                            )
-                                            onBackClick()
-                                        }
-                                    )
 
                                     Spacer(modifier = Modifier.width(4.dp))
 

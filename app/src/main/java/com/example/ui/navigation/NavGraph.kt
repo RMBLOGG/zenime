@@ -119,7 +119,6 @@ import com.example.ui.screens.home.HomeScreen
 import com.example.ui.screens.home.HomeViewModel
 import com.example.ui.screens.login.LoginScreen
 import com.example.ui.screens.login.LoginViewModel
-import com.example.ui.screens.player.MiniPlayerBar
 import com.example.ui.screens.player.PlayerScreen
 import com.example.ui.screens.player.PlayerViewModel
 import com.example.ui.screens.player.PremiumGate
@@ -255,6 +254,7 @@ fun ZenimeAppNavHost(
 ) {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
+    val miniPlayerInfo by com.example.util.MiniPlayerManager.info.collectAsStateWithLifecycle(null)
 
     val showBottomBar = currentRoute in bottomNavScreens.map { it.route }
 
@@ -976,21 +976,6 @@ fun ZenimeAppNavHost(
             }
         }
 
-        // Mini player -- kotak kecil ngambang yang BISA DIGESER BEBAS, muncul
-        // di ATAS layar lain (Home, Search, dll) selama ada sesi video yang
-        // diminimize dari PlayerScreen (lihat MiniPlayerController). Disembunyiin
-        // pas lagi BENERAN di halaman Player (percuma nampilin mini player di
-        // atas player penuh). Modifier cuma fillMaxSize -- posisi kotaknya
-        // sendiri (geser-geser) diurus di dalam MiniPlayerBar pakai offset.
-        if (currentRoute != Screen.Player.route) {
-            MiniPlayerBar(
-                onExpandClick = { episodeId, animeId ->
-                    navController.navigate(Screen.Player.createRoute(episodeId, animeId))
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-
         if (showBottomBar) {
             FloatingPillBottomBar(
                 currentRoute = currentRoute,
@@ -1014,6 +999,19 @@ fun ZenimeAppNavHost(
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
                     .padding(bottom = 12.dp)
+            )
+        }
+
+        // Mini player ngambang -- muncul di semua layar SELAIN PlayerScreen
+        // sendiri (gak ada gunanya nampilin mini player di atas player yang
+        // udah full, lagipula pas beneran di route Player, ExoPlayer-nya
+        // udah balik dipegang PlayerScreen lewat consumeForExpand).
+        if (miniPlayerInfo != null && currentRoute != Screen.Player.route) {
+            com.example.ui.components.MiniPlayerOverlay(
+                onExpand = {
+                    val target = miniPlayerInfo ?: return@MiniPlayerOverlay
+                    navController.navigate(Screen.Player.createRoute(target.episodeId, target.animeId))
+                }
             )
         }
 
