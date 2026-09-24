@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.UnfoldMore
@@ -139,7 +140,9 @@ fun MiniPlayerOverlay(
                         onDragStart = { totalDrag = Offset.Zero },
                         onDragEnd = {
                             if (totalDrag.getDistance() < tapSlopPx) {
-                                onExpand()
+                                // Tap kartu = munculin/sembunyiin tombol.
+                                // Buat balik ke full player pakai tombol expand.
+                                controlsVisible = !controlsVisible
                             }
                         },
                         onDrag = { change, dragAmount ->
@@ -203,6 +206,22 @@ fun MiniPlayerOverlay(
                             tint = Color.White
                         )
                     }
+                }
+
+                // Tombol expand -- balik ke full player screen
+                IconButton(
+                    onClick = { onExpand() },
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .size(28.dp)
+                        .padding(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.OpenInFull,
+                        contentDescription = "Buka full player",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
 
                 // Tombol tutup
