@@ -3,6 +3,7 @@ package com.example.ui.components
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
@@ -78,7 +79,6 @@ fun MiniPlayerOverlay(
     val currentInfo = info ?: return
 
     val density = LocalDensity.current
-    val tapSlopPx = with(density) { 8.dp.toPx() }
 
     // Tombol play/pause gak boleh nempel terus di layar (nutupin subtitle)
     // -- cuma muncul sesaat abis mini player baru dibuka, atau abis kartu
@@ -135,19 +135,15 @@ fun MiniPlayerOverlay(
                 .width(cardWidthDp)
                 .height(cardHeightDp)
                 .pointerInput(currentInfo.episodeId) {
-                    var totalDrag = Offset.Zero
+                    // detectDragGestures gak pernah nembak callback buat tap
+                    // biasa (harus geser lewat touch slop dulu), makanya tap
+                    // dideteksi terpisah di sini.
+                    detectTapGestures(onTap = { controlsVisible = !controlsVisible })
+                }
+                .pointerInput(currentInfo.episodeId) {
                     detectDragGestures(
-                        onDragStart = { totalDrag = Offset.Zero },
-                        onDragEnd = {
-                            if (totalDrag.getDistance() < tapSlopPx) {
-                                // Tap kartu = munculin/sembunyiin tombol.
-                                // Buat balik ke full player pakai tombol expand.
-                                controlsVisible = !controlsVisible
-                            }
-                        },
                         onDrag = { change, dragAmount ->
                             change.consume()
-                            totalDrag += dragAmount
                             offset = Offset(
                                 x = (offset.x + dragAmount.x).coerceIn(0f, maxXPx.coerceAtLeast(0f)),
                                 y = (offset.y + dragAmount.y).coerceIn(0f, maxYPx.coerceAtLeast(0f))
