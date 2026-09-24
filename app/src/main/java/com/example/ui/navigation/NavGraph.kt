@@ -976,21 +976,18 @@ fun ZenimeAppNavHost(
             }
         }
 
-        // Mini player -- ngambang di ATAS layar lain (Home, Search, dll)
-        // selama ada sesi video yang diminimize dari PlayerScreen (lihat
-        // MiniPlayerController). Disembunyiin pas lagi BENERAN di halaman
-        // Player (percuma nampilin mini player di atas player penuh).
+        // Mini player -- kotak kecil ngambang yang BISA DIGESER BEBAS, muncul
+        // di ATAS layar lain (Home, Search, dll) selama ada sesi video yang
+        // diminimize dari PlayerScreen (lihat MiniPlayerController). Disembunyiin
+        // pas lagi BENERAN di halaman Player (percuma nampilin mini player di
+        // atas player penuh). Modifier cuma fillMaxSize -- posisi kotaknya
+        // sendiri (geser-geser) diurus di dalam MiniPlayerBar pakai offset.
         if (currentRoute != Screen.Player.route) {
             MiniPlayerBar(
                 onExpandClick = { episodeId, animeId ->
                     navController.navigate(Screen.Player.createRoute(episodeId, animeId))
                 },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    // 64.dp tinggi FloatingPillBottomBar (lihat pillHeight di situ)
-                    // + jarak bottom-nya (12dp) + celah kecil di atasnya.
-                    .padding(bottom = if (showBottomBar) 88.dp else 12.dp)
+                modifier = Modifier.fillMaxSize()
             )
         }
 
