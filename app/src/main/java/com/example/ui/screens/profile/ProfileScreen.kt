@@ -45,6 +45,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -406,12 +407,12 @@ fun ProfileScreen(
             if (uiState.history.isEmpty()) {
                 EmptySectionBox(text = "Belum ada riwayat tontonan.")
             } else {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    items(uiState.history, key = { it.animeId }) { item ->
-                        HistoryPosterCard(item = item, onClick = onHistoryClick)
+                    uiState.history.forEach { item ->
+                        HistoryRow(item = item, onClick = onHistoryClick)
                     }
                 }
             }
@@ -591,15 +592,31 @@ private fun FavoritePosterCard(favorite: FavoriteEntity, onClick: () -> Unit) {
     }
 }
 
+/**
+ * Baris riwayat tontonan gaya Wibuku: thumbnail kecil di kiri, judul + episode
+ * di kanan atas, progress bar nonton di bawah lengkap sama label waktu
+ * (mm:ss / mm:ss) biar user langsung tau seberapa jauh dia nonton.
+ */
 @Composable
-private fun HistoryPosterCard(item: WatchHistoryEntity, onClick: (WatchHistoryEntity) -> Unit) {
+private fun HistoryRow(item: WatchHistoryEntity, onClick: (WatchHistoryEntity) -> Unit) {
+    val progressFraction = if (item.durationMs > 0) {
+        (item.progressMs.toFloat() / item.durationMs.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+
     Card(
-        modifier = Modifier.width(160.dp).clickable { onClick(item) },
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = ZenimeBackgroundDark)
+        modifier = Modifier.fillMaxWidth().clickable { onClick(item) },
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = ZenimeSurfaceDark)
     ) {
-        Column {
-            Box(modifier = Modifier.fillMaxWidth().height(95.dp)) {
+        Row(
+            modifier = Modifier.padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(width = 76.dp, height = 76.dp)
+                    .clip(RoundedCornerShape(10.dp))
+            ) {
                 AsyncImage(
                     model = item.posterUrl,
                     contentDescription = item.animeTitle,
@@ -607,7 +624,8 @@ private fun HistoryPosterCard(item: WatchHistoryEntity, onClick: (WatchHistoryEn
                     modifier = Modifier.fillMaxSize()
                 )
             }
-            Column(modifier = Modifier.padding(8.dp)) {
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = item.animeTitle,
                     color = Color.White,
@@ -616,16 +634,51 @@ private fun HistoryPosterCard(item: WatchHistoryEntity, onClick: (WatchHistoryEn
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = item.episodeTitle ?: "",
-                    color = Color.White.copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontSize = 10.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                if (!item.episodeTitle.isNullOrBlank()) {
+                    Text(
+                        text = item.episodeTitle,
+                        color = Color.White.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    LinearProgressIndicator(
+                        progress = { progressFraction },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(2.dp)),
+                        color = ZenimePrimary,
+                        trackColor = Color.White.copy(alpha = 0.12f)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "${formatWatchDuration(item.progressMs)} / ${formatWatchDuration(item.durationMs)}",
+                        color = Color.White.copy(alpha = 0.5f),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 10.sp,
+                        maxLines = 1
+                    )
+                }
             }
         }
+    }
+}
+
+/** Format durasi ms jadi mm:ss (atau h:mm:ss kalau udah lewat 1 jam), ala label progress Wibuku. */
+private fun formatWatchDuration(ms: Long): String {
+    if (ms <= 0) return "00:00"
+    val totalSeconds = ms / 1000
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return if (hours > 0) {
+        String.format("%d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format("%02d:%02d", minutes, seconds)
     }
 }
 
