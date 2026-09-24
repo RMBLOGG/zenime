@@ -15,14 +15,17 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,6 +33,19 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.automirrored.filled.Reply
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.IntOffset
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -159,7 +175,9 @@ fun ChatScreen(
     }
 
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .statusBarsPadding(),
         containerColor = ZenimeBackgroundDark,
         topBar = {
             ZenimeHeader(
@@ -349,8 +367,68 @@ private fun ChatBubble(
     modifier: Modifier = Modifier
 ) {
     val usernameColor = parseUsernameColor(senderUsernameColor)
+
+    // Swipe kanan buat reply: bubble ikut geser, muncul ikon + tulisan
+    // "Reply" di kiri, lepas jari setelah lewat batas = reply kepicu.
+    val swipeOffset = remember { Animatable(0f) }
+    val swipeScope = rememberCoroutineScope()
+    val swipeDensity = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
+    val swipeTriggerPx = with(swipeDensity) { 64.dp.toPx() }
+    val swipeMaxPx = with(swipeDensity) { 96.dp.toPx() }
+    var swipeTriggered by remember { mutableStateOf(false) }
+    val swipeProgress = (swipeOffset.value / swipeTriggerPx).coerceIn(0f, 1f)
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .pointerInput(message.id) {
+                detectHorizontalDragGestures(
+                    onDragStart = { swipeTriggered = false },
+                    onDragEnd = {
+                        if (swipeOffset.value >= swipeTriggerPx) onReply()
+                        swipeScope.launch { swipeOffset.animateTo(0f) }
+                    },
+                    onDragCancel = {
+                        swipeScope.launch { swipeOffset.animateTo(0f) }
+                    },
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        val next = (swipeOffset.value + dragAmount).coerceIn(0f, swipeMaxPx)
+                        swipeScope.launch { swipeOffset.snapTo(next) }
+                        if (!swipeTriggered && next >= swipeTriggerPx) {
+                            swipeTriggered = true
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
+                    }
+                )
+            }
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 12.dp)
+                .alpha(swipeProgress)
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Reply,
+                contentDescription = null,
+                tint = ZenimePrimary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = "Reply",
+                color = ZenimePrimary,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+            )
+        }
+
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = Modifier
+            .offset { IntOffset(swipeOffset.value.roundToInt(), 0) }
+            .fillMaxWidth(),
         horizontalArrangement = if (isOwnMessage) Arrangement.End else Arrangement.Start
     ) {
         if (!isOwnMessage) {
@@ -477,26 +555,37 @@ private fun ChatBubble(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     if (!message.replyToUsername.isNullOrBlank()) {
-                        Box(
+                        // Kutipan reply ala referensi: bar aksen di kiri +
+                        // background gelap, warna aksen dibikin beda dikit (rose).
+                        val replyAccent = Color(0xFFFF7A90)
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(Color.Black.copy(alpha = 0.18f))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                                .height(IntrinsicSize.Min)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF0B0B12).copy(alpha = 0.55f))
                         ) {
-                            Column {
+                            Box(
+                                modifier = Modifier
+                                    .width(3.dp)
+                                    .fillMaxHeight()
+                                    .background(replyAccent)
+                            )
+                            Column(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
                                 Text(
                                     text = message.replyToUsername,
-                                    color = if (isOwnMessage) Color.White else ZenimePrimary,
+                                    color = replyAccent,
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = message.replyToMessage ?: "",
-                                    color = Color.White.copy(alpha = 0.75f),
+                                    color = Color.White.copy(alpha = 0.85f),
                                     style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 1,
+                                    maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
@@ -567,6 +656,7 @@ private fun ChatBubble(
                 ChatAvatar(url = ownAvatarUrl, seed = message.firebaseUid, label = message.username)
             }
         }
+    }
     }
 }
 
