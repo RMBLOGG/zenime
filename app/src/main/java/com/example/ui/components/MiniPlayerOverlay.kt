@@ -1,8 +1,6 @@
 package com.example.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
@@ -34,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
@@ -182,18 +181,19 @@ fun MiniPlayerOverlay(
                 }
 
                 // Tombol play/pause tengah -- fade in/out, gak nempel terus
-                AnimatedVisibility(
-                    visible = controlsVisible,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                    modifier = Modifier.align(Alignment.Center)
-                ) {
+                val controlsAlpha by animateFloatAsState(
+                    targetValue = if (controlsVisible) 1f else 0f,
+                    label = "controlsAlpha"
+                )
+                if (controlsAlpha > 0f) {
                     IconButton(
                         onClick = {
                             MiniPlayerManager.togglePlayPause()
                             controlsVisible = true
                         },
                         modifier = Modifier
+                            .align(Alignment.Center)
+                            .alpha(controlsAlpha)
                             .size(40.dp)
                             .background(Color.Black.copy(alpha = 0.35f), shape = CircleShape)
                     ) {
