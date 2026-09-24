@@ -167,60 +167,28 @@ fun ProfileScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 32.dp)
         ) {
-            // --- Banner full-bleed + avatar overlap, ala Wibuku ---
-            ProfileBannerHeader(
+            // --- Hero section: banner nutupin avatar + identitas + stat + CTA,
+            // ukurannya ngikutin tinggi konten di dalemnya (persis Wibuku) ---
+            ProfileHeroSection(
                 backdropImage = backdropImage,
                 avatarUrl = uiState.avatarUrl,
                 firebaseUid = firebaseUid,
-                username = uiState.username,
-                onBackClick = onBackClick
-            )
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // --- Nama + badge verified + pill Level/Premium ---
-            ProfileIdentitySection(
                 username = uiState.username.ifBlank { "Pengguna Zenime" },
                 isPremium = uiState.isPremium,
-                level = level
-            )
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            // --- Stat row flat, 4 kolom + garis pemisah (bukan kartu) ---
-            ProfileStatsRowFlat(
+                level = level,
                 stats = listOf(
                     animatedFavoriteCount.toString() to "Favorit",
                     animatedAnimeCount.toString() to "Anime Ditonton",
                     animatedEpisodeCount.toString() to "Episode",
                     level.toString() to "Level"
-                )
-            )
-
-            // --- Tombol pill sekunder: Clan / Leaderboard ---
-            SecondaryActionPillsRow(
+                ),
+                onBackClick = onBackClick,
                 onClanClick = onClanClick,
-                onLeaderboardClick = onXpLeaderboardClick
+                onLeaderboardClick = onXpLeaderboardClick,
+                onEditClick = { viewModel.openEditDialog() }
             )
 
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // --- CTA utama full-width, posisi & bobot visual kayak "Tambah Teman" ---
-            Button(
-                onClick = { viewModel.openEditDialog() },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .height(52.dp),
-                shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(containerColor = ZenimePrimary)
-            ) {
-                Icon(Icons.Filled.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Edit Profil", color = Color.White, fontWeight = FontWeight.Bold)
-            }
-
-            Spacer(modifier = Modifier.height(22.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // --- Tab: Semua / Favorit / Riwayat ---
             ProfileTabRow(selectedIndex = selectedTab, onSelect = { selectedTab = it })
@@ -299,40 +267,192 @@ fun ProfileScreen(
 }
 
 /** Banner full-bleed + avatar overlap plain-border, ala kartu profil Wibuku. */
+/**
+ * Hero section ala Wibuku: SATU banner yang nutupin avatar, nama, badge,
+ * stat, pill sekunder, sampe tombol CTA -- gambar banner otomatis ngikutin
+ * tinggi konten di dalemnya (pake matchParentSize), bukan kotak setinggi
+ * fix yang keputus sebelum konten identitas.
+ */
 @Composable
-private fun ProfileBannerHeader(
+private fun ProfileHeroSection(
     backdropImage: String?,
     avatarUrl: String?,
     firebaseUid: String,
     username: String,
-    onBackClick: () -> Unit
+    isPremium: Boolean,
+    level: Int,
+    stats: List<Pair<String, String>>,
+    onBackClick: () -> Unit,
+    onClanClick: () -> Unit,
+    onLeaderboardClick: () -> Unit,
+    onEditClick: () -> Unit
 ) {
-    Box(modifier = Modifier.fillMaxWidth().height(420.dp)) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        // Background banner, ukurannya nempel persis ke Column konten di bawah.
+        if (backdropImage != null) {
+            AsyncImage(
+                model = backdropImage,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize()
+            )
+        } else {
+            Box(modifier = Modifier.matchParentSize().background(ZenimeSurfaceVariantDark))
+        }
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(360.dp)
-                .align(Alignment.TopCenter)
-        ) {
-            if (backdropImage != null) {
-                AsyncImage(
-                    model = backdropImage,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else {
-                Box(modifier = Modifier.fillMaxSize().background(ZenimeSurfaceVariantDark))
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.25f), ZenimeBackgroundDark)
+                .matchParentSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.15f),
+                            Color.Black.copy(alpha = 0.45f),
+                            ZenimeBackgroundDark
                         )
                     )
-            )
+                )
+        )
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth().padding(top = 56.dp, bottom = 20.dp)
+        ) {
+            // Avatar plain, ga ada border/ring sama sekali.
+            Box(
+                modifier = Modifier.size(120.dp).clip(CircleShape).background(ZenimeSurfaceDark),
+                contentAlignment = Alignment.Center
+            ) {
+                if (!avatarUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = avatarUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize().clip(CircleShape)
+                    )
+                } else {
+                    GeneratedAvatar(seed = firebaseUid, label = username, size = 120.dp)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = username,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (isPremium) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_verified_badge),
+                        contentDescription = "Verified",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PillBadge(
+                    icon = Icons.Filled.Bolt,
+                    text = "Lvl. $level",
+                    containerColor = ZenimePrimary,
+                    contentColor = Color.White
+                )
+                if (isPremium) {
+                    PillBadge(
+                        icon = Icons.Filled.WorkspacePremium,
+                        text = "Premium",
+                        containerColor = ZenimeInfoBlue,
+                        contentColor = Color.White
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // Stat row flat -- angka gede, label kecil di bawah, garis pemisah tipis.
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                stats.forEachIndexed { index, (value, label) ->
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
+                        Text(text = value, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 19.sp)
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = label,
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    if (index != stats.lastIndex) {
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(26.dp)
+                                .background(Color.White.copy(alpha = 0.25f))
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // Dua tombol pill sekunder, peran kayak "WIBUxNAKAMA" / "Lihat Pet".
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onClanClick,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(50),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                ) {
+                    Icon(Icons.Filled.Groups, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Clan", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                OutlinedButton(
+                    onClick = onLeaderboardClick,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(50),
+                    border = BorderStroke(1.dp, ZenimePrimary.copy(alpha = 0.6f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ZenimePrimary)
+                ) {
+                    Icon(Icons.Filled.Leaderboard, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Leaderboard", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // CTA utama full-width, posisi & bobot visual kayak "Tambah Teman".
+            Button(
+                onClick = onEditClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .height(52.dp),
+                shape = RoundedCornerShape(50),
+                colors = ButtonDefaults.buttonColors(containerColor = ZenimePrimary)
+            ) {
+                Icon(Icons.Filled.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Edit Profil", color = Color.White, fontWeight = FontWeight.Bold)
+            }
         }
 
         IconButton(
@@ -349,84 +469,6 @@ private fun ProfileBannerHeader(
                 tint = Color.White
             )
         }
-
-        // Avatar plain, ngambang di tengah bawah banner -- border putih tipis
-        // kayak Wibuku, bukan ring warna.
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .size(104.dp)
-                .clip(CircleShape)
-                .background(ZenimeBackgroundDark)
-                .padding(4.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(CircleShape)
-                    .background(ZenimeSurfaceDark),
-                contentAlignment = Alignment.Center
-            ) {
-                if (!avatarUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = avatarUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize().clip(CircleShape)
-                    )
-                } else {
-                    GeneratedAvatar(seed = firebaseUid, label = username, size = 92.dp)
-                }
-            }
-        }
-    }
-}
-
-/** Nama + badge verified di tengah, plus pill Level & Premium tepat di bawahnya. */
-@Composable
-private fun ProfileIdentitySection(username: String, isPremium: Boolean, level: Int) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = username,
-                color = Color.White,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            if (isPremium) {
-                Spacer(modifier = Modifier.width(6.dp))
-                Image(
-                    painter = painterResource(id = R.drawable.ic_verified_badge),
-                    contentDescription = "Verified",
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(10.dp))
-
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PillBadge(
-                icon = Icons.Filled.Bolt,
-                text = "Lvl. $level",
-                containerColor = ZenimePrimary,
-                contentColor = Color.White
-            )
-            if (isPremium) {
-                PillBadge(
-                    icon = Icons.Filled.WorkspacePremium,
-                    text = "Premium",
-                    containerColor = ZenimeInfoBlue,
-                    contentColor = Color.White
-                )
-            }
-        }
     }
 }
 
@@ -442,73 +484,6 @@ private fun PillBadge(icon: ImageVector, text: String, containerColor: Color, co
         Icon(imageVector = icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(14.dp))
         Spacer(modifier = Modifier.width(4.dp))
         Text(text = text, color = contentColor, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-    }
-}
-
-/** Stat row flat -- angka gede, label kecil di bawah, garis pemisah tipis (bukan kartu kotak). */
-@Composable
-private fun ProfileStatsRowFlat(stats: List<Pair<String, String>>) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        stats.forEachIndexed { index, (value, label) ->
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
-                Text(text = value, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 19.sp)
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = label,
-                    color = Color.White.copy(alpha = 0.55f),
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center
-                )
-            }
-            if (index != stats.lastIndex) {
-                Box(
-                    modifier = Modifier
-                        .width(1.dp)
-                        .height(26.dp)
-                        .background(Color.White.copy(alpha = 0.12f))
-                )
-            }
-        }
-    }
-}
-
-/** Dua tombol pill sekunder sejajar, posisi & peran kayak "WIBUxNAKAMA" / "Lihat Pet". */
-@Composable
-private fun SecondaryActionPillsRow(onClanClick: () -> Unit, onLeaderboardClick: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        OutlinedButton(
-            onClick = onClanClick,
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(50),
-            border = BorderStroke(1.dp, CardOutlineBorder),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
-        ) {
-            Icon(Icons.Filled.Groups, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("Clan", maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        OutlinedButton(
-            onClick = onLeaderboardClick,
-            modifier = Modifier.weight(1f),
-            shape = RoundedCornerShape(50),
-            border = BorderStroke(1.dp, ZenimePrimary.copy(alpha = 0.5f)),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = ZenimePrimary)
-        ) {
-            Icon(Icons.Filled.Leaderboard, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("Leaderboard", maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
     }
 }
 
