@@ -39,6 +39,7 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Leaderboard
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -94,6 +95,9 @@ import com.example.ui.theme.ZenimeInfoBlue
 import com.example.ui.theme.ZenimePrimary
 import com.example.ui.theme.ZenimeSurfaceDark
 import com.example.ui.theme.ZenimeSurfaceVariantDark
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Profil Saya -- dirombak total ngikutin pola Wibuku: banner full-bleed jadi
@@ -211,6 +215,10 @@ fun ProfileScreen(
 
                 else -> ProfileRiwayatTab(
                     history = uiState.history,
+                    username = uiState.username.ifBlank { "Pengguna Zenime" },
+                    avatarUrl = uiState.avatarUrl,
+                    firebaseUid = firebaseUid,
+                    isPremium = uiState.isPremium,
                     onHistoryClick = onHistoryClick,
                     onClearAllClick = { showClearHistoryDialog = true }
                 )
@@ -653,10 +661,14 @@ private fun ProfileFavoritTab(favorites: List<FavoriteEntity>, onAnimeClick: (St
     }
 }
 
-/** Isi tab "Riwayat": daftar riwayat tontonan gaya baris + progress bar. */
+/** Isi tab "Riwayat": feed flat kayak Wibuku -- avatar+nama+waktu, thumbnail+judul, progress bar. Ga dibungkus card. */
 @Composable
 private fun ProfileRiwayatTab(
     history: List<WatchHistoryEntity>,
+    username: String,
+    avatarUrl: String?,
+    firebaseUid: String,
+    isPremium: Boolean,
     onHistoryClick: (WatchHistoryEntity) -> Unit,
     onClearAllClick: () -> Unit
 ) {
@@ -699,12 +711,19 @@ private fun ProfileRiwayatTab(
         if (history.isEmpty()) {
             EmptySectionBox(text = "Belum ada riwayat tontonan.")
         } else {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                history.forEach { item ->
-                    HistoryRow(item = item, onClick = onHistoryClick)
+            Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                history.forEachIndexed { index, item ->
+                    HistoryRow(
+                        item = item,
+                        username = username,
+                        avatarUrl = avatarUrl,
+                        firebaseUid = firebaseUid,
+                        isPremium = isPremium,
+                        onClick = onHistoryClick
+                    )
+                    if (index != history.lastIndex) {
+                        Spacer(modifier = Modifier.height(22.dp))
+                    }
                 }
             }
         }
@@ -783,29 +802,79 @@ private fun FavoritePosterCard(favorite: FavoriteEntity, onClick: () -> Unit) {
 }
 
 /**
- * Baris riwayat tontonan gaya Wibuku: thumbnail kecil di kiri, judul + episode
- * di kanan atas, progress bar nonton di bawah lengkap sama label waktu
- * (mm:ss / mm:ss) biar user langsung tau seberapa jauh dia nonton.
+ * Baris riwayat tontonan flat kayak feed Wibuku -- avatar mini + nama + waktu
+ * relatif di atas, thumbnail + judul/episode, terus play icon + progress bar
+ * + label waktu (mm:ss / mm:ss) di bawah. Ga dibungkus Card/kotak sama sekali.
  */
 @Composable
-private fun HistoryRow(item: WatchHistoryEntity, onClick: (WatchHistoryEntity) -> Unit) {
+private fun HistoryRow(
+    item: WatchHistoryEntity,
+    username: String,
+    avatarUrl: String?,
+    firebaseUid: String,
+    isPremium: Boolean,
+    onClick: (WatchHistoryEntity) -> Unit
+) {
     val progressFraction = if (item.durationMs > 0) {
         (item.progressMs.toFloat() / item.durationMs.toFloat()).coerceIn(0f, 1f)
     } else 0f
 
-    Card(
-        modifier = Modifier.fillMaxWidth().clickable { onClick(item) },
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = ZenimeSurfaceDark)
-    ) {
+    Column(modifier = Modifier.fillMaxWidth().clickable { onClick(item) }) {
+        // --- Baris atas: avatar mini + nama + badge verified, waktu di kanan ---
         Row(
-            modifier = Modifier.padding(10.dp),
+            modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
+                modifier = Modifier.size(28.dp).clip(CircleShape).background(ZenimeSurfaceDark),
+                contentAlignment = Alignment.Center
+            ) {
+                if (!avatarUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = avatarUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize().clip(CircleShape)
+                    )
+                } else {
+                    GeneratedAvatar(seed = firebaseUid, label = username, size = 28.dp)
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = username,
+                color = Color.White,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            if (isPremium) {
+                Spacer(modifier = Modifier.width(4.dp))
+                Image(
+                    painter = painterResource(id = R.drawable.ic_verified_badge),
+                    contentDescription = "Verified",
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = formatRelativeTime(item.lastUpdated),
+                color = Color.White.copy(alpha = 0.45f),
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 11.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // --- Thumbnail + judul/episode ---
+        Row(verticalAlignment = Alignment.Top) {
+            Box(
                 modifier = Modifier
-                    .size(width = 76.dp, height = 76.dp)
-                    .clip(RoundedCornerShape(10.dp))
+                    .size(width = 72.dp, height = 72.dp)
+                    .clip(RoundedCornerShape(8.dp))
             ) {
                 AsyncImage(
                     model = item.posterUrl,
@@ -815,7 +884,7 @@ private fun HistoryRow(item: WatchHistoryEntity, onClick: (WatchHistoryEntity) -
                 )
             }
             Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.weight(1f).padding(top = 2.dp)) {
                 Text(
                     text = item.animeTitle,
                     color = Color.White,
@@ -833,27 +902,42 @@ private fun HistoryRow(item: WatchHistoryEntity, onClick: (WatchHistoryEntity) -
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    LinearProgressIndicator(
-                        progress = { progressFraction },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp)),
-                        color = ZenimePrimary,
-                        trackColor = Color.White.copy(alpha = 0.12f)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "${formatWatchDuration(item.progressMs)} / ${formatWatchDuration(item.durationMs)}",
-                        color = Color.White.copy(alpha = 0.5f),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontSize = 10.sp,
-                        maxLines = 1
-                    )
-                }
             }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // --- Play icon + progress bar + label waktu, full width ---
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(26.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.PlayArrow,
+                    contentDescription = "Lanjut nonton",
+                    tint = Color.White,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            LinearProgressIndicator(
+                progress = { progressFraction },
+                modifier = Modifier
+                    .weight(1f)
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(2.dp)),
+                color = ZenimePrimary,
+                trackColor = Color.White.copy(alpha = 0.15f)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = "${formatWatchDuration(item.progressMs)} / ${formatWatchDuration(item.durationMs)}",
+                color = Color.White.copy(alpha = 0.5f),
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 10.sp,
+                maxLines = 1
+            )
         }
     }
 }
@@ -869,6 +953,21 @@ private fun formatWatchDuration(ms: Long): String {
         String.format("%d:%02d:%02d", hours, minutes, seconds)
     } else {
         String.format("%02d:%02d", minutes, seconds)
+    }
+}
+
+/** Waktu relatif ala feed Wibuku ("X jam lalu" / "X hari lalu"), fallback tanggal kalau udah lama. */
+private fun formatRelativeTime(ms: Long): String {
+    val diff = (System.currentTimeMillis() - ms).coerceAtLeast(0)
+    val minutes = diff / 60_000
+    val hours = diff / 3_600_000
+    val days = diff / 86_400_000
+    return when {
+        minutes < 1 -> "Baru saja"
+        minutes < 60 -> "$minutes menit lalu"
+        hours < 24 -> "$hours jam lalu"
+        days < 30 -> "$days hari lalu"
+        else -> SimpleDateFormat("dd MMM yyyy", Locale("id", "ID")).format(Date(ms))
     }
 }
 
