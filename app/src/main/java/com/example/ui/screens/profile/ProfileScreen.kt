@@ -307,11 +307,11 @@ private fun ProfileBannerHeader(
     username: String,
     onBackClick: () -> Unit
 ) {
-    Box(modifier = Modifier.fillMaxWidth().height(300.dp)) {
+    Box(modifier = Modifier.fillMaxWidth().height(420.dp)) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(230.dp)
+                .height(360.dp)
                 .align(Alignment.TopCenter)
         ) {
             if (backdropImage != null) {
@@ -365,8 +365,7 @@ private fun ProfileBannerHeader(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(CircleShape)
-                    .background(ZenimeSurfaceDark)
-                    .border(2.dp, Color.White.copy(alpha = 0.85f), CircleShape),
+                    .background(ZenimeSurfaceDark),
                 contentAlignment = Alignment.Center
             ) {
                 if (!avatarUrl.isNullOrBlank()) {
