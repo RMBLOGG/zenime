@@ -1,12 +1,13 @@
 package com.example.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -23,7 +24,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -37,21 +37,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
 import com.example.util.MiniPlayerManager
+import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
 // Rasio lebar:tinggi kartu (dari ukuran default 190x120) -- dipertahanin
@@ -82,6 +79,17 @@ fun MiniPlayerOverlay(
 
     val density = LocalDensity.current
     val tapSlopPx = with(density) { 8.dp.toPx() }
+
+    // Tombol play/pause gak boleh nempel terus di layar (nutupin subtitle)
+    // -- cuma muncul sesaat abis mini player baru dibuka, atau abis kartu
+    // di-tap, terus ilang sendiri.
+    var controlsVisible by remember(currentInfo.episodeId) { mutableStateOf(true) }
+    LaunchedEffect(controlsVisible) {
+        if (controlsVisible) {
+            delay(1800)
+            controlsVisible = false
+        }
+    }
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val maxWidthAllowedDp = (maxWidth * 0.85f)
@@ -173,19 +181,28 @@ fun MiniPlayerOverlay(
                     )
                 }
 
-                // Tombol play/pause tengah
-                IconButton(
-                    onClick = { MiniPlayerManager.togglePlayPause() },
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(40.dp)
-                        .background(Color.Black.copy(alpha = 0.35f), shape = CircleShape)
+                // Tombol play/pause tengah -- fade in/out, gak nempel terus
+                AnimatedVisibility(
+                    visible = controlsVisible,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier.align(Alignment.Center)
                 ) {
-                    Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        tint = Color.White
-                    )
+                    IconButton(
+                        onClick = {
+                            MiniPlayerManager.togglePlayPause()
+                            controlsVisible = true
+                        },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(Color.Black.copy(alpha = 0.35f), shape = CircleShape)
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            tint = Color.White
+                        )
+                    }
                 }
 
                 // Tombol tutup
@@ -204,37 +221,11 @@ fun MiniPlayerOverlay(
                     )
                 }
 
-                // Judul + episode, gradasi gelap di bawah biar tetep kebaca
-                // di atas video apa pun.
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
-                            )
-                        )
-                        .padding(horizontal = 8.dp, vertical = 6.dp)
-                ) {
-                    Column {
-                        Text(
-                            text = currentInfo.animeTitle,
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = currentInfo.episodeLabel,
-                            color = Color.White.copy(alpha = 0.75f),
-                            fontSize = 10.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
+                // Judul/episode SENGAJA gak dirender di sini lagi -- nutupin
+                // subtitle video (lihat request user). Info judul/episode
+                // masih ada di MiniPlayerManager.info kalau nanti perlu
+                // ditampilin di tempat lain (misal notifikasi).
+
 
                 // Handle resize -- pojok kanan-bawah. Tarik buat gedein,
                 // dorong balik buat ngecilin. Icon-nya sengaja diputer 90
