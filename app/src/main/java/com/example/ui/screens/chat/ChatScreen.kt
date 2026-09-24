@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -178,6 +179,10 @@ fun ChatScreen(
         modifier = modifier
             .fillMaxSize()
             .statusBarsPadding(),
+        // Inset nav bar diurus input bar sendiri (navigationBarsPadding +
+        // imePadding). Kalau Scaffold ikut nambah, jadi dobel & input bar
+        // ketinggian (jauh dari keyboard).
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         containerColor = ZenimeBackgroundDark,
         topBar = {
             ZenimeHeader(
