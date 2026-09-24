@@ -94,6 +94,14 @@ data class KickMemberRequest(
     @Json(name = "target_uid") val targetUid: String
 )
 
+/** Leader ngangkat/nurunin role Officer buat 1 member. role: "co_leader" (Officer) atau "member". */
+@JsonClass(generateAdapter = true)
+data class SetMemberRoleRequest(
+    @Json(name = "clan_id") val clanId: String,
+    @Json(name = "target_uid") val targetUid: String,
+    @Json(name = "role") val role: String
+)
+
 @JsonClass(generateAdapter = true)
 data class ClanActionResponse(
     @Json(name = "clan") val clan: Clan? = null,

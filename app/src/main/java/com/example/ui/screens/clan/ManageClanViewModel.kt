@@ -25,15 +25,23 @@ data class ManageClanUiState(
     val tagInput: String = "",
     val isSavingSettings: Boolean = false,
     val settingsFeedback: String? = null,
-    val actionInFlightId: String? = null // request_id atau firebase_uid yang lagi diproses
-)
+    val actionInFlightId: String? = null, // request_id atau firebase_uid yang lagi diproses
+    val myFirebaseUid: String = ""
+) {
+    /** Role viewer sekarang di clan ini. Cuma leader yang boleh liat tab Settings & atur role/kick. */
+    val myRole: String
+        get() = members.find { it.firebaseUid == myFirebaseUid }?.role ?: "member"
+
+    val isLeader: Boolean get() = myRole == "leader"
+}
 
 class ManageClanViewModel(
     private val clanId: String,
+    private val myFirebaseUid: String,
     private val repository: ClanRepository = ClanRepository()
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ManageClanUiState())
+    private val _uiState = MutableStateFlow(ManageClanUiState(myFirebaseUid = myFirebaseUid))
     val uiState: StateFlow<ManageClanUiState> = _uiState.asStateFlow()
 
     init {
@@ -174,6 +182,31 @@ class ManageClanViewModel(
                     _uiState.value = _uiState.value.copy(
                         actionInFlightId = null,
                         error = e.message ?: "Gagal kick member"
+                    )
+                }
+        }
+    }
+
+    /** Cuma leader yang boleh manggil ini (dicek juga di Edge Function). */
+    fun setMemberRole(targetUid: String, makeOfficer: Boolean) {
+        if (!_uiState.value.isLeader) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(actionInFlightId = targetUid)
+            repository.setMemberRole(clanId, targetUid, makeOfficer)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        actionInFlightId = null,
+                        members = _uiState.value.members.map { member ->
+                            if (member.firebaseUid == targetUid) {
+                                member.copy(role = if (makeOfficer) "co_leader" else "member")
+                            } else member
+                        }
+                    )
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        actionInFlightId = null,
+                        error = e.message ?: "Gagal ubah role member"
                     )
                 }
         }

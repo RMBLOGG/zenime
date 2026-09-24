@@ -12,6 +12,7 @@ import com.example.data.model.CreateClanRequest
 import com.example.data.model.DonateToClanRequest
 import com.example.data.model.KickMemberRequest
 import com.example.data.model.RespondJoinRequestBody
+import com.example.data.model.SetMemberRoleRequest
 import com.example.data.model.UpdateClanSettingsRequest
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.tasks.await
@@ -238,6 +239,27 @@ class ClanRepository(
             Unit
         } catch (e: HttpException) {
             throw IllegalStateException(extractErrorMessage(e, "Gagal kick member"))
+        }
+    }
+
+    /** @param makeOfficer true = angkat jadi Officer (role "co_leader"), false = balikin ke Member biasa. */
+    suspend fun setMemberRole(clanId: String, targetUid: String, makeOfficer: Boolean): Result<Unit> = runCatching {
+        try {
+            val role = if (makeOfficer) "co_leader" else "member"
+            clanApi.setMemberRole(authHeader(), SetMemberRoleRequest(clanId, targetUid, role))
+            Unit
+        } catch (e: HttpException) {
+            throw IllegalStateException(extractErrorMessage(e, "Gagal ubah role member"))
+        }
+    }
+
+    /** Keluar dari clan sendiri. Kalau caller adalah leader, Edge Function bakal nolak (leader harus transfer/bubarkan clan dulu). */
+    suspend fun leaveClan(clanId: String): Result<Unit> = runCatching {
+        try {
+            clanApi.leaveClan(authHeader(), ClanIdRequest(clanId))
+            Unit
+        } catch (e: HttpException) {
+            throw IllegalStateException(extractErrorMessage(e, "Gagal keluar clan"))
         }
     }
 

@@ -76,6 +76,11 @@ fun ClanScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    // Setelah berhasil keluar clan, gak ada lagi yang bisa ditampilin di screen ini -- balik ke layar sebelumnya.
+    androidx.compose.runtime.LaunchedEffect(uiState.leftClan) {
+        if (uiState.leftClan) onBackClick()
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -109,7 +114,8 @@ fun ClanScreen(
                         onSearchQueryChange = viewModel::onSearchQueryChange,
                         onRequestJoinClick = viewModel::requestJoin,
                         onManageClanClick = { onManageClanClick(uiState.clan!!.id) },
-                        onDonateClick = { viewModel.onDonateDialogToggle(true) }
+                        onDonateClick = { viewModel.onDonateDialogToggle(true) },
+                        onLeaveClick = { viewModel.onLeaveDialogToggle(true) }
                     )
                 }
             }
@@ -124,6 +130,15 @@ fun ClanScreen(
                     onSubmit = viewModel::submitDonation
                 )
             }
+
+            if (uiState.showLeaveDialog) {
+                LeaveClanDialog(
+                    isLeaving = uiState.isLeaving,
+                    feedback = uiState.leaveFeedback,
+                    onDismiss = { viewModel.onLeaveDialogToggle(false) },
+                    onConfirm = viewModel::confirmLeaveClan
+                )
+            }
         }
     }
 }
@@ -135,7 +150,8 @@ private fun ClanContent(
     onSearchQueryChange: (String) -> Unit,
     onRequestJoinClick: () -> Unit,
     onManageClanClick: () -> Unit,
-    onDonateClick: () -> Unit
+    onDonateClick: () -> Unit,
+    onLeaveClick: () -> Unit
 ) {
     val clan = uiState.clan ?: return
 
@@ -146,7 +162,8 @@ private fun ClanContent(
                 uiState = uiState,
                 onRequestJoinClick = onRequestJoinClick,
                 onManageClanClick = onManageClanClick,
-                onDonateClick = onDonateClick
+                onDonateClick = onDonateClick,
+                onLeaveClick = onLeaveClick
             )
 
             Spacer(Modifier.height(16.dp))
@@ -230,7 +247,8 @@ private fun ClanHeaderCard(
     uiState: ClanUiState,
     onRequestJoinClick: () -> Unit,
     onManageClanClick: () -> Unit,
-    onDonateClick: () -> Unit
+    onDonateClick: () -> Unit,
+    onLeaveClick: () -> Unit
 ) {
     val clan = uiState.clan ?: return
 
@@ -300,6 +318,16 @@ private fun ClanHeaderCard(
                 Icon(Icons.Filled.Diamond, contentDescription = null, tint = ZenimePrimary, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
                 Text("Donasi ZCoin", fontWeight = FontWeight.Bold, color = Color.White)
+            }
+        }
+
+        if (uiState.canLeave) {
+            Spacer(Modifier.height(8.dp))
+            androidx.compose.material3.TextButton(
+                onClick = onLeaveClick,
+                modifier = Modifier.fillMaxWidth().height(40.dp)
+            ) {
+                Text("Keluar Clan", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
             }
         }
 
@@ -378,6 +406,18 @@ private fun ClanCtaButton(
                     style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = Color.White.copy(alpha = 0.75f)
                 )
+            }
+        }
+        ClanMembershipCta.IS_OFFICER -> {
+            // Officer: tombol "Kelola Clan" juga muncul, tapi ManageClanScreen
+            // nyembunyiin tab Settings & aksi kick/role buat non-leader.
+            Button(
+                onClick = onManageClanClick,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(50),
+                colors = ButtonDefaults.buttonColors(containerColor = CoLeaderBadgeColor)
+            ) {
+                Text("Kelola Clan (Officer)", fontWeight = FontWeight.Bold, color = Color.White)
             }
         }
         ClanMembershipCta.IS_LEADER -> {
@@ -598,7 +638,7 @@ private fun DonationListItem(rank: Int, entry: ClanDonationEntry) {
 private fun RoleBadge(role: String) {
     val (label, color) = when (role) {
         "leader" -> "LEADER" to LeaderBadgeColor
-        "co_leader" -> "CO-LEADER" to CoLeaderBadgeColor
+        "co_leader" -> "OFFICER" to CoLeaderBadgeColor
         else -> "MEMBER" to MemberBadgeColor
     }
     Box(
@@ -693,6 +733,50 @@ private fun formatRelativeDate(isoTimestamp: String): String {
     } catch (e: Exception) {
         ""
     }
+}
+
+@Composable
+private fun LeaveClanDialog(
+    isLeaving: Boolean,
+    feedback: String?,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = { if (!isLeaving) onDismiss() },
+        title = { Text("Keluar Clan?", fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                Text(
+                    "Kamu bakal kehilangan kontribusi & role kamu di clan ini. Kamu bisa gabung lagi nanti lewat Request Join.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                feedback?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = !isLeaving,
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            ) {
+                if (isLeaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+                } else {
+                    Text("Keluar")
+                }
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss, enabled = !isLeaving) {
+                Text("Batal")
+            }
+        }
+    )
 }
 
 @Composable

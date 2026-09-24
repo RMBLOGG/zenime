@@ -12,6 +12,7 @@ import com.example.data.model.KickMemberRequest
 import com.example.data.model.MyJoinRequestStatusResponse
 import com.example.data.model.PendingJoinRequestsResponse
 import com.example.data.model.RespondJoinRequestBody
+import com.example.data.model.SetMemberRoleRequest
 import com.example.data.model.UpdateClanSettingsRequest
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -80,6 +81,20 @@ interface ZenimeClanApi {
     suspend fun kickMember(
         @Header("Authorization") authorization: String,
         @Body body: KickMemberRequest
+    ): ClanActionResponse
+
+    /** Leader ngangkat/nurunin member jadi Officer atau balik ke Member biasa. */
+    @POST("functions/v1/zenime-clan-set-role")
+    suspend fun setMemberRole(
+        @Header("Authorization") authorization: String,
+        @Body body: SetMemberRoleRequest
+    ): ClanActionResponse
+
+    /** Member/Officer keluar dari clan sendiri (leader gabisa lewat endpoint ini). */
+    @POST("functions/v1/zenime-clan-leave")
+    suspend fun leaveClan(
+        @Header("Authorization") authorization: String,
+        @Body body: ClanIdRequest
     ): ClanActionResponse
 
     // --- Baca langsung lewat PostgREST (public SELECT, lihat RLS di SQL, gak butuh Firebase token) ---

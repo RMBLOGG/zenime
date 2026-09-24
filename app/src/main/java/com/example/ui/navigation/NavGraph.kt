@@ -887,10 +887,11 @@ fun ZenimeAppNavHost(
                 arguments = listOf(navArgument("clanId") { type = NavType.StringType })
             ) { backStackEntry ->
                 val clanId = backStackEntry.arguments?.getString("clanId")
-                if (clanId != null) {
+                val manageUid = currentUser?.uid
+                if (clanId != null && manageUid != null) {
                     val manageClanViewModel: ManageClanViewModel = viewModel(
                         factory = viewModelFactory {
-                            initializer { ManageClanViewModel(clanId = clanId) }
+                            initializer { ManageClanViewModel(clanId = clanId, myFirebaseUid = manageUid) }
                         }
                     )
                     ManageClanScreen(

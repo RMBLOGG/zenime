@@ -101,10 +101,11 @@ fun ManageClanScreen(
                             selectedTab = uiState.selectedTab,
                             pendingCount = uiState.pendingRequests.size,
                             memberCount = uiState.members.size,
+                            showSettingsTab = uiState.isLeader,
                             onTabSelected = viewModel::onTabSelected
                         )
                         when (uiState.selectedTab) {
-                            ManageClanTab.SETTINGS -> SettingsTab(
+                            ManageClanTab.SETTINGS -> if (uiState.isLeader) SettingsTab(
                                 uiState = uiState,
                                 onNameChange = viewModel::onNameInputChange,
                                 onTagChange = viewModel::onTagInputChange,
@@ -127,7 +128,9 @@ fun ManageClanScreen(
                             ManageClanTab.MEMBERS -> MembersTab(
                                 members = uiState.members,
                                 actionInFlightId = uiState.actionInFlightId,
-                                onKick = viewModel::kickMember
+                                canManageRoles = uiState.isLeader,
+                                onKick = viewModel::kickMember,
+                                onSetRole = viewModel::setMemberRole
                             )
                         }
                     }
@@ -142,6 +145,7 @@ private fun ManageTabRow(
     selectedTab: ManageClanTab,
     pendingCount: Int,
     memberCount: Int,
+    showSettingsTab: Boolean,
     onTabSelected: (ManageClanTab) -> Unit
 ) {
     Row(
@@ -153,7 +157,10 @@ private fun ManageTabRow(
             .padding(4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        TabChip("Settings", selectedTab == ManageClanTab.SETTINGS, Modifier.weight(1f)) { onTabSelected(ManageClanTab.SETTINGS) }
+        // Cuma leader yang boleh liat/ubah Settings clan (nama/tag/foto).
+        if (showSettingsTab) {
+            TabChip("Settings", selectedTab == ManageClanTab.SETTINGS, Modifier.weight(1f)) { onTabSelected(ManageClanTab.SETTINGS) }
+        }
         TabChip("Request ($pendingCount)", selectedTab == ManageClanTab.REQUESTS, Modifier.weight(1f)) { onTabSelected(ManageClanTab.REQUESTS) }
         TabChip("Member ($memberCount)", selectedTab == ManageClanTab.MEMBERS, Modifier.weight(1f)) { onTabSelected(ManageClanTab.MEMBERS) }
     }
@@ -315,47 +322,68 @@ private fun RequestsTab(
 private fun MembersTab(
     members: List<ClanMemberDisplay>,
     actionInFlightId: String?,
-    onKick: (String) -> Unit
+    canManageRoles: Boolean,
+    onKick: (String) -> Unit,
+    onSetRole: (targetUid: String, makeOfficer: Boolean) -> Unit
 ) {
     LazyColumn(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         items(members, key = { it.firebaseUid }) { member ->
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(12.dp)
             ) {
-                if (member.avatarUrl != null) {
-                    AsyncImage(model = member.avatarUrl, contentDescription = member.username, modifier = Modifier.size(40.dp))
-                } else {
-                    GeneratedAvatar(seed = member.firebaseUid, label = member.username, size = 40.dp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (member.avatarUrl != null) {
+                        AsyncImage(model = member.avatarUrl, contentDescription = member.username, modifier = Modifier.size(40.dp))
+                    } else {
+                        GeneratedAvatar(seed = member.firebaseUid, label = member.username, size = 40.dp)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = member.username,
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = if (member.role == "co_leader") "OFFICER" else member.role.uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    // Kick cuma buat leader, dan gak bisa nge-kick diri sendiri (leader).
+                    if (canManageRoles && member.role != "leader") {
+                        val isBusy = actionInFlightId == member.firebaseUid
+                        OutlinedButton(
+                            onClick = { onKick(member.firebaseUid) },
+                            enabled = !isBusy,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                        ) {
+                            Text("Kick", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                        }
+                    }
                 }
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = member.username,
-                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = member.role.uppercase(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                if (member.role != "leader") {
+                // Tombol angkat/turunin Officer -- cuma leader yang liat, gak berlaku buat leader sendiri.
+                if (canManageRoles && member.role != "leader") {
+                    Spacer(Modifier.height(8.dp))
                     val isBusy = actionInFlightId == member.firebaseUid
                     OutlinedButton(
-                        onClick = { onKick(member.firebaseUid) },
+                        onClick = { onSetRole(member.firebaseUid, member.role != "co_leader") },
                         enabled = !isBusy,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(vertical = 6.dp)
                     ) {
-                        Text("Kick", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                        Text(
+                            text = if (member.role == "co_leader") "Jadikan Member Biasa" else "Jadikan Officer",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = ZenimePrimary
+                        )
                     }
                 }
             }

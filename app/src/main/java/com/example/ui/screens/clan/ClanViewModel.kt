@@ -18,10 +18,11 @@ enum class ClanTab { MEMBERS, DONATION_TODAY }
 /** Status tombol CTA di header, tergantung relasi user sekarang sama clan ini. */
 enum class ClanMembershipCta {
     REQUEST_JOIN,       // belum gabung clan manapun -- tombol "Request Join" aktif
-    PENDING,            // udah kirim request, nunggu di-approve leader/co-leader
+    PENDING,            // udah kirim request, nunggu di-approve leader/officer
     BLOCKED_OTHER_CLAN, // udah gabung clan LAIN, gabisa request ke sini
-    IS_MEMBER,          // member clan ini (non-leader)
-    IS_LEADER           // leader clan ini -- munculin tombol "Kelola Clan"
+    IS_MEMBER,          // member biasa clan ini
+    IS_OFFICER,         // officer (role "co_leader") clan ini -- munculin tombol "Kelola Clan" (versi terbatas)
+    IS_LEADER           // leader clan ini -- munculin tombol "Kelola Clan" (penuh)
 }
 
 data class ClanUiState(
@@ -39,10 +40,18 @@ data class ClanUiState(
     val showDonateDialog: Boolean = false,
     val donateAmountInput: String = "",
     val isDonating: Boolean = false,
-    val donateFeedback: String? = null
+    val donateFeedback: String? = null,
+    val showLeaveDialog: Boolean = false,
+    val isLeaving: Boolean = false,
+    val leaveFeedback: String? = null,
+    val leftClan: Boolean = false
 ) {
     val canDonate: Boolean
-        get() = cta == ClanMembershipCta.IS_MEMBER || cta == ClanMembershipCta.IS_LEADER
+        get() = cta == ClanMembershipCta.IS_MEMBER || cta == ClanMembershipCta.IS_OFFICER || cta == ClanMembershipCta.IS_LEADER
+
+    /** Leader gabisa "Keluar Clan" biasa -- harus transfer kepemimpinan/bubarkan clan dulu (di luar cakupan tombol ini). */
+    val canLeave: Boolean
+        get() = cta == ClanMembershipCta.IS_MEMBER || cta == ClanMembershipCta.IS_OFFICER
 
     val leader: ClanMemberDisplay?
         get() = members.find { it.role == "leader" }
@@ -139,6 +148,7 @@ class ClanViewModel(
             }
             myMembership.clanId != clanId -> ClanMembershipCta.BLOCKED_OTHER_CLAN
             myMembership.role == "leader" -> ClanMembershipCta.IS_LEADER
+            myMembership.role == "co_leader" -> ClanMembershipCta.IS_OFFICER
             else -> ClanMembershipCta.IS_MEMBER
         }
     }
@@ -211,6 +221,31 @@ class ClanViewModel(
                     _uiState.value = _uiState.value.copy(
                         isDonating = false,
                         donateFeedback = e.message ?: "Gagal donasi"
+                    )
+                }
+        }
+    }
+
+    fun onLeaveDialogToggle(show: Boolean) {
+        _uiState.value = _uiState.value.copy(showLeaveDialog = show, leaveFeedback = null)
+    }
+
+    fun confirmLeaveClan() {
+        if (!_uiState.value.canLeave) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLeaving = true, leaveFeedback = null)
+            repository.leaveClan(clanId)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(
+                        isLeaving = false,
+                        showLeaveDialog = false,
+                        leftClan = true
+                    )
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        isLeaving = false,
+                        leaveFeedback = e.message ?: "Gagal keluar clan"
                     )
                 }
         }
