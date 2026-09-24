@@ -63,10 +63,10 @@ class ClanRepository(
         clanApi.getMyJoinRequestStatus(authorization = authHeader(), clanId = clanId).pending
     }
 
-    /** Daftar member digabung sama username/avatar dari chat_profiles. */
+    /** Daftar member digabung sama username/avatar dari chat_profiles. Leader selalu di posisi paling atas. */
     suspend fun getMembers(clanId: String): Result<List<ClanMemberDisplay>> = runCatching {
         val members = clanApi.getClanMembers(clanIdEq = "eq.$clanId")
-        mergeWithProfiles(members)
+        mergeWithProfiles(members).sortedByDescending { it.role == "leader" }
     }
 
     /**

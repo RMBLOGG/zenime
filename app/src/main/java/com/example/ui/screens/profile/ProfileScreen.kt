@@ -252,8 +252,8 @@ fun ProfileScreen(
                         if (uiState.isPremium) {
                             Spacer(modifier = Modifier.width(2.dp))
                             Image(
-                                painter = painterResource(id = R.drawable.ic_premium_badge),
-                                contentDescription = "Premium",
+                                painter = painterResource(id = R.drawable.ic_verified_badge),
+                                contentDescription = "Verified",
                                 modifier = Modifier.size(20.dp)
                             )
                         }

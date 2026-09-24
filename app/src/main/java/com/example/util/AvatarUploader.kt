@@ -29,15 +29,19 @@ private const val JPEG_QUALITY = 82
  * (gak perlu Premium; beda sama [BannerUploader] yang tetap khusus Premium).
  * Gambar dikompres dulu ke JPEG max 512px, lalu diupload ke Cloudinary lewat
  * unsigned upload preset `Zenime` (pola PERSIS sama kayak [ClanPhotoUploader],
- * cuma folder public_id-nya beda: "avatars/{firebaseUid}" bukan "clan-photos/...").
+ * cuma folder public_id-nya beda: "avatars/{firebaseUid}-{timestamp}" bukan
+ * "clan-photos/...").
  *
- * PENTING soal overwrite: public_id-nya FIXED per user (bukan per-upload),
- * niatnya biar foto lama ketimpa pas user ganti foto. Itu bergantung ke
- * setting "Overwrite" + "Unique filename" DIMATIKAN di preset `Zenime` pada
- * dashboard Cloudinary -- kalau preset itu belum diatur begitu, upload tetap
- * JALAN dan foto tetap kepasang bener (karena selalu pake secure_url yang
- * baru dari response, bukan nyusun URL manual), cuma file lama bakal numpuk
- * di storage Cloudinary (buang-buang kuota) daripada bener-bener ketimpa.
+ * public_id-nya UNIK per upload (nempel timestamp), BUKAN fixed per user.
+ * Sebelumnya public_id fixed ("avatars/{uid}") sehingga bergantung ke setting
+ * "Overwrite" + "Unique filename" di preset Cloudinary buat bisa dipakai
+ * berkali-kali -- kalau preset-nya belum diatur pas, upload ke-3 dst bentrok
+ * sama asset lama (bug "foto cuma bisa diganti 2x"). Public_id unik = setiap
+ * upload pasti berhasil bikin asset baru, gak pernah bentrok lagi, gak
+ * gantung setting preset apapun. Konsekuensinya: asset lama TETAP ada di
+ * storage Cloudinary (gak keganti/kehapus otomatis) -- biasanya gak masalah
+ * buat foto profil yang ukurannya kecil, tapi kalau storage jadi perhatian,
+ * perlu ditambah cleanup terpisah (hapus asset lama pakai Admin API).
  */
 object AvatarUploader {
 
@@ -62,11 +66,19 @@ object AvatarUploader {
             val tempFile = File.createTempFile("avatar", ".jpg", context.cacheDir)
             tempFile.writeBytes(jpegBytes)
 
+            // public_id DIBIKIN UNIK per upload (timestamp) -- BUKAN fixed per user lagi.
+            // Sebelumnya public_id fixed ("avatars/{uid}") jadi upload ke-3+ bentrok
+            // sama asset lama & gagal/gak ke-overwrite kalau setting "Overwrite" +
+            // "Unique filename" di preset Cloudinary belum pas (banyak yang ngeluh
+            // foto profil cuma bisa diganti 2x). Public_id unik = gak pernah bentrok
+            // lagi, gak gantung sama setting preset apapun.
+            val uniquePublicId = "avatars/$firebaseUid-${System.currentTimeMillis()}"
+
             try {
                 val requestBody = MultipartBody.Builder()
                     .setType(MultipartBody.FORM)
                     .addFormDataPart("upload_preset", CLOUDINARY_UPLOAD_PRESET)
-                    .addFormDataPart("public_id", "avatars/$firebaseUid")
+                    .addFormDataPart("public_id", uniquePublicId)
                     .addFormDataPart(
                         "file",
                         "$firebaseUid.jpg",

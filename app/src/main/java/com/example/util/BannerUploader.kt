@@ -32,9 +32,9 @@ private const val JPEG_QUALITY = 82
  * manggil ini, dan diulang lagi di ProfileViewModel.uploadBanner biar gak
  * bisa dilewatin). Sama persis polanya kayak [AvatarUploader]/[ClanPhotoUploader]:
  * kompres ke JPEG dulu, lalu upload ke Cloudinary lewat unsigned upload
- * preset `Zenime`, public_id "banners/{firebaseUid}".
- *
- * Catatan overwrite sama kayak [AvatarUploader] -- lihat komentar di situ.
+ * preset `Zenime`, public_id "banners/{firebaseUid}-{timestamp}" (UNIK per
+ * upload, bukan fixed lagi -- lihat komentar lengkap di [AvatarUploader],
+ * ini fix buat bug "banner cuma bisa diganti 2x").
  */
 object BannerUploader {
 
@@ -57,11 +57,14 @@ object BannerUploader {
             val tempFile = File.createTempFile("banner", ".jpg", context.cacheDir)
             tempFile.writeBytes(jpegBytes)
 
+            // public_id unik per upload -- lihat komentar di AvatarUploader.uploadAvatar.
+            val uniquePublicId = "banners/$firebaseUid-${System.currentTimeMillis()}"
+
             try {
                 val requestBody = MultipartBody.Builder()
                     .setType(MultipartBody.FORM)
                     .addFormDataPart("upload_preset", CLOUDINARY_UPLOAD_PRESET)
-                    .addFormDataPart("public_id", "banners/$firebaseUid")
+                    .addFormDataPart("public_id", uniquePublicId)
                     .addFormDataPart(
                         "file",
                         "$firebaseUid.jpg",
