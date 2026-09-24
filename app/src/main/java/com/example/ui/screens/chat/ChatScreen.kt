@@ -479,15 +479,15 @@ private fun ChatBubble(
                     ) {
                         if (isOwnMessage) {
                             Spacer(modifier = Modifier.weight(1f, fill = true))
-                            if (senderUserNumber != null) {
-                                Text(
-                                    text = "#$senderUserNumber",
-                                    color = Color.White.copy(alpha = 0.5f),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 1,
-                                    modifier = Modifier.padding(end = 3.dp)
-                                )
-                            }
+                            // Urutan: username -> centang premium -> #id
+                            Text(
+                                text = message.username,
+                                color = usernameColor,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(end = 3.dp)
+                            )
                             if (isSenderPremium) {
                                 Icon(
                                     imageVector = Icons.Filled.Verified,
@@ -498,13 +498,14 @@ private fun ChatBubble(
                                         .size(17.dp)
                                 )
                             }
-                            Text(
-                                text = message.username,
-                                color = usernameColor,
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            if (senderUserNumber != null) {
+                                Text(
+                                    text = "#$senderUserNumber",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1
+                                )
+                            }
                         } else {
                             Text(
                                 text = message.username,
