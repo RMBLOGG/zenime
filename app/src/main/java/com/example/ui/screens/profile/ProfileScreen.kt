@@ -311,7 +311,7 @@ private fun ProfileHeroSection(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .matchParentSize()
-                    .blur(radius = 14.dp)
+                    .blur(radius = 6.dp)
             )
         } else {
             Box(modifier = Modifier.matchParentSize().background(ZenimeSurfaceVariantDark))
@@ -322,8 +322,8 @@ private fun ProfileHeroSection(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.35f),
-                            Color.Black.copy(alpha = 0.6f),
+                            Color.Black.copy(alpha = 0.2f),
+                            Color.Black.copy(alpha = 0.4f),
                             ZenimeBackgroundDark
                         )
                     )
