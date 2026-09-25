@@ -67,6 +67,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -308,7 +309,9 @@ private fun ProfileHeroSection(
                 model = backdropImage,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.matchParentSize()
+                modifier = Modifier
+                    .matchParentSize()
+                    .blur(radius = 14.dp)
             )
         } else {
             Box(modifier = Modifier.matchParentSize().background(ZenimeSurfaceVariantDark))
@@ -319,8 +322,8 @@ private fun ProfileHeroSection(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.15f),
-                            Color.Black.copy(alpha = 0.45f),
+                            Color.Black.copy(alpha = 0.35f),
+                            Color.Black.copy(alpha = 0.6f),
                             ZenimeBackgroundDark
                         )
                     )
