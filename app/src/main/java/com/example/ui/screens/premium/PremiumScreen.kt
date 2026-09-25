@@ -416,9 +416,29 @@ private fun PremiumCheckoutCard(
 
                     Button(
                         onClick = {
-                            // NONAKTIF SEMENTARA: checkout otomatis Sakurupiah dimatikan,
-                            // tombol ini sekarang langsung ke /bayar-manual (QRIS pribadi +
-                            // verifikasi manual admin) buat semua user, bukan cuma luar negeri.
+                            val autoUri = Uri.parse(SupabaseConfig.STOREFRONT_URL)
+                                .buildUpon()
+                                .appendQueryParameter("code", zenimeCode)
+                                .appendQueryParameter("package_id", pkg.id)
+                                .build()
+                            val intent = Intent(Intent.ACTION_VIEW, autoUri)
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = ZenimePrimary)
+                    ) {
+                        Icon(Icons.Filled.OpenInBrowser, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Pembayaran Otomatis", fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            // Buat pembeli yang QRIS otomatisnya gak kebaca e-wallet/bank
+                            // mereka (mis. luar negeri) -- verifikasi dilakukan manual admin.
                             val manualUri = Uri.parse(SupabaseConfig.MANUAL_STOREFRONT_URL)
                                 .buildUpon()
                                 .appendQueryParameter("code", zenimeCode)
@@ -429,11 +449,11 @@ private fun PremiumCheckoutCard(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = ZenimePrimary)
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ZenimePrimary)
                     ) {
                         Icon(Icons.Filled.OpenInBrowser, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Bayar Sekarang", fontWeight = FontWeight.Bold)
+                        Text("Pembayaran Manual", fontWeight = FontWeight.Bold)
                     }
                 }
             }
