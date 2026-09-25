@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Autorenew
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ColorLens
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.HighQuality
@@ -268,6 +269,8 @@ fun SettingsScreen(
     onPremiumClick: () -> Unit = {},
     onCoinClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
+    isPrivilegedUser: Boolean = false,
+    onAdminPanelClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val premiumStatus by viewModel.premiumStatus.collectAsStateWithLifecycle()
@@ -602,6 +605,51 @@ fun SettingsScreen(
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(20.dp)
                                     )
+                                }
+
+                                // Tombol Panel Admin -- cuma nongol buat user yang
+                                // punya role (developer/admin/moderator). Role-nya
+                                // dicek ULANG di server pas buka panelnya, jadi ini
+                                // murni buat nyembunyiin entry point-nya aja.
+                                if (isPrivilegedUser) {
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                    HorizontalDivider(
+                                        thickness = 1.dp,
+                                        color = CardOutlineBorder.copy(alpha = 0.6f)
+                                    )
+                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .clickable(onClick = onAdminPanelClick)
+                                            .padding(vertical = 4.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            SettingsIconChip(icon = Icons.Default.Shield)
+                                            Spacer(modifier = Modifier.width(14.dp))
+                                            Column {
+                                                Text(
+                                                    "Panel Admin",
+                                                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
+                                                )
+                                                Text(
+                                                    "Kelola role, ban, dan moderasi",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                        Icon(
+                                            imageVector = Icons.Default.ChevronRight,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
                                 }
                             }
                         }

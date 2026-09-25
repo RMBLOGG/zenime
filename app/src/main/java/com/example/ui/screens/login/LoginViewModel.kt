@@ -1,8 +1,11 @@
 package com.example.ui.screens.login
 
+import android.annotation.SuppressLint
 import android.content.Context
+import android.provider.Settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.repository.AdminRepository
 import com.example.data.repository.AuthRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -22,7 +25,8 @@ import kotlinx.coroutines.launch
  * install pun langsung lihat poster asli tanpa nunggu network sama sekali).
  */
 class LoginViewModel(
-    private val authRepository: AuthRepository
+    private val authRepository: AuthRepository,
+    private val adminRepository: AdminRepository = AdminRepository()
 ) : ViewModel() {
 
     private val _isSigningIn = MutableStateFlow(false)
@@ -39,7 +43,23 @@ class LoginViewModel(
             _isSigningIn.value = true
             _loginError.value = null
             val result = authRepository.signInWithGoogle(context)
-            result.onSuccess { onSuccess() }
+            result.onSuccess {
+                // Cek akun/device lagi diban atau nggak SEBELUM masuk Home --
+                // Android ID dipakai sebagai device_id (nempel walau app
+                // di-uninstall/install ulang, beda sama Firebase Installation
+                // ID yang reset tiap install ulang -- lihat catatan di
+                // zenime-check-ban).
+                @SuppressLint("HardwareIds")
+                val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+                    ?: ""
+                val banResult = adminRepository.checkBan(deviceId).getOrNull()
+                if (banResult?.banned == true) {
+                    authRepository.signOut()
+                    _loginError.value = banResult.reason ?: "Akun/perangkat ini diblokir."
+                } else {
+                    onSuccess()
+                }
+            }
             result.onFailure { error ->
                 _loginError.value = error.message ?: "Login Google gagal, coba lagi."
             }

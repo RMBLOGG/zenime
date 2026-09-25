@@ -135,6 +135,9 @@ import com.example.ui.screens.search.SearchScreen
 import com.example.ui.screens.search.SearchViewModel
 import com.example.ui.screens.settings.SettingsScreen
 import com.example.ui.screens.settings.SettingsViewModel
+import com.example.ui.screens.admin.AdminScreen
+import com.example.ui.screens.admin.AdminViewModel
+import com.example.data.repository.AdminRepository
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import com.example.ui.theme.CardOutlineBorder
@@ -158,6 +161,7 @@ sealed class Screen(
     data object Schedule : Screen("schedule", "Jadwal", Icons.Filled.DateRange, Icons.Outlined.DateRange)
     data object Favorites : Screen("favorites", "Koleksi", Icons.Filled.Bookmark, Icons.Outlined.Bookmark)
     data object Settings : Screen("settings", "Pengaturan", Icons.Filled.Settings, Icons.Outlined.Settings)
+    data object AdminPanel : Screen("admin-panel")
     data object Comic : Screen("comic", "Komik", Icons.Filled.AutoStories, Icons.Outlined.AutoStories)
 
     data object Premium : Screen("premium")
@@ -706,12 +710,39 @@ fun ZenimeAppNavHost(
                 val settingsViewModel: SettingsViewModel = viewModel(
                     factory = viewModelFactory { initializer { SettingsViewModel(repository) } }
                 )
+                val settingsAdminViewModel: AdminViewModel? = currentUser?.uid?.let { uid ->
+                    viewModel(
+                        key = "settings-admin-$uid",
+                        factory = viewModelFactory { initializer { AdminViewModel(AdminRepository(), uid) } }
+                    )
+                }
+                val settingsAdminState = settingsAdminViewModel?.uiState?.collectAsState()?.value
                 SettingsScreen(
                     viewModel = settingsViewModel,
                     onPremiumClick = { navController.navigate(Screen.Premium.route) },
                     onCoinClick = { navController.navigate(Screen.Coin.route) },
-                    onProfileClick = { navController.navigate(Screen.Profile.route) }
+                    onProfileClick = { navController.navigate(Screen.Profile.route) },
+                    isPrivilegedUser = settingsAdminState?.myRole != null,
+                    onAdminPanelClick = { navController.navigate(Screen.AdminPanel.route) }
                 )
+            }
+
+            // Panel Admin -- gate role dicek ULANG di dalam AdminScreen sendiri
+            // (server-side lewat zenime-admin-get-role), jadi walau ada yang
+            // nyoba deep-link ke route ini langsung, tetap ketolak kalau
+            // emang bukan developer/admin/moderator.
+            composable(Screen.AdminPanel.route) {
+                val uid = currentUser?.uid
+                if (uid != null) {
+                    val adminViewModel: AdminViewModel = viewModel(
+                        key = "admin-panel-$uid",
+                        factory = viewModelFactory { initializer { AdminViewModel(AdminRepository(), uid) } }
+                    )
+                    AdminScreen(
+                        viewModel = adminViewModel,
+                        onBackClick = { navController.popBackStack() }
+                    )
+                }
             }
 
             // Premium Screen -- daftar paket, kode akun buat checkout di storefront

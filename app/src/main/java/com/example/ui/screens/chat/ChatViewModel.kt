@@ -11,6 +11,7 @@ import com.example.data.repository.ChatRepository
 import com.example.data.repository.ClanRepository
 import com.example.data.repository.XpRepository
 import com.example.data.repository.PremiumRepository
+import com.example.data.repository.AdminRepository
 import com.example.util.AvatarUploader
 import com.example.util.VoiceNoteUploader
 import com.example.util.VoiceRecorder
@@ -95,6 +96,18 @@ data class ChatUiState(
     // avatar kosong/lama selamanya walau fotonya di Top XP dll udah kelihatan.
     val avatarUrlsByUid: Map<String, String> = emptyMap(),
 
+    // Role (developer/admin/moderator) per firebase_uid pengirim -- dipakai
+    // buat nampilin badge centang berwarna (gantiin/nambahin centang
+    // Premium biru). uid yang gak ada di map ini = user biasa.
+    val rolesByUid: Map<String, String> = emptyMap(),
+    // Override warna badge custom per uid (cuma keisi kalau developer
+    // nyetel warna khusus lewat Panel Admin) -- kalau kosong, ChatScreen
+    // jatuh ke warna default role-nya.
+    val roleBadgeColorsByUid: Map<String, String> = emptyMap(),
+    // true kalau akun yang lagi login role-nya admin/developer -- boleh
+    // hapus pesan SIAPAPUN di Chat Global, bukan cuma pesan sendiri.
+    val canDeleteOthersMessages: Boolean = false,
+
     // --- Pesan Suara (VN) -- kirim khusus Premium, dengerin/play terbuka
     // buat semua user (lihat catatan di ChatRepository.sendVoiceMessage).
     val isRecording: Boolean = false,
@@ -127,7 +140,8 @@ class ChatViewModel(
     fallbackUsername: String,
     private val realtimeClient: ChatRealtimeClient = ChatRealtimeClient(),
     private val clanRepository: ClanRepository = ClanRepository(),
-    private val xpRepository: XpRepository = XpRepository()
+    private val xpRepository: XpRepository = XpRepository(),
+    private val adminRepository: AdminRepository = AdminRepository()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -188,15 +202,36 @@ class ChatViewModel(
     // dua-duanya dari tabel chat_profiles yang sama. Satu checked-set buat dua-duanya.
     private val chatBadgeCheckedUids = mutableSetOf<String>()
 
+    // Sama pola kayak cache badge lain, tapi buat role (developer/admin/
+    // moderator). `null` value = udah dicek, ternyata user biasa (gak
+    // punya role) -- beda sama "belum pernah dicek" (uid gak ada di map).
+    private val roleCache = mutableMapOf<String, String?>()
+    private val roleBadgeColorCache = mutableMapOf<String, String?>()
+    private val roleCheckedUids = mutableSetOf<String>()
+
     init {
         // Simpen tiap perubahan (pesan + badge) ke cache sesi biar buka chat berikutnya instan.
         viewModelScope.launch { _uiState.collect { ChatSessionCache.save(it) } }
         loadProfileAndPremiumStatus(fallbackUsername)
+        loadMyRole()
         // Full load sekali di awal (isi riwayat pesan), abis itu pesan baru
         // masuk lewat Realtime -- bukan polling ulang tiap beberapa detik.
         viewModelScope.launch { refreshMessages() }
         startRealtime()
         startPeriodicResync()
+    }
+
+    /** Cek role diri sendiri -- nentuin boleh/nggaknya hapus pesan orang lain. */
+    private fun loadMyRole() {
+        viewModelScope.launch {
+            val role = adminRepository.getMyRole().getOrNull()?.role
+            roleCheckedUids += firebaseUid
+            roleCache[firebaseUid] = role
+            _uiState.value = _uiState.value.copy(
+                canDeleteOthersMessages = role == "admin" || role == "developer",
+                rolesByUid = roleCache.filterValues { it != null }.mapValues { it.value!! }
+            )
+        }
     }
 
     private fun loadProfileAndPremiumStatus(fallbackUsername: String) {
@@ -369,6 +404,37 @@ class ChatViewModel(
     // (checkUserNumbersForNewSenders lama digabung ke checkChatBadgesForNewSenders
     // di bawah -- warna username & user_number sekarang satu request.)
 
+    /**
+     * Cek role (developer/admin/moderator) buat pengirim-pengirim baru yang
+     * muncul di daftar pesan -- pola sama kayak [checkChatBadgesForNewSenders],
+     * lewat PostgREST langsung (public SELECT), dibatch sekali jalan.
+     */
+    private fun checkRolesForNewSenders(messages: List<ChatMessage>) {
+        val newUids = messages
+            .map { it.firebaseUid }
+            .filter { it.isNotBlank() }
+            .distinct()
+            .filterNot { roleCheckedUids.contains(it) }
+        if (newUids.isEmpty()) return
+
+        roleCheckedUids += newUids
+        viewModelScope.launch {
+            val result = runCatching { adminRepository.getRolesForUids(newUids) }.getOrNull()
+            if (result == null) {
+                roleCheckedUids -= newUids.toSet()
+                return@launch
+            }
+            newUids.forEach { uid ->
+                roleCache[uid] = result[uid]?.role
+                roleBadgeColorCache[uid] = result[uid]?.badgeColor
+            }
+            _uiState.value = _uiState.value.copy(
+                rolesByUid = roleCache.filterValues { it != null }.mapValues { it.value!! },
+                roleBadgeColorsByUid = roleBadgeColorCache.filterValues { it != null }.mapValues { it.value!! }
+            )
+        }
+    }
+
     /** Subscribe ke Supabase Realtime -- gantiin polling PostgREST tiap 3 detik. */
     private fun startRealtime() {
         realtimeJob?.cancel()
@@ -388,6 +454,7 @@ class ChatViewModel(
                 checkClanTagsForNewSenders(listOf(event.message))
                 checkXpLevelsForNewSenders(listOf(event.message))
                 checkChatBadgesForNewSenders(listOf(event.message))
+                checkRolesForNewSenders(listOf(event.message))
             }
             is ChatRealtimeEvent.Deleted -> {
                 _uiState.value = _uiState.value.copy(
@@ -424,6 +491,7 @@ class ChatViewModel(
             checkClanTagsForNewSenders(messages)
             checkXpLevelsForNewSenders(messages)
             checkChatBadgesForNewSenders(messages)
+            checkRolesForNewSenders(messages)
         } catch (e: Exception) {
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
@@ -562,14 +630,26 @@ class ChatViewModel(
 
     // --- Hapus pesan ---
 
-    /** Cuma bisa hapus pesan sendiri -- dicek dua kali (UI cuma nampilin tombol di pesan sendiri, dan di sini juga). */
+    /**
+     * Pesan sendiri: hapus langsung lewat PostgREST (RLS filter firebase_uid,
+     * lihat ChatRepository.deleteMessage). Pesan ORANG LAIN: cuma boleh kalau
+     * [ChatUiState.canDeleteOthersMessages] true (role admin/developer),
+     * lewat Edge Function zenime-admin-delete-message -- role-nya dicek ULANG
+     * di server, jadi request langsung ke API pun tetap ketolak kalau bukan
+     * admin/developer beneran.
+     */
     fun deleteMessage(message: ChatMessage) {
-        if (message.firebaseUid != firebaseUid) return
+        val isOwn = message.firebaseUid == firebaseUid
+        if (!isOwn && !_uiState.value.canDeleteOthersMessages) return
 
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(deletingMessageId = message.id, errorMessage = null)
             try {
-                repository.deleteMessage(id = message.id, firebaseUid = firebaseUid)
+                if (isOwn) {
+                    repository.deleteMessage(id = message.id, firebaseUid = firebaseUid)
+                } else {
+                    adminRepository.deleteMessage(message.id).getOrThrow()
+                }
                 _uiState.value = _uiState.value.copy(
                     deletingMessageId = null,
                     messages = _uiState.value.messages.filterNot { it.id == message.id }

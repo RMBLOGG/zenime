@@ -258,6 +258,9 @@ fun ChatScreen(
                                     senderAvatarUrl = uiState.avatarUrlsByUid[message.firebaseUid] ?: message.avatarUrl,
                                     isDeleting = uiState.deletingMessageId == message.id,
                                     ownAvatarUrl = uiState.displayAvatarUrl,
+                                    senderRole = uiState.rolesByUid[message.firebaseUid],
+                                    senderRoleBadgeColor = uiState.roleBadgeColorsByUid[message.firebaseUid],
+                                    canDeleteOthers = uiState.canDeleteOthersMessages,
                                     onReply = { viewModel.setReplyTarget(message) },
                                     onDeleteRequest = { pendingDelete = message },
                                     onOwnAvatarClick = onOwnAvatarClick
@@ -366,12 +369,31 @@ private fun ChatBubble(
     senderAvatarUrl: String?,
     isDeleting: Boolean,
     ownAvatarUrl: String?,
+    // true kalau akun yang lagi login punya role admin/developer -- boleh
+    // hapus pesan SIAPAPUN, bukan cuma pesan sendiri (lihat AdminViewModel).
+    canDeleteOthers: Boolean = false,
+    // Role (developer/admin/moderator) & warna badge custom pengirim, kalau
+    // ada -- null berarti user biasa, badge Premium biru tetap dipakai.
+    senderRole: String? = null,
+    senderRoleBadgeColor: String? = null,
     onReply: () -> Unit,
     onDeleteRequest: () -> Unit,
     onOwnAvatarClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val usernameColor = parseUsernameColor(senderUsernameColor)
+    // Role menang atas Premium buat warna centang (satu checkmark aja,
+    // biar gak dobel) -- default merah/hijau/ungu, atau custom kalau
+    // developer nyetel badge_color-nya sendiri.
+    val roleCheckColor: Color? = senderRole?.let { role ->
+        val hex = senderRoleBadgeColor ?: when (role) {
+            "developer" -> "#E53935"
+            "admin" -> "#43A047"
+            "moderator" -> "#8E24AA"
+            else -> null
+        }
+        hex?.let { runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull() }
+    }
 
     // Swipe kanan buat reply: bubble ikut geser, muncul ikon + tulisan
     // "Reply" di kiri, lepas jari setelah lewat batas = reply kepicu.
@@ -488,7 +510,16 @@ private fun ChatBubble(
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.padding(end = 3.dp)
                             )
-                            if (isSenderPremium) {
+                            if (roleCheckColor != null) {
+                                Icon(
+                                    imageVector = Icons.Filled.Verified,
+                                    contentDescription = senderRole,
+                                    tint = roleCheckColor,
+                                    modifier = Modifier
+                                        .padding(end = 3.dp)
+                                        .size(17.dp)
+                                )
+                            } else if (isSenderPremium) {
                                 Icon(
                                     imageVector = Icons.Filled.Verified,
                                     contentDescription = "Premium",
@@ -631,7 +662,7 @@ private fun ChatBubble(
                                 .padding(start = 8.dp)
                                 .clickable(onClick = onReply)
                         )
-                        if (isOwnMessage) {
+                        if (isOwnMessage || canDeleteOthers) {
                             if (isDeleting) {
                                 CircularProgressIndicator(
                                     color = Color.White.copy(alpha = 0.5f),
