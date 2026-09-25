@@ -90,6 +90,7 @@ import com.example.data.local.FavoriteEntity
 import com.example.data.local.WatchHistoryEntity
 import com.example.ui.components.ClanRainbowBadge
 import com.example.ui.components.GeneratedAvatar
+import com.example.ui.components.LevelBadge
 import com.example.ui.theme.CardOutlineBorder
 import com.example.ui.theme.ZenimeBackgroundDark
 import com.example.ui.theme.ZenimeInfoBlue
@@ -180,6 +181,7 @@ fun ProfileScreen(
                 firebaseUid = firebaseUid,
                 username = uiState.username.ifBlank { "Pengguna Zenime" },
                 userNumber = uiState.userNumber,
+                isPremium = uiState.isPremium,
                 clanTag = uiState.clanTag,
                 level = level,
                 stats = listOf(
@@ -290,6 +292,7 @@ private fun ProfileHeroSection(
     firebaseUid: String,
     username: String,
     userNumber: Long?,
+    isPremium: Boolean,
     clanTag: String?,
     level: Int,
     stats: List<Pair<String, String>>,
@@ -347,35 +350,46 @@ private fun ProfileHeroSection(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            Text(
-                text = username,
-                color = Color.White,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-
-            if (userNumber != null) {
-                Spacer(modifier = Modifier.height(2.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
                 Text(
-                    text = "ID #$userNumber",
-                    color = Color.White.copy(alpha = 0.7f),
-                    style = MaterialTheme.typography.labelSmall,
+                    text = username,
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (userNumber != null) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(bottom = 3.dp)
+                    ) {
+                        Text(
+                            text = "ID #$userNumber",
+                            color = Color.White.copy(alpha = 0.7f),
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (isPremium) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_verified_badge),
+                                contentDescription = "Verified",
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                PillBadge(
-                    icon = Icons.Filled.Bolt,
-                    text = "Lvl. $level",
-                    containerColor = ZenimePrimary,
-                    contentColor = Color.White
-                )
+                LevelBadge(level = level)
                 if (!clanTag.isNullOrBlank()) {
                     ClanRainbowBadge(text = clanTag)
                 }
