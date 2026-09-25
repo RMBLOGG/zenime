@@ -54,38 +54,10 @@ fun ComicPremiumGate(
     onUpgradeClick: () -> Unit,
     content: @Composable () -> Unit
 ) {
-    var state by remember(firebaseUid) { mutableStateOf<ComicGateState>(ComicGateState.Checking) }
-
-    LaunchedEffect(firebaseUid) {
-        state = ComicGateState.Checking
-        val isPremium = if (firebaseUid.isNullOrBlank()) {
-            false
-        } else {
-            PremiumRepository().checkPremiumStatus(firebaseUid).getOrNull()?.isPremium ?: false
-        }
-        state = ComicGateState.Resolved(isPremium)
-    }
-
-    when (val s = state) {
-        is ComicGateState.Checking -> {
-            Scaffold(containerColor = Color.Black) { padding ->
-                Box(
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(color = ZenimePrimary)
-                }
-            }
-        }
-
-        is ComicGateState.Resolved -> {
-            if (s.isPremium) {
-                content()
-            } else {
-                ComicLockedScreen(onBackClick = onBackClick, onUpgradeClick = onUpgradeClick)
-            }
-        }
-    }
+    // Gate dilepas: baca chapter komik sekarang terbuka buat semua user,
+    // gak cuma Premium lagi. Fungsi ComicLockedScreen & pengecekan
+    // PremiumRepository dibiarin di bawah (unused) kalau mau diaktifin lagi nanti.
+    content()
 }
 
 @Composable
