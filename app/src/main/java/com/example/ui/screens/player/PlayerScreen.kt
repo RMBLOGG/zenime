@@ -54,6 +54,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.BrightnessLow
@@ -162,6 +163,8 @@ import com.example.data.model.EpisodeDetail
 import com.example.data.model.EpisodeItem
 import com.example.ui.components.DownloadQualityPickerDialog
 import com.example.ui.components.ErrorStateView
+import com.example.ui.screens.comments.CommentsViewModel
+import com.example.ui.screens.comments.EpisodeCommentsSheet
 import com.example.ui.theme.ZenimePrimary
 import com.example.util.LOCKED_LATEST_EPISODES_COUNT
 import com.example.util.episodeIndexValue
@@ -273,6 +276,12 @@ fun PlayerScreen(
 
     var showEpisodeList by remember { mutableStateOf(false) }
     var showDeleteDownloadConfirm by remember { mutableStateOf(false) }
+
+    // Sheet komentar episode -- ViewModel-nya sengaja dibikin lazy (cuma
+    // pas tombol "Komentar" di-tap), bukan langsung pas PlayerScreen dibuka,
+    // biar gak nembak network call komentar tiap kali orang buka episode
+    // padahal belum tentu mau baca komentarnya.
+    var showCommentsSheet by remember { mutableStateOf(false) }
 
     // Nge-track apakah seek "lanjutin dari terakhir nonton" udah pernah
     // dijalanin. Cuma sekali di awal -- ganti server/kualitas belakangan
@@ -1284,6 +1293,7 @@ fun PlayerScreen(
                                 }
                             },
                             onEpisodeClick = { ep -> onNextEpisodeClick(ep.id) },
+                            onCommentsClick = { showCommentsSheet = true },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -1338,6 +1348,25 @@ fun PlayerScreen(
                 }
             }
         }
+    }
+
+    // Sheet komentar episode -- ViewModel-nya di-key per episodeId biar
+    // pindah episode (Episode Selanjutnya) dapet thread komentar yang baru,
+    // bukan nyangkut nampilin komentar episode sebelumnya.
+    if (showCommentsSheet) {
+        val commentsViewModel: CommentsViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+            key = "comments_${viewModel.episodeId}",
+            factory = androidx.lifecycle.viewmodel.viewModelFactory {
+                androidx.lifecycle.viewmodel.initializer {
+                    CommentsViewModel(episodeId = viewModel.episodeId, animeId = viewModel.animeId)
+                }
+            }
+        )
+        EpisodeCommentsSheet(
+            viewModel = commentsViewModel,
+            onDismiss = { showCommentsSheet = false },
+            onUpgradeClick = onUpgradeClick
+        )
     }
 
     // Dialog pilih kualitas sebelum download mulai.
@@ -2346,6 +2375,7 @@ private fun PlayerDetailsSection(
     onQualityClick: () -> Unit,
     onDownloadClick: () -> Unit,
     onEpisodeClick: (EpisodeItem) -> Unit,
+    onCommentsClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -2504,6 +2534,11 @@ private fun PlayerDetailsSection(
                     icon = Icons.Default.DownloadForOffline,
                     label = "Download",
                     onClick = onDownloadClick
+                )
+                PlayerActionChip(
+                    icon = Icons.AutoMirrored.Filled.Chat,
+                    label = "Komentar",
+                    onClick = onCommentsClick
                 )
                 PlayerActionChip(
                     icon = Icons.Default.Flag,

@@ -4,6 +4,8 @@ import com.example.data.model.ChatMessage
 import com.example.data.model.ChatMessageInsert
 import com.example.data.model.ChatProfile
 import com.example.data.model.ChatProfileUpsert
+import com.example.data.model.EpisodeComment
+import com.example.data.model.EpisodeCommentInsert
 import com.example.data.model.CoinBalanceResponse
 import com.example.data.model.CoinPackagesResponse
 import com.example.data.model.PremiumPackagesResponse
@@ -112,4 +114,31 @@ interface ZenimeSupabaseApi {
         @Query("on_conflict") onConflict: String = "firebase_uid",
         @Body body: ChatProfileUpsert
     ): List<ChatProfile>
+
+    // --- Komentar Episode ---
+    // Sama pola-nya kayak Chat Global: langsung ke tabel `episode_comments`
+    // lewat PostgREST, tanpa Edge Function. SATU request ambil SEMUA baris
+    // (komentar top-level + balasan) punya episode ini sekaligus -- pohon
+    // thread-nya disusun di sisi app (lihat CommentRepository), biar gak
+    // perlu 2 request bolak-balik (top-level dulu, baru balasan per thread).
+
+    @GET("rest/v1/episode_comments")
+    suspend fun getEpisodeComments(
+        @Query("episode_id") episodeIdEq: String,
+        @Query("select") select: String = "id,episode_id,anime_id,firebase_uid,username,avatar_url,comment,parent_id,reply_to_username,created_at,is_pinned",
+        @Query("order") order: String = "created_at.asc",
+        @Query("limit") limit: Int = 500
+    ): List<EpisodeComment>
+
+    @Headers("Prefer: return=representation")
+    @POST("rest/v1/episode_comments")
+    suspend fun postEpisodeComment(@Body body: EpisodeCommentInsert): List<EpisodeComment>
+
+    // Hapus komentar/balasan milik sendiri -- filter ganda (id + firebase_uid)
+    // di query-nya sendiri, sama pola kayak deleteChatMessage.
+    @DELETE("rest/v1/episode_comments")
+    suspend fun deleteEpisodeComment(
+        @Query("id") idEq: String,
+        @Query("firebase_uid") firebaseUidEq: String
+    ): Response<Void>
 }
