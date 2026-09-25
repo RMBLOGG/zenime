@@ -8,6 +8,7 @@ import com.example.data.local.FavoriteEntity
 import com.example.data.local.WatchHistoryEntity
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.ChatRepository
+import com.example.data.repository.ClanRepository
 import com.example.data.repository.PremiumRepository
 import com.example.util.AvatarUploader
 import com.example.util.BannerUploader
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 
 private const val MAX_USERNAME_LENGTH = 24
@@ -30,6 +32,11 @@ data class ProfileUiState(
     // yang udah di-set user lewat dialog "Edit Profil" di Chat Global.
     val usernameColor: String? = null,
     val isPremium: Boolean = false,
+    // ID urut user ("ID #123") sama tag Clan ("badge clan yang sudah ada
+    // di Chat Global/Leaderboard") -- tampil di hero section ProfileScreen,
+    // gantiin centang biru + badge "Premium" yang lama.
+    val userNumber: Long? = null,
+    val clanTag: String? = null,
     val favorites: List<FavoriteEntity> = emptyList(),
     val history: List<WatchHistoryEntity> = emptyList(),
 
@@ -55,6 +62,7 @@ class ProfileViewModel(
     private val repository: AnimeRepository,
     private val chatRepository: ChatRepository = ChatRepository(),
     private val premiumRepository: PremiumRepository = PremiumRepository(),
+    private val clanRepository: ClanRepository = ClanRepository(),
     private val firebaseUid: String,
     private val fallbackUsername: String
 ) : ViewModel() {
@@ -76,14 +84,17 @@ class ProfileViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
 
-            val profile = try {
-                chatRepository.getProfile(firebaseUid)
-            } catch (e: Exception) {
-                null
-            }
+            // Profil & status Premium gak saling butuh -- ditarik BARENGAN,
+            // bukan satu-satu, biar halaman Profil gak nunggu 2 round-trip
+            // berturut-turut cuma buat nampilin header.
+            val profileDeferred = async { runCatching { chatRepository.getProfile(firebaseUid) }.getOrNull() }
+            val premiumDeferred = async { premiumRepository.checkPremiumStatus(firebaseUid) }
+            val clanTagDeferred = async { clanRepository.getClanTagsForUids(listOf(firebaseUid)) }
 
-            val premiumResult = premiumRepository.checkPremiumStatus(firebaseUid)
+            val profile = profileDeferred.await()
+            val premiumResult = premiumDeferred.await()
             val isPremium = premiumResult.getOrNull()?.isPremium ?: false
+            val clanTag = clanTagDeferred.await().getOrNull()?.get(firebaseUid)
 
             // Avatar sekarang BEBAS semua user (gak perlu premium) --
             // banner tetap premium-only. Foto custom avatar selalu dipasang
@@ -97,7 +108,9 @@ class ProfileViewModel(
                 avatarUrl = resolvedAvatarUrl,
                 bannerUrl = resolvedBannerUrl,
                 usernameColor = profile?.usernameColor,
-                isPremium = isPremium
+                isPremium = isPremium,
+                userNumber = profile?.userNumber,
+                clanTag = clanTag
             )
         }
     }

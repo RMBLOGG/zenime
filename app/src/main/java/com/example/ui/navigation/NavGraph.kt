@@ -399,7 +399,12 @@ fun ZenimeAppNavHost(
             insetsController.systemBarsBehavior =
                 WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         } else {
-            WindowCompat.setDecorFitsSystemWindows(window, true)
+            // Chat Global pakai imePadding() sendiri, jadi window-nya JANGAN
+            // ikut di-resize oleh decor (decorFits=true) -- kalau dua-duanya
+            // aktif, tinggi keyboard kepotong 2x dan seluruh isi chat ilang
+            // (input bar nempel di atas). Status bar-nya diurus ChatScreen.
+            val isChatRoute = currentRoute == Screen.Chat.route
+            WindowCompat.setDecorFitsSystemWindows(window, !isChatRoute)
             val insetsController = WindowInsetsControllerCompat(window, window.decorView)
             insetsController.show(WindowInsetsCompat.Type.systemBars())
         }
