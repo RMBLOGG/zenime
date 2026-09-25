@@ -9,6 +9,7 @@ import com.example.data.model.RoleListResponse
 import com.example.data.model.SetRoleRequest
 import com.example.data.model.TargetUidRequest
 import com.example.data.model.RoleListEntry
+import com.example.data.model.UserListResponse
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
@@ -36,6 +37,15 @@ interface ZenimeAdminApi {
     suspend fun listRoles(
         @Header("Authorization") authorization: String
     ): RoleListResponse
+
+    /** Dipakai tab "Semua User" -- daftar/pencarian semua user (bukan cuma pemegang role). */
+    @GET("functions/v1/zenime-admin-list-users")
+    suspend fun listUsers(
+        @Header("Authorization") authorization: String,
+        @Query("search") search: String? = null,
+        @Query("limit") limit: Int = 20,
+        @Query("offset") offset: Int = 0
+    ): UserListResponse
 
     @POST("functions/v1/zenime-admin-set-role")
     suspend fun setRole(

@@ -3,8 +3,11 @@ package com.example.ui.screens.admin
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.RoleListEntry
+import com.example.data.model.UserListEntry
 import com.example.data.model.ZenimeRole
 import com.example.data.repository.AdminRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +20,15 @@ data class AdminUiState(
     val isLoadingRoleList: Boolean = false,
     val roleList: List<RoleListEntry> = emptyList(),
     val roleListError: String? = null,
+
+    // Tab "Semua User" -- daftar/pencarian semua user, sumber utama aksi
+    // role/ban device/ban akun (per baris), gantiin form ketik-UID-manual.
+    val userSearchQuery: String = "",
+    val isLoadingUserList: Boolean = false,
+    val userList: List<UserListEntry> = emptyList(),
+    val userListError: String? = null,
+    val userListHasMore: Boolean = false,
+    val isLoadingMoreUsers: Boolean = false,
 
     val isProcessing: Boolean = false,
     val actionError: String? = null,
@@ -31,6 +43,9 @@ class AdminViewModel(
     private val _uiState = MutableStateFlow(AdminUiState())
     val uiState: StateFlow<AdminUiState> = _uiState.asStateFlow()
 
+    private var searchDebounceJob: Job? = null
+    private var userListOffset = 0
+
     init {
         loadMyRole()
     }
@@ -42,10 +57,12 @@ class AdminViewModel(
                 .onSuccess { info ->
                     val role = ZenimeRole.fromValue(info.role)
                     _uiState.value = _uiState.value.copy(myRole = role, isLoadingMyRole = false)
-                    // Developer langsung ditarik daftar role -- role lain
-                    // (admin/moderator) gak butuh, tab-nya beda per role,
-                    // dimuat lazy dari screen pas tab dibuka.
-                    if (role == ZenimeRole.DEVELOPER) loadRoleList()
+                    if (role != null) {
+                        loadUserList(resetQuery = true)
+                        // Tab "Pemegang Role" cuma dipakai developer, gak perlu
+                        // ditarik buat admin/moderator.
+                        if (role == ZenimeRole.DEVELOPER) loadRoleList()
+                    }
                 }
                 .onFailure {
                     _uiState.value = _uiState.value.copy(myRole = null, isLoadingMyRole = false)
@@ -69,11 +86,79 @@ class AdminViewModel(
         }
     }
 
+    /** Dipanggil tiap ketikan search berubah -- di-debounce biar gak spam request. */
+    fun onUserSearchQueryChange(query: String) {
+        _uiState.value = _uiState.value.copy(userSearchQuery = query)
+        searchDebounceJob?.cancel()
+        searchDebounceJob = viewModelScope.launch {
+            delay(350)
+            loadUserList(resetQuery = false)
+        }
+    }
+
+    fun loadUserList(resetQuery: Boolean) {
+        if (resetQuery) _uiState.value = _uiState.value.copy(userSearchQuery = "")
+        val query = _uiState.value.userSearchQuery
+        userListOffset = 0
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingUserList = true, userListError = null)
+            repository.listUsers(search = query, offset = 0)
+                .onSuccess { (list, hasMore) ->
+                    userListOffset = list.size
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingUserList = false,
+                        userList = list,
+                        userListHasMore = hasMore
+                    )
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingUserList = false,
+                        userListError = e.message ?: "Gagal memuat daftar user"
+                    )
+                }
+        }
+    }
+
+    /** Muat halaman berikutnya (dipanggil pas nyampe bawah list), nambahin ke list yang udah ada. */
+    fun loadMoreUsers() {
+        val state = _uiState.value
+        if (state.isLoadingMoreUsers || !state.userListHasMore) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingMoreUsers = true)
+            repository.listUsers(search = state.userSearchQuery, offset = userListOffset)
+                .onSuccess { (list, hasMore) ->
+                    userListOffset += list.size
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingMoreUsers = false,
+                        userList = _uiState.value.userList + list,
+                        userListHasMore = hasMore
+                    )
+                }
+                .onFailure {
+                    _uiState.value = _uiState.value.copy(isLoadingMoreUsers = false)
+                }
+        }
+    }
+
+    /** Refresh ringan setelah aksi role/ban -- biar badge & status di baris user langsung update. */
+    private fun refreshAfterAction() {
+        val state = _uiState.value
+        viewModelScope.launch {
+            repository.listUsers(search = state.userSearchQuery, offset = 0)
+                .onSuccess { (list, hasMore) ->
+                    userListOffset = list.size
+                    _uiState.value = _uiState.value.copy(userList = list, userListHasMore = hasMore)
+                }
+        }
+        if (state.myRole == ZenimeRole.DEVELOPER) loadRoleList()
+    }
+
     private fun clearMessages() {
         _uiState.value = _uiState.value.copy(actionError = null, actionSuccessMessage = null)
     }
 
-    /** Kasih/ganti role user lain lewat kode/uid yang diketik developer. */
+    /** Kasih/ganti role user lain. */
     fun assignRole(targetUid: String, role: ZenimeRole, badgeColorHex: String?) {
         if (targetUid == myUid) {
             _uiState.value = _uiState.value.copy(actionError = "Gak bisa ganti role diri sendiri")
@@ -85,7 +170,7 @@ class AdminViewModel(
             repository.setRole(targetUid, role, badgeColorHex)
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(isProcessing = false, actionSuccessMessage = "Role berhasil diset")
-                    loadRoleList()
+                    refreshAfterAction()
                 }
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(isProcessing = false, actionError = e.message ?: "Gagal set role")
@@ -100,7 +185,7 @@ class AdminViewModel(
             repository.removeRole(targetUid)
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(isProcessing = false, actionSuccessMessage = "Role dicabut")
-                    loadRoleList()
+                    refreshAfterAction()
                 }
                 .onFailure { e ->
                     _uiState.value = _uiState.value.copy(isProcessing = false, actionError = e.message ?: "Gagal cabut role")
@@ -118,7 +203,10 @@ class AdminViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isProcessing = true)
             repository.banUser(targetUid, reason)
-                .onSuccess { _uiState.value = _uiState.value.copy(isProcessing = false, actionSuccessMessage = "Akun diban") }
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(isProcessing = false, actionSuccessMessage = "Akun diban")
+                    refreshAfterAction()
+                }
                 .onFailure { e -> _uiState.value = _uiState.value.copy(isProcessing = false, actionError = e.message ?: "Gagal ban akun") }
         }
     }
@@ -128,7 +216,10 @@ class AdminViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isProcessing = true)
             repository.unbanUser(targetUid)
-                .onSuccess { _uiState.value = _uiState.value.copy(isProcessing = false, actionSuccessMessage = "Ban dicabut") }
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(isProcessing = false, actionSuccessMessage = "Ban dicabut")
+                    refreshAfterAction()
+                }
                 .onFailure { e -> _uiState.value = _uiState.value.copy(isProcessing = false, actionError = e.message ?: "Gagal cabut ban") }
         }
     }
@@ -143,10 +234,28 @@ class AdminViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isProcessing = true)
             repository.banDevice(targetUid, reason)
-                .onSuccess { _uiState.value = _uiState.value.copy(isProcessing = false, actionSuccessMessage = "Device diban") }
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(isProcessing = false, actionSuccessMessage = "Device diban")
+                    refreshAfterAction()
+                }
                 .onFailure { e -> _uiState.value = _uiState.value.copy(isProcessing = false, actionError = e.message ?: "Gagal ban device") }
         }
     }
 
+    fun unbanDevice(deviceId: String) {
+        clearMessages()
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isProcessing = true)
+            repository.unbanDevice(deviceId)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(isProcessing = false, actionSuccessMessage = "Ban device dicabut")
+                    refreshAfterAction()
+                }
+                .onFailure { e -> _uiState.value = _uiState.value.copy(isProcessing = false, actionError = e.message ?: "Gagal cabut ban device") }
+        }
+    }
+
     fun clearActionMessages() = clearMessages()
+
+    fun currentUid(): String = myUid
 }
