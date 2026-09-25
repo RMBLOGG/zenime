@@ -112,8 +112,8 @@ class CommentsViewModel(
                 myAvatarUrl = profile?.avatarUrl,
                 isPremium = isPremium,
                 premiumUids = premiumUidsSnapshot(),
-                userNumbersByUid = userNumberCache.filterValues { it != null }.mapValues { it!! },
-                avatarUrlsByUid = avatarCache.filterValues { it != null }.mapValues { it!! }
+                userNumbersByUid = userNumberCache.filterValues { it != null }.mapValues { it.value!! },
+                avatarUrlsByUid = avatarCache.filterValues { it != null }.mapValues { it.value!! }
             )
         }
     }
@@ -279,8 +279,8 @@ class CommentsViewModel(
                 _uiState.value = _uiState.value.copy(
                     premiumUids = premiumUidsSnapshot(),
                     levelsByUid = levelCache.filterValues { it != null }.mapValues { it.value!! },
-                    userNumbersByUid = userNumberCache.filterValues { it != null }.mapValues { it!! },
-                    avatarUrlsByUid = avatarCache.filterValues { it != null }.mapValues { it!! }
+                    userNumbersByUid = userNumberCache.filterValues { it != null }.mapValues { it.value!! },
+                    avatarUrlsByUid = avatarCache.filterValues { it != null }.mapValues { it.value!! }
                 )
             }
         }

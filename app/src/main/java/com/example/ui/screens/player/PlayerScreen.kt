@@ -166,6 +166,9 @@ import com.example.ui.components.ErrorStateView
 import com.example.ui.screens.comments.CommentsViewModel
 import com.example.ui.screens.comments.EpisodeCommentsSheet
 import com.example.ui.theme.ZenimePrimary
+import androidx.lifecycle.viewmodel.compose.viewModel as composeViewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.util.LOCKED_LATEST_EPISODES_COUNT
 import com.example.util.episodeIndexValue
 import com.example.util.PipController
@@ -1353,11 +1356,14 @@ fun PlayerScreen(
     // Sheet komentar episode -- ViewModel-nya di-key per episodeId biar
     // pindah episode (Episode Selanjutnya) dapet thread komentar yang baru,
     // bukan nyangkut nampilin komentar episode sebelumnya.
+    // Dipanggil pake alias `composeViewModel` (bukan `viewModel` polos)
+    // karena parameter PlayerScreen ini sendiri udah ada yang namanya
+    // `viewModel` (instance PlayerViewModel) -- biar gak ambigu/ketuker.
     if (showCommentsSheet) {
-        val commentsViewModel: CommentsViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        val commentsViewModel: CommentsViewModel = composeViewModel(
             key = "comments_${viewModel.episodeId}",
-            factory = androidx.lifecycle.viewmodel.viewModelFactory {
-                androidx.lifecycle.viewmodel.initializer {
+            factory = viewModelFactory {
+                initializer {
                     CommentsViewModel(episodeId = viewModel.episodeId, animeId = viewModel.animeId)
                 }
             }
