@@ -30,6 +30,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.DeleteSweep
@@ -88,6 +89,7 @@ import coil.compose.AsyncImage
 import com.example.R
 import com.example.data.local.FavoriteEntity
 import com.example.data.local.WatchHistoryEntity
+import com.example.data.model.EpisodeComment
 import com.example.ui.components.ClanRainbowBadge
 import com.example.ui.components.GeneratedAvatar
 import com.example.ui.components.LevelBadge
@@ -98,6 +100,7 @@ import com.example.ui.theme.ZenimePrimary
 import com.example.ui.theme.ZenimeSurfaceDark
 import com.example.ui.theme.ZenimeSurfaceVariantDark
 import java.text.SimpleDateFormat
+import java.time.Instant
 import java.util.Date
 import java.util.Locale
 
@@ -106,8 +109,9 @@ import java.util.Locale
  * satu kesatuan sama avatar (bukan app bar solid terpisah), identitas +
  * badge level/premium ngambang di bawah avatar, stat row flat 4 kolom pake
  * garis pemisah (bukan kartu kotak), tombol pill sekunder (Clan/Leaderboard),
- * CTA utama full-width, terus tab "Semua / Favorit / Riwayat" persis posisi
- * tab "Semua / Komentar / Riwayat" di Wibuku.
+ * CTA utama full-width, terus tab "Semua / Favorit / Komentar / Riwayat"
+ * ngikutin pola tab "Semua / Komentar / Riwayat" di Wibuku (Favorit
+ * ditambahin sebelum Komentar, satu-satunya beda posisi).
  */
 @Composable
 fun ProfileScreen(
@@ -198,7 +202,7 @@ fun ProfileScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // --- Tab: Semua / Favorit / Riwayat ---
+            // --- Tab: Semua / Favorit / Komentar / Riwayat ---
             ProfileTabRow(selectedIndex = selectedTab, onSelect = { selectedTab = it })
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -216,6 +220,20 @@ fun ProfileScreen(
                     favorites = uiState.favorites,
                     onAnimeClick = onAnimeClick
                 )
+
+                2 -> {
+                    LaunchedEffect(Unit) { viewModel.loadMyCommentsIfNeeded() }
+                    ProfileKomentarTab(
+                        comments = uiState.comments,
+                        isLoading = uiState.isLoadingComments,
+                        errorMessage = uiState.commentsError,
+                        username = uiState.username.ifBlank { "Pengguna Zenime" },
+                        avatarUrl = uiState.avatarUrl,
+                        firebaseUid = firebaseUid,
+                        isPremium = uiState.isPremium,
+                        onCommentClick = { comment -> onAnimeClick(comment.animeId) }
+                    )
+                }
 
                 else -> ProfileRiwayatTab(
                     history = uiState.history,
@@ -511,7 +529,7 @@ private fun PillBadge(icon: ImageVector, text: String, containerColor: Color, co
 /** Tab "Semua / Favorit / Riwayat" -- posisi & garis indikator persis tab Wibuku. */
 @Composable
 private fun ProfileTabRow(selectedIndex: Int, onSelect: (Int) -> Unit) {
-    val tabs = listOf("Semua", "Favorit", "Riwayat")
+    val tabs = listOf("Semua", "Favorit", "Komentar", "Riwayat")
     Column {
         Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             tabs.forEachIndexed { index, label ->
@@ -740,6 +758,201 @@ private fun ProfileRiwayatTab(
                 }
             }
         }
+    }
+}
+
+/** Isi tab "Komentar": feed flat sama persis pola [ProfileRiwayatTab] -- semua komentar/balasan yang pernah dikirim user ini. */
+@Composable
+private fun ProfileKomentarTab(
+    comments: List<EpisodeComment>,
+    isLoading: Boolean,
+    errorMessage: String?,
+    username: String,
+    avatarUrl: String?,
+    firebaseUid: String,
+    isPremium: Boolean,
+    onCommentClick: (EpisodeComment) -> Unit
+) {
+    Column {
+        SectionHeader(
+            iconVector = Icons.AutoMirrored.Filled.Chat,
+            iconTint = ZenimePrimary,
+            title = "Komentar",
+            trailing = if (comments.isNotEmpty()) "${comments.size} Komentar" else null
+        )
+
+        when {
+            isLoading -> Box(
+                modifier = Modifier.fillMaxWidth().height(130.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = ZenimePrimary, modifier = Modifier.size(28.dp))
+            }
+
+            errorMessage != null -> EmptySectionBox(text = errorMessage)
+
+            comments.isEmpty() -> EmptySectionBox(text = "Belum pernah komentar di episode manapun.")
+
+            else -> Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+                comments.forEachIndexed { index, item ->
+                    CommentFeedRow(
+                        item = item,
+                        username = username,
+                        avatarUrl = avatarUrl,
+                        firebaseUid = firebaseUid,
+                        isPremium = isPremium,
+                        onClick = onCommentClick
+                    )
+                    if (index != comments.lastIndex) {
+                        Spacer(modifier = Modifier.height(22.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Baris komentar flat kayak feed Wibuku -- avatar mini + nama + waktu
+ * relatif di atas (sama persis [HistoryRow]), thumbnail anime + judul +
+ * nomor episode, teks komentarnya, terus label jumlah balasan kalau ada
+ * (cuma buat komentar top-level -- balasan gak punya sub-balasan lagi).
+ */
+@Composable
+private fun CommentFeedRow(
+    item: EpisodeComment,
+    username: String,
+    avatarUrl: String?,
+    firebaseUid: String,
+    isPremium: Boolean,
+    onClick: (EpisodeComment) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth().clickable { onClick(item) }) {
+        // --- Baris atas: avatar mini + nama + badge verified, waktu di kanan ---
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.size(28.dp).clip(CircleShape).background(ZenimeSurfaceDark),
+                contentAlignment = Alignment.Center
+            ) {
+                if (!avatarUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = avatarUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize().clip(CircleShape)
+                    )
+                } else {
+                    GeneratedAvatar(seed = firebaseUid, label = username, size = 28.dp)
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = username,
+                color = Color.White,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false)
+            )
+            if (isPremium) {
+                Spacer(modifier = Modifier.width(4.dp))
+                Image(
+                    painter = painterResource(id = R.drawable.ic_verified_badge),
+                    contentDescription = "Verified",
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = formatRelativeTime(parseCommentTimeMs(item.createdAt)),
+                color = Color.White.copy(alpha = 0.45f),
+                style = MaterialTheme.typography.labelSmall,
+                fontSize = 11.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // --- Thumbnail + judul anime/episode ---
+        Row(verticalAlignment = Alignment.Top) {
+            Box(
+                modifier = Modifier
+                    .size(width = 72.dp, height = 72.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(ZenimeSurfaceDark)
+            ) {
+                if (!item.animePosterUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = item.animePosterUrl,
+                        contentDescription = item.animeTitle,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f).padding(top = 2.dp)) {
+                Text(
+                    text = item.animeTitle ?: "Anime",
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (!item.episodeIndex.isNullOrBlank()) {
+                    Text(
+                        text = "Episode ${item.episodeIndex}",
+                        color = Color.White.copy(alpha = 0.6f),
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // --- Teks komentar + tag "balasan untuk @x" kalau ini reply ---
+        if (!item.replyToUsername.isNullOrBlank()) {
+            Text(
+                text = "Balasan untuk @${item.replyToUsername}",
+                color = ZenimePrimary,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                modifier = Modifier.padding(bottom = 2.dp)
+            )
+        }
+        Text(
+            text = item.comment,
+            color = Color.White.copy(alpha = 0.85f),
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = 3,
+            overflow = TextOverflow.Ellipsis
+        )
+
+        if (item.parentId == null && item.replyCount > 0) {
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = "${item.replyCount} Balasan",
+                color = Color.White.copy(alpha = 0.5f),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+/** Parse timestamp ISO 8601 dari Supabase (`created_at`) jadi epoch millis buat [formatRelativeTime]. */
+private fun parseCommentTimeMs(isoTimestamp: String): Long {
+    return try {
+        Instant.parse(isoTimestamp).toEpochMilli()
+    } catch (e: Exception) {
+        0L
     }
 }
 

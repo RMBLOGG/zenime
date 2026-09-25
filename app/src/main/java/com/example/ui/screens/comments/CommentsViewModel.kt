@@ -69,6 +69,12 @@ data class CommentsUiState(
 class CommentsViewModel(
     private val episodeId: String,
     private val animeId: String,
+    // Snapshot judul anime/poster/nomor episode -- ditempelin ke tiap
+    // komentar yang dikirim dari sini, dipakai tab "Komentar" di Profil
+    // biar bisa nampilin thumbnail+judul tanpa query balik ke tabel anime.
+    private val animeTitle: String? = null,
+    private val animePosterUrl: String? = null,
+    private val episodeIndex: String? = null,
     private val repository: CommentRepository = CommentRepository(),
     private val chatRepository: ChatRepository = ChatRepository(),
     private val premiumRepository: PremiumRepository = PremiumRepository(),
@@ -190,7 +196,10 @@ class CommentsViewModel(
                     // Highlight mahkota cuma efektif buat user Premium, biarpun
                     // togglenya kepencet -- dicek ulang di sini (bukan cuma di UI)
                     // biar gak bisa disalahgunain user non-premium.
-                    isPinned = asPremiumHighlight && state.isPremium
+                    isPinned = asPremiumHighlight && state.isPremium,
+                    animeTitle = animeTitle,
+                    animePosterUrl = animePosterUrl,
+                    episodeIndex = episodeIndex
                 )
             }.onSuccess { inserted ->
                 if (parentId == null) {

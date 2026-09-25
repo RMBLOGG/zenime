@@ -1364,7 +1364,13 @@ fun PlayerScreen(
             key = "comments_${viewModel.episodeId}",
             factory = viewModelFactory {
                 initializer {
-                    CommentsViewModel(episodeId = viewModel.episodeId, animeId = viewModel.animeId)
+                    CommentsViewModel(
+                        episodeId = viewModel.episodeId,
+                        animeId = viewModel.animeId,
+                        animeTitle = animeInfo?.title,
+                        animePosterUrl = animeInfo?.image_poster ?: animeInfo?.image_cover,
+                        episodeIndex = currentEpisodeDetail?.index
+                    )
                 }
             }
         )

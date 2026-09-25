@@ -6,9 +6,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.FavoriteEntity
 import com.example.data.local.WatchHistoryEntity
+import com.example.data.model.EpisodeComment
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.ChatRepository
 import com.example.data.repository.ClanRepository
+import com.example.data.repository.CommentRepository
 import com.example.data.repository.PremiumRepository
 import com.example.util.AvatarUploader
 import com.example.util.BannerUploader
@@ -40,6 +42,14 @@ data class ProfileUiState(
     val favorites: List<FavoriteEntity> = emptyList(),
     val history: List<WatchHistoryEntity> = emptyList(),
 
+    // Tab "Komentar" -- lazy-load, cuma ditarik pas tab-nya pertama kali
+    // dibuka (bukan bareng data lain pas Profil ke-buka), biar gak nembak
+    // network call yang belum tentu kepake.
+    val comments: List<EpisodeComment> = emptyList(),
+    val isLoadingComments: Boolean = false,
+    val hasLoadedComments: Boolean = false,
+    val commentsError: String? = null,
+
     // Dialog "Edit Profil".
     val isEditDialogOpen: Boolean = false,
     val isSavingUsername: Boolean = false,
@@ -63,6 +73,7 @@ class ProfileViewModel(
     private val chatRepository: ChatRepository = ChatRepository(),
     private val premiumRepository: PremiumRepository = PremiumRepository(),
     private val clanRepository: ClanRepository = ClanRepository(),
+    private val commentRepository: CommentRepository = CommentRepository(),
     private val firebaseUid: String,
     private val fallbackUsername: String
 ) : ViewModel() {
@@ -222,5 +233,29 @@ class ProfileViewModel(
 
     fun clearAllHistory() {
         viewModelScope.launch { repository.clearHistory() }
+    }
+
+    // --- Tab "Komentar" ---
+
+    /** Dipanggil sekali pas tab "Komentar" pertama kali dibuka (lihat [hasLoadedComments]). */
+    fun loadMyCommentsIfNeeded() {
+        if (_uiState.value.hasLoadedComments || _uiState.value.isLoadingComments) return
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingComments = true, commentsError = null)
+            runCatching { commentRepository.getMyComments(firebaseUid) }
+                .onSuccess { list ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingComments = false,
+                        hasLoadedComments = true,
+                        comments = list
+                    )
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingComments = false,
+                        commentsError = friendlyErrorMessage(e, "Gagal memuat komentar")
+                    )
+                }
+        }
     }
 }

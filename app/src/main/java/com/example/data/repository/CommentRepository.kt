@@ -40,7 +40,10 @@ class CommentRepository(
         comment: String,
         parentId: Long? = null,
         replyToUsername: String? = null,
-        isPinned: Boolean = false
+        isPinned: Boolean = false,
+        animeTitle: String? = null,
+        animePosterUrl: String? = null,
+        episodeIndex: String? = null
     ): EpisodeComment {
         val result = api.postEpisodeComment(
             EpisodeCommentInsert(
@@ -52,10 +55,18 @@ class CommentRepository(
                 comment = comment,
                 parentId = parentId,
                 replyToUsername = replyToUsername,
-                isPinned = isPinned
+                isPinned = isPinned,
+                animeTitle = animeTitle,
+                animePosterUrl = animePosterUrl,
+                episodeIndex = episodeIndex
             )
         )
         return result.first()
+    }
+
+    /** Semua komentar/balasan milik 1 user -- basis tab "Komentar" di Profil. */
+    suspend fun getMyComments(firebaseUid: String): List<EpisodeComment> {
+        return api.getMyEpisodeComments(firebaseUidEq = "eq.$firebaseUid")
     }
 
     /** Hapus komentar/balasan milik sendiri -- firebase_uid ikut difilter di query. */

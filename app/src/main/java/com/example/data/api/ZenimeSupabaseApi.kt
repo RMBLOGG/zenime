@@ -125,9 +125,20 @@ interface ZenimeSupabaseApi {
     @GET("rest/v1/episode_comments")
     suspend fun getEpisodeComments(
         @Query("episode_id") episodeIdEq: String,
-        @Query("select") select: String = "id,episode_id,anime_id,firebase_uid,username,avatar_url,comment,parent_id,reply_to_username,created_at,is_pinned",
+        @Query("select") select: String = "id,episode_id,anime_id,firebase_uid,username,avatar_url,comment,parent_id,reply_to_username,created_at,is_pinned,reply_count",
         @Query("order") order: String = "created_at.asc",
         @Query("limit") limit: Int = 500
+    ): List<EpisodeComment>
+
+    // Semua komentar/balasan MILIK 1 user, lintas semua episode -- basis
+    // tab "Komentar" di halaman Profil. Diurutin terbaru duluan, dibatasin
+    // 50 biar ringan (belum ada pagination -- cukup buat MVP).
+    @GET("rest/v1/episode_comments")
+    suspend fun getMyEpisodeComments(
+        @Query("firebase_uid") firebaseUidEq: String,
+        @Query("select") select: String = "id,episode_id,anime_id,anime_title,anime_poster_url,episode_index,firebase_uid,username,avatar_url,comment,parent_id,reply_to_username,created_at,is_pinned,reply_count",
+        @Query("order") order: String = "created_at.desc",
+        @Query("limit") limit: Int = 50
     ): List<EpisodeComment>
 
     @Headers("Prefer: return=representation")

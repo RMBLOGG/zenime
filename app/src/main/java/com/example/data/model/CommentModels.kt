@@ -27,7 +27,19 @@ data class EpisodeComment(
     @Json(name = "created_at") val createdAt: String = "",
     // Komentar yang dikirim user Premium lewat tombol mahkota -- disorot
     // beda (border emas) & diprioritaskan di tab "Top Comment".
-    @Json(name = "is_pinned") val isPinned: Boolean = false
+    @Json(name = "is_pinned") val isPinned: Boolean = false,
+
+    // --- Snapshot anime/episode, khusus dipake tab "Komentar" di halaman
+    // Profil (biar bisa nampilin thumbnail+judul tanpa query balik ke
+    // tabel anime tiap baris) -- kosong/null aman diabaikan di sheet
+    // komentar per-episode yang gak butuh field ini.
+    @Json(name = "anime_title") val animeTitle: String? = null,
+    @Json(name = "anime_poster_url") val animePosterUrl: String? = null,
+    @Json(name = "episode_index") val episodeIndex: String? = null,
+    // Jumlah balasan komentar ini -- di-update otomatis lewat trigger DB,
+    // BUKAN dihitung di app (lihat SETUP_KOMENTAR_PROFIL.sql). Cuma valid
+    // buat komentar top-level (parentId null); balasan selalu 0.
+    @Json(name = "reply_count") val replyCount: Int = 0
 )
 
 /** Body buat POST insert komentar/balasan baru -- id & created_at di-generate DB. */
@@ -41,5 +53,8 @@ data class EpisodeCommentInsert(
     @Json(name = "comment") val comment: String,
     @Json(name = "parent_id") val parentId: Long? = null,
     @Json(name = "reply_to_username") val replyToUsername: String? = null,
-    @Json(name = "is_pinned") val isPinned: Boolean = false
+    @Json(name = "is_pinned") val isPinned: Boolean = false,
+    @Json(name = "anime_title") val animeTitle: String? = null,
+    @Json(name = "anime_poster_url") val animePosterUrl: String? = null,
+    @Json(name = "episode_index") val episodeIndex: String? = null
 )
