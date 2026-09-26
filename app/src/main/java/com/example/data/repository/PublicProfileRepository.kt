@@ -1,5 +1,10 @@
 package com.example.data.repository
 
+import android.os.Handler
+import android.os.Looper
+import android.util.Log
+import android.widget.Toast
+import com.example.ZenimeApp
 import com.example.data.api.SupabaseNetworkModule
 import com.example.data.api.ZenimeSupabaseApi
 import com.example.data.local.FavoriteEntity
@@ -9,6 +14,9 @@ import com.example.data.model.PublicProfileContentResponse
 import com.example.data.model.WatchHistoryUpsert
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import retrofit2.Response
+
+private const val TAG = "PublicProfileSync"
 
 /**
  * Sinkronisasi Favorit & Riwayat Tontonan ke Supabase (`user_favorites`,
@@ -18,16 +26,42 @@ import kotlinx.coroutines.coroutineScope
  *
  * Room ([com.example.data.local.ZenimeDatabase]) tetap sumber utama buat
  * pemilik data sendiri -- semua fungsi sync di sini best-effort/fire-and-
- * forget, dipanggil SETELAH tulis ke Room berhasil (lihat [AnimeRepository]),
- * dan errornya sengaja ditelan biar gak ganggu pengalaman nonton/nge-favorite
- * kalau lagi offline atau server lagi bermasalah.
+ * forget, dipanggil SETELAH tulis ke Room berhasil (lihat [AnimeRepository]).
+ * Gagal sync gak dilempar balik ke pemanggil (biar gak ganggu pengalaman
+ * nonton/nge-favorite kalau lagi offline), TAPI selalu di-log ke Logcat DAN
+ * ditampilin sebagai Toast (lewat [ZenimeApp.instance], gak butuh Context
+ * dari pemanggil) -- biar kelihatan LANGSUNG di HP pas testing tanpa perlu
+ * adb/PC. Ini penting karena endpoint yang balikin `Response<Void>` TIDAK
+ * nge-throw buat status HTTP non-2xx (beda sama endpoint yang balikin tipe
+ * data biasa) -- tanpa cek `isSuccessful` manual, request yang ditolak
+ * RLS/validasi server bakal keliatan "sukses" padahal gak nyimpen apa-apa.
  */
 class PublicProfileRepository(
     private val api: ZenimeSupabaseApi = SupabaseNetworkModule.api
 ) {
+    private fun showErrorToast(message: String) {
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(ZenimeApp.instance, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun <T> logIfFailed(action: String, response: Response<T>) {
+        if (!response.isSuccessful) {
+            val errorBody = runCatching { response.errorBody()?.string() }.getOrNull()
+            val message = "$action GAGAL -- HTTP ${response.code()}: $errorBody"
+            Log.e(TAG, message)
+            showErrorToast(message)
+        }
+    }
+
+    private fun logException(action: String, e: Throwable) {
+        Log.e(TAG, "$action EXCEPTION", e)
+        showErrorToast("$action EXCEPTION: ${e.message}")
+    }
+
     suspend fun syncFavoriteAdded(firebaseUid: String, favorite: FavoriteEntity) {
         runCatching {
-            api.upsertFavorite(
+            val response = api.upsertFavorite(
                 body = FavoriteUpsert(
                     firebaseUid = firebaseUid,
                     animeId = favorite.id,
@@ -37,18 +71,20 @@ class PublicProfileRepository(
                     status = favorite.status
                 )
             )
-        }
+            logIfFailed("syncFavoriteAdded", response)
+        }.onFailure { e -> logException("syncFavoriteAdded", e) }
     }
 
     suspend fun syncFavoriteRemoved(firebaseUid: String, animeId: String) {
         runCatching {
-            api.deleteFavoriteRemote(firebaseUidEq = "eq.$firebaseUid", animeIdEq = "eq.$animeId")
-        }
+            val response = api.deleteFavoriteRemote(firebaseUidEq = "eq.$firebaseUid", animeIdEq = "eq.$animeId")
+            logIfFailed("syncFavoriteRemoved", response)
+        }.onFailure { e -> logException("syncFavoriteRemoved", e) }
     }
 
     suspend fun syncWatchProgress(firebaseUid: String, history: WatchHistoryEntity) {
         runCatching {
-            api.upsertWatchHistoryRemote(
+            val response = api.upsertWatchHistoryRemote(
                 body = WatchHistoryUpsert(
                     firebaseUid = firebaseUid,
                     animeId = history.animeId,
@@ -61,13 +97,15 @@ class PublicProfileRepository(
                     durationMs = history.durationMs
                 )
             )
-        }
+            logIfFailed("syncWatchProgress", response)
+        }.onFailure { e -> logException("syncWatchProgress", e) }
     }
 
     suspend fun syncHistoryRemoved(firebaseUid: String, animeId: String) {
         runCatching {
-            api.deleteWatchHistoryRemote(firebaseUidEq = "eq.$firebaseUid", animeIdEq = "eq.$animeId")
-        }
+            val response = api.deleteWatchHistoryRemote(firebaseUidEq = "eq.$firebaseUid", animeIdEq = "eq.$animeId")
+            logIfFailed("syncHistoryRemoved", response)
+        }.onFailure { e -> logException("syncHistoryRemoved", e) }
     }
 
     /**
