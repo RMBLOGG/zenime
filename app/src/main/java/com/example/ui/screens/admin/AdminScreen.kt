@@ -10,21 +10,22 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenu
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -289,7 +290,7 @@ private fun AssignRoleForm(isProcessing: Boolean, viewModel: AdminViewModel) {
         )
         Spacer(modifier = Modifier.height(10.dp))
 
-        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        Box(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = when (selectedRole) {
                     ZenimeRole.DEVELOPER -> "Developer"
@@ -299,10 +300,26 @@ private fun AssignRoleForm(isProcessing: Boolean, viewModel: AdminViewModel) {
                 onValueChange = {},
                 readOnly = true,
                 label = { Text("Role") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                modifier = Modifier.fillMaxWidth().menuAnchor()
+                trailingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = null
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = true }
             )
-            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            // Overlay transparan biar klik di textfield (yang readOnly) ikut
+            // buka dropdown -- OutlinedTextField readOnly gak nembusin klik
+            // ke .clickable di modifier-nya sendiri di sebagian versi Compose,
+            // jadi dijamin pakai Box overlay ini.
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .clickable { expanded = true }
+            )
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 listOf(ZenimeRole.DEVELOPER, ZenimeRole.ADMIN, ZenimeRole.MODERATOR).forEach { r ->
                     DropdownMenuItem(
                         text = {
