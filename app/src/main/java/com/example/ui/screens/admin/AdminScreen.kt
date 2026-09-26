@@ -13,21 +13,22 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -155,7 +156,7 @@ private fun AdminScreenContent(
 
         when (tabs[selectedTab]) {
             "Semua User" -> UserListTab(role = role, uiState = uiState, viewModel = viewModel)
-            "Pemegang Role" -> RoleHoldersTab(uiState = uiState)
+            "Pemegang Role" -> RoleHoldersTab(uiState = uiState, viewModel = viewModel)
             else -> InfoTab(role = role)
         }
     }
@@ -404,7 +405,7 @@ private fun StatusChip(text: String) {
 }
 
 @Composable
-private fun RoleHoldersTab(uiState: AdminUiState) {
+private fun RoleHoldersTab(uiState: AdminUiState, viewModel: AdminViewModel) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp)
@@ -425,7 +426,7 @@ private fun RoleHoldersTab(uiState: AdminUiState) {
             }
         } else {
             items(uiState.roleList) { entry ->
-                RoleListItemView(entry = entry)
+                RoleListItemView(entry = entry, onRemove = { viewModel.removeRole(entry.firebaseUid) })
             }
         }
         item { Spacer(modifier = Modifier.height(24.dp)) }
@@ -507,7 +508,7 @@ fun RoleBadgeChip(role: ZenimeRole, badgeColorHex: String?, modifier: Modifier =
 }
 
 @Composable
-private fun RoleListItemView(entry: RoleListEntry) {
+private fun RoleListItemView(entry: RoleListEntry, onRemove: () -> Unit) {
     val role = ZenimeRole.fromValue(entry.role) ?: return
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -528,6 +529,12 @@ private fun RoleListItemView(entry: RoleListEntry) {
             Spacer(modifier = Modifier.height(4.dp))
             RoleBadgeChip(role = role, badgeColorHex = entry.badgeColor)
         }
+        Text(
+            "Cabut",
+            color = Color(0xFFE57373),
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.clickable(onClick = onRemove).padding(8.dp)
+        )
     }
 }
 
@@ -549,7 +556,7 @@ private fun RoleAssignDialog(
         title = { Text("Set Role -- ${user.username ?: user.firebaseUid}") },
         text = {
             Column {
-                ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+                Box(modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(
                         value = when (selectedRole) {
                             ZenimeRole.DEVELOPER -> "Developer"
@@ -559,10 +566,18 @@ private fun RoleAssignDialog(
                         onValueChange = {},
                         readOnly = true,
                         label = { Text("Role") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                        modifier = Modifier.fillMaxWidth().menuAnchor()
+                        trailingIcon = {
+                            Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null)
+                        },
+                        modifier = Modifier.fillMaxWidth()
                     )
-                    ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    // Overlay transparan biar klik di textfield (readOnly) ikut buka dropdown.
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .clickable { expanded = true }
+                    )
+                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                         listOf(ZenimeRole.DEVELOPER, ZenimeRole.ADMIN, ZenimeRole.MODERATOR).forEach { r ->
                             DropdownMenuItem(
                                 text = {
