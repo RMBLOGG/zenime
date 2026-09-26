@@ -80,6 +80,27 @@ data class AdminActionResponse(
     @Json(name = "device_id") val deviceId: String? = null
 )
 
+/** Satu baris di zenime-admin-list-users -- dipakai buat tab "Semua User". */
+@JsonClass(generateAdapter = true)
+data class UserListEntry(
+    @Json(name = "firebase_uid") val firebaseUid: String = "",
+    @Json(name = "username") val username: String? = null,
+    @Json(name = "avatar_url") val avatarUrl: String? = null,
+    @Json(name = "zenime_code") val zenimeCode: String? = null,
+    @Json(name = "user_number") val userNumber: Int? = null,
+    @Json(name = "last_device_id") val lastDeviceId: String? = null,
+    @Json(name = "role") val role: String? = null,
+    @Json(name = "badge_color") val badgeColor: String? = null,
+    @Json(name = "banned_account") val bannedAccount: Boolean = false,
+    @Json(name = "banned_device") val bannedDevice: Boolean = false
+)
+
+@JsonClass(generateAdapter = true)
+data class UserListResponse(
+    @Json(name = "users") val users: List<UserListEntry> = emptyList(),
+    @Json(name = "has_more") val hasMore: Boolean = false
+)
+
 @JsonClass(generateAdapter = true)
 data class CheckBanResponse(
     @Json(name = "banned") val banned: Boolean = false,

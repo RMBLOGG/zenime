@@ -37,6 +37,97 @@ class LoginViewModel(
 
     val posterUrls: List<String> = LoginBackdropPosters.urls
 
+    // --- State khusus form email (Daftar / Masuk manual) ---
+    private val _emailFormMode = MutableStateFlow(EmailFormMode.HIDDEN)
+    val emailFormMode: StateFlow<EmailFormMode> = _emailFormMode
+
+    private val _emailFormMessage = MutableStateFlow<String?>(null)
+    val emailFormMessage: StateFlow<String?> = _emailFormMessage
+
+    private val _isEmailFormLoading = MutableStateFlow(false)
+    val isEmailFormLoading: StateFlow<Boolean> = _isEmailFormLoading
+
+    // Nyimpen email/password terakhir yang dicoba, dipake buat tombol
+    // "Kirim ulang email verifikasi" tanpa user perlu ngetik ulang.
+    private var lastAttemptedEmail: String = ""
+    private var lastAttemptedPassword: String = ""
+
+    // Nyala cuma pas signInWithEmail gagal spesifik karena belum verified.
+    private val _showResendVerification = MutableStateFlow(false)
+    val showResendVerification: StateFlow<Boolean> = _showResendVerification
+
+    fun setEmailFormMode(mode: EmailFormMode) {
+        _emailFormMode.value = mode
+        _emailFormMessage.value = null
+        _showResendVerification.value = false
+    }
+
+    fun signUpWithEmail(username: String, email: String, password: String) {
+        if (_isEmailFormLoading.value) return
+        viewModelScope.launch {
+            _isEmailFormLoading.value = true
+            _emailFormMessage.value = null
+            _showResendVerification.value = false
+            val result = authRepository.signUpWithEmail(username, email, password)
+            result.onSuccess {
+                _emailFormMessage.value =
+                    "Berhasil daftar! Cek email $email buat verifikasi akun, baru bisa masuk."
+                _emailFormMode.value = EmailFormMode.SIGN_IN
+            }
+            result.onFailure { error ->
+                _emailFormMessage.value = error.message ?: "Daftar gagal, coba lagi."
+            }
+            _isEmailFormLoading.value = false
+        }
+    }
+
+    fun signInWithEmail(context: Context, email: String, password: String, onSuccess: () -> Unit) {
+        if (_isEmailFormLoading.value) return
+        lastAttemptedEmail = email
+        lastAttemptedPassword = password
+        viewModelScope.launch {
+            _isEmailFormLoading.value = true
+            _emailFormMessage.value = null
+            _showResendVerification.value = false
+            val result = authRepository.signInWithEmail(email, password)
+            result.onSuccess {
+                @SuppressLint("HardwareIds")
+                val deviceId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+                    ?: ""
+                val banResult = adminRepository.checkBan(deviceId).getOrNull()
+                if (banResult?.banned == true) {
+                    authRepository.signOut()
+                    _emailFormMessage.value = banResult.reason ?: "Akun/perangkat ini diblokir."
+                } else {
+                    onSuccess()
+                }
+            }
+            result.onFailure { error ->
+                _emailFormMessage.value = error.message ?: "Login gagal, coba lagi."
+                if (error.message?.contains("belum diverifikasi") == true) {
+                    _showResendVerification.value = true
+                }
+            }
+            _isEmailFormLoading.value = false
+        }
+    }
+
+    fun resendVerificationEmail() {
+        if (_isEmailFormLoading.value || lastAttemptedEmail.isEmpty()) return
+        viewModelScope.launch {
+            _isEmailFormLoading.value = true
+            val result = authRepository.resendVerificationEmail(lastAttemptedEmail, lastAttemptedPassword)
+            result.onSuccess {
+                _emailFormMessage.value = "Email verifikasi udah dikirim ulang, cek inbox kamu."
+                _showResendVerification.value = false
+            }
+            result.onFailure { error ->
+                _emailFormMessage.value = error.message ?: "Gagal kirim ulang, coba lagi."
+            }
+            _isEmailFormLoading.value = false
+        }
+    }
+
     fun signInWithGoogle(context: Context, onSuccess: () -> Unit) {
         if (_isSigningIn.value) return
         viewModelScope.launch {
@@ -71,3 +162,5 @@ class LoginViewModel(
         _loginError.value = null
     }
 }
+
+enum class EmailFormMode { HIDDEN, SIGN_IN, SIGN_UP }

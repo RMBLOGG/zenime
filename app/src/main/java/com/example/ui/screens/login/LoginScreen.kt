@@ -1,6 +1,8 @@
 package com.example.ui.screens.login
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -21,10 +24,16 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,6 +44,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -156,11 +167,17 @@ fun LoginScreen(
                 .height(40.dp)
         )
 
-        // Layer 4: judul + tombol login, nempel di bawah
+        // Layer 4: judul + tombol login, nempel di bawah. imePadding() +
+        // verticalScroll WAJIB di sini -- tanpa ini form email/password di
+        // bawah ketutup keyboard pas fokus ke field-nya (dilaporin user),
+        // soalnya layar ini pakai decorFitsSystemWindows(false) buat
+        // immersive mode jadi keyboard gak otomatis nge-resize layout.
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 28.dp)
                 .padding(bottom = 40.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -221,6 +238,156 @@ fun LoginScreen(
                     textAlign = TextAlign.Center
                 )
             }
+
+            // --- Form Daftar/Masuk manual pakai email+password ---
+            val emailFormMode by viewModel.emailFormMode.collectAsStateWithLifecycle()
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (emailFormMode == EmailFormMode.HIDDEN) {
+                TextButton(onClick = { viewModel.setEmailFormMode(EmailFormMode.SIGN_IN) }) {
+                    Text(
+                        "Daftar / masuk pakai email",
+                        color = Color.White.copy(alpha = 0.85f)
+                    )
+                }
+            } else {
+                EmailAuthForm(
+                    viewModel = viewModel,
+                    mode = emailFormMode,
+                    onSuccess = onLoginSuccess
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmailAuthForm(
+    viewModel: LoginViewModel,
+    mode: EmailFormMode,
+    onSuccess: () -> Unit
+) {
+    val context = LocalContext.current
+    val isLoading by viewModel.isEmailFormLoading.collectAsStateWithLifecycle()
+    val message by viewModel.emailFormMessage.collectAsStateWithLifecycle()
+    val showResend by viewModel.showResendVerification.collectAsStateWithLifecycle()
+
+    var username by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedBorderColor = ZenimePrimary,
+        unfocusedBorderColor = CardOutlineBorder,
+        focusedTextColor = Color.White,
+        unfocusedTextColor = Color.White,
+        cursorColor = ZenimePrimary,
+        focusedLabelColor = ZenimePrimary,
+        unfocusedLabelColor = Color.White.copy(alpha = 0.6f)
+    )
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        if (mode == EmailFormMode.SIGN_UP) {
+            OutlinedTextField(
+                value = username,
+                onValueChange = { username = it },
+                label = { Text("Username") },
+                singleLine = true,
+                colors = fieldColors,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+
+        OutlinedTextField(
+            value = email,
+            onValueChange = { email = it },
+            label = { Text("Email") },
+            singleLine = true,
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Email),
+            colors = fieldColors,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it },
+            label = { Text("Password") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Password),
+            colors = fieldColors,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        OutlinedButton(
+            onClick = {
+                if (mode == EmailFormMode.SIGN_UP) {
+                    viewModel.signUpWithEmail(username, email, password)
+                } else {
+                    viewModel.signInWithEmail(context, email, password, onSuccess)
+                }
+            },
+            enabled = !isLoading,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            shape = RoundedCornerShape(14.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+            border = androidx.compose.foundation.BorderStroke(1.dp, CardOutlineBorder)
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(
+                    color = ZenimePrimary,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(if (mode == EmailFormMode.SIGN_UP) "Mendaftar..." else "Masuk...")
+            } else {
+                Text(if (mode == EmailFormMode.SIGN_UP) "Daftar" else "Masuk")
+            }
+        }
+
+        if (message != null) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = message ?: "",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (message?.startsWith("Berhasil") == true) ZenimePrimary else MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        if (showResend) {
+            Spacer(modifier = Modifier.height(6.dp))
+            TextButton(
+                onClick = { viewModel.resendVerificationEmail() },
+                enabled = !isLoading,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Kirim ulang email verifikasi", color = ZenimePrimary)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+        TextButton(
+            onClick = {
+                viewModel.setEmailFormMode(
+                    if (mode == EmailFormMode.SIGN_UP) EmailFormMode.SIGN_IN else EmailFormMode.SIGN_UP
+                )
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                if (mode == EmailFormMode.SIGN_UP) "Udah punya akun? Masuk" else "Belum punya akun? Daftar",
+                color = Color.White.copy(alpha = 0.85f)
+            )
         }
     }
 }
