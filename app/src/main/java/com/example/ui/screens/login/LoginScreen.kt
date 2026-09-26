@@ -1,6 +1,8 @@
 package com.example.ui.screens.login
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -164,11 +167,17 @@ fun LoginScreen(
                 .height(40.dp)
         )
 
-        // Layer 4: judul + tombol login, nempel di bawah
+        // Layer 4: judul + tombol login, nempel di bawah. imePadding() +
+        // verticalScroll WAJIB di sini -- tanpa ini form email/password di
+        // bawah ketutup keyboard pas fokus ke field-nya (dilaporin user),
+        // soalnya layar ini pakai decorFitsSystemWindows(false) buat
+        // immersive mode jadi keyboard gak otomatis nge-resize layout.
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
+                .imePadding()
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 28.dp)
                 .padding(bottom = 40.dp),
             horizontalAlignment = Alignment.CenterHorizontally
