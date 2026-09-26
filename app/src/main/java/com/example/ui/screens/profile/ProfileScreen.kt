@@ -524,18 +524,22 @@ private fun ProfileHeroSection(
             Spacer(modifier = Modifier.height(14.dp))
 
             // CTA utama full-width, posisi & bobot visual kayak "Tambah Teman".
-            Button(
-                onClick = onEditClick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
-                    .height(52.dp),
-                shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(containerColor = ZenimePrimary)
-            ) {
-                Icon(Icons.Filled.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Edit Profil", color = Color.White, fontWeight = FontWeight.Bold)
+            // Cuma masuk akal di profil SENDIRI -- di profil orang lain gak
+            // ada apa-apa yang bisa diedit dari sini.
+            if (isOwnProfile) {
+                Button(
+                    onClick = onEditClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(50),
+                    colors = ButtonDefaults.buttonColors(containerColor = ZenimePrimary)
+                ) {
+                    Icon(Icons.Filled.Edit, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Edit Profil", color = Color.White, fontWeight = FontWeight.Bold)
+                }
             }
         }
 
