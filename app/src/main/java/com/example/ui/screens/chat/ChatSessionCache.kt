@@ -16,6 +16,8 @@ object ChatSessionCache {
     @Volatile var usernameColorsByUid: Map<String, String> = emptyMap()
     @Volatile var userNumbersByUid: Map<String, Long> = emptyMap()
     @Volatile var avatarUrlsByUid: Map<String, String> = emptyMap()
+    @Volatile var rolesByUid: Map<String, String> = emptyMap()
+    @Volatile var roleBadgeColorsByUid: Map<String, String> = emptyMap()
 
     fun save(state: ChatUiState) {
         // Jangan timpa cache yang udah isi pakai state kosong (misal pas awal VM).
@@ -27,5 +29,7 @@ object ChatSessionCache {
         usernameColorsByUid = state.usernameColorsByUid
         userNumbersByUid = state.userNumbersByUid
         avatarUrlsByUid = state.avatarUrlsByUid
+        rolesByUid = state.rolesByUid
+        roleBadgeColorsByUid = state.roleBadgeColorsByUid
     }
 }

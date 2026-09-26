@@ -160,7 +160,12 @@ class ChatViewModel(
             xpLevelsByUid = ChatSessionCache.xpLevelsByUid,
             usernameColorsByUid = ChatSessionCache.usernameColorsByUid,
             userNumbersByUid = ChatSessionCache.userNumbersByUid,
-            avatarUrlsByUid = ChatSessionCache.avatarUrlsByUid
+            avatarUrlsByUid = ChatSessionCache.avatarUrlsByUid,
+            // Role & warna badge custom ikut di-cache biar gak sempet numpang
+            // fallback ke badge Premium biru pas Chat Global baru dibuka lagi
+            // (sebelum hasil checkRolesForNewSenders yang baru datang).
+            rolesByUid = ChatSessionCache.rolesByUid,
+            roleBadgeColorsByUid = ChatSessionCache.roleBadgeColorsByUid
         )
     )
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
@@ -205,8 +210,8 @@ class ChatViewModel(
     // Sama pola kayak cache badge lain, tapi buat role (developer/admin/
     // moderator). `null` value = udah dicek, ternyata user biasa (gak
     // punya role) -- beda sama "belum pernah dicek" (uid gak ada di map).
-    private val roleCache = mutableMapOf<String, String?>()
-    private val roleBadgeColorCache = mutableMapOf<String, String?>()
+    private val roleCache = mutableMapOf<String, String?>().apply { putAll(ChatSessionCache.rolesByUid) }
+    private val roleBadgeColorCache = mutableMapOf<String, String?>().apply { putAll(ChatSessionCache.roleBadgeColorsByUid) }
     private val roleCheckedUids = mutableSetOf<String>()
 
     init {
@@ -224,12 +229,14 @@ class ChatViewModel(
     /** Cek role diri sendiri -- nentuin boleh/nggaknya hapus pesan orang lain. */
     private fun loadMyRole() {
         viewModelScope.launch {
-            val role = adminRepository.getMyRole().getOrNull()?.role
+            val info = adminRepository.getMyRole().getOrNull()
             roleCheckedUids += firebaseUid
-            roleCache[firebaseUid] = role
+            roleCache[firebaseUid] = info?.role
+            roleBadgeColorCache[firebaseUid] = info?.badgeColor
             _uiState.value = _uiState.value.copy(
-                canDeleteOthersMessages = role == "admin" || role == "developer",
-                rolesByUid = roleCache.filterValues { it != null }.mapValues { it.value!! }
+                canDeleteOthersMessages = info?.role == "admin" || info?.role == "developer",
+                rolesByUid = roleCache.filterValues { it != null }.mapValues { it.value!! },
+                roleBadgeColorsByUid = roleBadgeColorCache.filterValues { it != null }.mapValues { it.value!! }
             )
         }
     }
