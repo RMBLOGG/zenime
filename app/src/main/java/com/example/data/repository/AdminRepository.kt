@@ -9,7 +9,6 @@ import com.example.data.model.RoleInfoResponse
 import com.example.data.model.RoleListEntry
 import com.example.data.model.SetRoleRequest
 import com.example.data.model.TargetUidRequest
-import com.example.data.model.UserListEntry
 import com.example.data.model.ZenimeRole
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.tasks.await
@@ -60,19 +59,6 @@ class AdminRepository(
     /** Daftar semua pemegang role -- khusus developer, ditolak server kalau bukan. */
     suspend fun listRoles(): Result<List<RoleListEntry>> = try {
         Result.success(api.listRoles(authHeader()).roles)
-    } catch (e: Exception) {
-        Result.failure(e)
-    }
-
-    /**
-     * Daftar/cari SEMUA user (bukan cuma pemegang role) -- sumber data tab
-     * "Semua User", biar developer/admin/moderator tinggal cari nama/kode
-     * lalu pencet tombol aksi di barisnya, gak perlu ketik UID manual lagi.
-     * Boleh dipanggil siapapun yang punya role (dicek ulang di server).
-     */
-    suspend fun listUsers(search: String? = null, offset: Int = 0): Result<Pair<List<UserListEntry>, Boolean>> = try {
-        val response = api.listUsers(authHeader(), search?.takeIf { it.isNotBlank() }, offset = offset)
-        Result.success(response.users to response.hasMore)
     } catch (e: Exception) {
         Result.failure(e)
     }

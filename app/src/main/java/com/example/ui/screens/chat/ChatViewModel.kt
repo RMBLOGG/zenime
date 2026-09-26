@@ -7,6 +7,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.model.ChatMessage
 import com.example.data.realtime.ChatRealtimeClient
 import com.example.data.realtime.ChatRealtimeEvent
+import com.example.data.realtime.RoleRealtimeClient
+import com.example.data.realtime.RoleRealtimeEvent
 import com.example.data.repository.ChatRepository
 import com.example.data.repository.ClanRepository
 import com.example.data.repository.XpRepository
@@ -139,6 +141,7 @@ class ChatViewModel(
     private val firebaseUid: String,
     fallbackUsername: String,
     private val realtimeClient: ChatRealtimeClient = ChatRealtimeClient(),
+    private val roleRealtimeClient: RoleRealtimeClient = RoleRealtimeClient(),
     private val clanRepository: ClanRepository = ClanRepository(),
     private val xpRepository: XpRepository = XpRepository(),
     private val adminRepository: AdminRepository = AdminRepository()
@@ -161,9 +164,6 @@ class ChatViewModel(
             usernameColorsByUid = ChatSessionCache.usernameColorsByUid,
             userNumbersByUid = ChatSessionCache.userNumbersByUid,
             avatarUrlsByUid = ChatSessionCache.avatarUrlsByUid,
-            // Role & warna badge custom ikut di-cache biar gak sempet numpang
-            // fallback ke badge Premium biru pas Chat Global baru dibuka lagi
-            // (sebelum hasil checkRolesForNewSenders yang baru datang).
             rolesByUid = ChatSessionCache.rolesByUid,
             roleBadgeColorsByUid = ChatSessionCache.roleBadgeColorsByUid
         )
@@ -171,6 +171,7 @@ class ChatViewModel(
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
     private var realtimeJob: Job? = null
+    private var roleRealtimeJob: Job? = null
     private var resyncJob: Job? = null
     private var cooldownJob: Job? = null
     private var recordingTimerJob: Job? = null
@@ -223,20 +224,19 @@ class ChatViewModel(
         // masuk lewat Realtime -- bukan polling ulang tiap beberapa detik.
         viewModelScope.launch { refreshMessages() }
         startRealtime()
+        startRoleRealtime()
         startPeriodicResync()
     }
 
     /** Cek role diri sendiri -- nentuin boleh/nggaknya hapus pesan orang lain. */
     private fun loadMyRole() {
         viewModelScope.launch {
-            val info = adminRepository.getMyRole().getOrNull()
+            val role = adminRepository.getMyRole().getOrNull()?.role
             roleCheckedUids += firebaseUid
-            roleCache[firebaseUid] = info?.role
-            roleBadgeColorCache[firebaseUid] = info?.badgeColor
+            roleCache[firebaseUid] = role
             _uiState.value = _uiState.value.copy(
-                canDeleteOthersMessages = info?.role == "admin" || info?.role == "developer",
-                rolesByUid = roleCache.filterValues { it != null }.mapValues { it.value!! },
-                roleBadgeColorsByUid = roleBadgeColorCache.filterValues { it != null }.mapValues { it.value!! }
+                canDeleteOthersMessages = role == "admin" || role == "developer",
+                rolesByUid = roleCache.filterValues { it != null }.mapValues { it.value!! }
             )
         }
     }
@@ -449,6 +449,41 @@ class ChatViewModel(
             .onEach { event -> applyRealtimeEvent(event) }
             .launchIn(viewModelScope)
     }
+
+    /**
+     * Subscribe realtime khusus tabel `user_roles` -- begitu developer
+     * assign/cabut role lewat Panel Admin, badge di Chat Global ke-update
+     * SEKARANG JUGA di semua device yang lagi buka chat, gak perlu nunggu
+     * pesan baru / reopen chat kayak mekanisme cache biasa.
+     */
+    private fun startRoleRealtime() {
+        roleRealtimeJob?.cancel()
+        roleRealtimeJob = roleRealtimeClient.events(viewModelScope)
+            .onEach { event -> applyRoleRealtimeEvent(event) }
+            .launchIn(viewModelScope)
+    }
+
+    private fun applyRoleRealtimeEvent(event: RoleRealtimeEvent) {
+        when (event) {
+            is RoleRealtimeEvent.Upserted -> {
+                roleCheckedUids += event.firebaseUid
+                roleCache[event.firebaseUid] = event.role
+                roleBadgeColorCache[event.firebaseUid] = event.badgeColor
+            }
+            is RoleRealtimeEvent.Removed -> {
+                roleCheckedUids += event.firebaseUid
+                roleCache[event.firebaseUid] = null
+                roleBadgeColorCache[event.firebaseUid] = null
+            }
+        }
+        val myRole = roleCache[firebaseUid]
+        _uiState.value = _uiState.value.copy(
+            rolesByUid = roleCache.filterValues { it != null }.mapValues { it.value!! },
+            roleBadgeColorsByUid = roleBadgeColorCache.filterValues { it != null }.mapValues { it.value!! },
+            canDeleteOthersMessages = myRole == "admin" || myRole == "developer"
+        )
+    }
+
 
     private fun applyRealtimeEvent(event: ChatRealtimeEvent) {
         when (event) {
@@ -804,7 +839,7 @@ class ChatViewModel(
     override fun onCleared() {
         super.onCleared()
         realtimeJob?.cancel()
-        resyncJob?.cancel()
+        roleRealtimeJob?.cancel()
         cooldownJob?.cancel()
         recordingTimerJob?.cancel()
         voiceRecorder?.cancel()
