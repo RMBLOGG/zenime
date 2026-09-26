@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -572,9 +571,13 @@ private fun RoleAssignDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                     // Overlay transparan biar klik di textfield (readOnly) ikut buka dropdown.
+                    // Tinggi tetap 56.dp (tinggi default OutlinedTextField M3) dipakai
+                    // di sini, bukan matchParentSize(), karena API itu gak kebaca di
+                    // versi Compose Foundation yang ke-resolve di CI build project ini.
                     Box(
                         modifier = Modifier
-                            .matchParentSize()
+                            .fillMaxWidth()
+                            .height(56.dp)
                             .clickable { expanded = true }
                     )
                     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
