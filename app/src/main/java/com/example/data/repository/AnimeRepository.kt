@@ -30,16 +30,20 @@ import com.example.util.friendlyErrorMessage
 import com.example.data.model.StreamResponse
 import com.example.data.model.StreamServer
 import com.example.util.qualityValueP
+import com.google.firebase.auth.FirebaseAuth
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlinx.coroutines.sync.Mutex
@@ -52,6 +56,14 @@ class AnimeRepository(
     val userPrefs: UserPreferencesRepository,
     private val downloadManager: EpisodeDownloadManager
 ) {
+    // Sync Favorit/Riwayat ke Supabase -- fire-and-forget, dipanggil setelah
+    // tulis ke Room (sumber utama) berhasil. Pakai scope sendiri (bukan
+    // viewModelScope pemanggil) biar sync gak ke-cancel kalau user pindah
+    // layar sebelum request-nya selesai.
+    private val publicProfileRepository = PublicProfileRepository()
+    private val syncScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
+    private fun currentFirebaseUidOrNull(): String? = FirebaseAuth.getInstance().currentUser?.uid
 
     // ---- Cache infrastructure ----------------------------------------
     // In-memory, per-process cache. Ilang kalau proses app di-kill, tapi
@@ -984,21 +996,26 @@ class AnimeRepository(
     // cukup id-nya doang.
     suspend fun removeFavorite(animeId: String) {
         dao.deleteFavorite(animeId)
+        currentFirebaseUidOrNull()?.let { uid ->
+            syncScope.launch { publicProfileRepository.syncFavoriteRemoved(uid, animeId) }
+        }
     }
 
     suspend fun toggleFavorite(anime: AnimeItem, isCurrentlyFavorite: Boolean) {
+        val uid = currentFirebaseUidOrNull()
         if (isCurrentlyFavorite) {
             dao.deleteFavorite(anime.id)
+            uid?.let { syncScope.launch { publicProfileRepository.syncFavoriteRemoved(it, anime.id) } }
         } else {
-            dao.insertFavorite(
-                FavoriteEntity(
-                    id = anime.id,
-                    title = anime.title ?: "Tanpa Judul",
-                    posterUrl = anime.image_poster,
-                    type = anime.type,
-                    status = anime.status
-                )
+            val entity = FavoriteEntity(
+                id = anime.id,
+                title = anime.title ?: "Tanpa Judul",
+                posterUrl = anime.image_poster,
+                type = anime.type,
+                status = anime.status
             )
+            dao.insertFavorite(entity)
+            uid?.let { syncScope.launch { publicProfileRepository.syncFavoriteAdded(it, entity) } }
         }
     }
 
@@ -1017,22 +1034,37 @@ class AnimeRepository(
         progressMs: Long,
         durationMs: Long
     ) {
-        dao.insertOrUpdateHistory(
-            WatchHistoryEntity(
-                animeId = animeId,
-                animeTitle = animeTitle,
-                posterUrl = posterUrl,
-                episodeId = episodeId,
-                episodeTitle = episodeTitle,
-                episodeIndex = episodeIndex,
-                progressMs = progressMs,
-                durationMs = durationMs,
-                lastUpdated = System.currentTimeMillis()
-            )
+        val entity = WatchHistoryEntity(
+            animeId = animeId,
+            animeTitle = animeTitle,
+            posterUrl = posterUrl,
+            episodeId = episodeId,
+            episodeTitle = episodeTitle,
+            episodeIndex = episodeIndex,
+            progressMs = progressMs,
+            durationMs = durationMs,
+            lastUpdated = System.currentTimeMillis()
         )
+        dao.insertOrUpdateHistory(entity)
+        currentFirebaseUidOrNull()?.let { uid ->
+            syncScope.launch { publicProfileRepository.syncWatchProgress(uid, entity) }
+        }
     }
 
-    suspend fun deleteHistory(animeId: String) = dao.deleteHistory(animeId)
+    suspend fun deleteHistory(animeId: String) {
+        dao.deleteHistory(animeId)
+        currentFirebaseUidOrNull()?.let { uid ->
+            syncScope.launch { publicProfileRepository.syncHistoryRemoved(uid, animeId) }
+        }
+    }
+
+    // CATATAN: clearHistory() sengaja TIDAK nyapu baris di `user_watch_history`
+    // (Supabase) satu-satu -- riwayat lokal ke-reset, tapi salinan server lama
+    // masih ada sampai ke-timpa progress nonton baru. Gak krusial selama
+    // history_public masih patuh ke toggle privasi user (yang emang jadi satu-
+    // satunya gerbang tampil ke user lain), tapi kalau nanti mau bener-bener
+    // ikut kehapus pas "Hapus Semua Riwayat" di ProfileScreen, tambahin loop
+    // hapus per-animeId di sini pakai snapshot repository.watchHistory.
     suspend fun clearHistory() = dao.clearHistory()
 
     // ---- Downloads (nonton offline, premium only) -------------------------

@@ -49,6 +49,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -57,6 +58,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -129,7 +132,37 @@ fun ProfileScreen(
     var showClearHistoryDialog by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableIntStateOf(0) }
 
-    val uniqueAnimeCount = uiState.history.distinctBy { it.animeId }.size
+    // Profil sendiri -> data lokal (Room, real-time). Profil orang lain ->
+    // hasil Edge Function, dipetakan ke tipe entity yang sama biar semua
+    // composable list di bawah (FavoritePosterCard, HistoryRow, dll) gak
+    // perlu tau bedanya.
+    val displayFavorites = if (uiState.isOwnProfile) {
+        uiState.favorites
+    } else {
+        uiState.publicFavorites.map { row ->
+            FavoriteEntity(id = row.animeId, title = row.title, posterUrl = row.posterUrl, type = row.type, status = row.status)
+        }
+    }
+    val displayHistory = if (uiState.isOwnProfile) {
+        uiState.history
+    } else {
+        uiState.publicHistory.map { row ->
+            WatchHistoryEntity(
+                animeId = row.animeId,
+                animeTitle = row.animeTitle,
+                posterUrl = row.posterUrl,
+                episodeId = row.episodeId,
+                episodeTitle = row.episodeTitle,
+                episodeIndex = row.episodeIndex,
+                progressMs = row.progressMs,
+                durationMs = row.durationMs
+            )
+        }
+    }
+    val favoritesLocked = !uiState.isOwnProfile && !uiState.favoritesPublic
+    val historyLocked = !uiState.isOwnProfile && !uiState.historyPublic
+
+    val uniqueAnimeCount = displayHistory.distinctBy { it.animeId }.size
 
     // Instance yang sama persis dipakai MyXpCard di bawah (key sama), jadi
     // gak dobel network call -- cuma numpang ambil angka Level buat masuk
@@ -145,7 +178,7 @@ fun ProfileScreen(
     LaunchedEffect(Unit) { startAnimation = true }
 
     val animatedFavoriteCount by animateIntAsState(
-        targetValue = if (startAnimation) uiState.favorites.size else 0,
+        targetValue = if (startAnimation) displayFavorites.size else 0,
         animationSpec = tween(1200),
         label = "favorite_count"
     )
@@ -155,7 +188,7 @@ fun ProfileScreen(
         label = "anime_count"
     )
     val animatedEpisodeCount by animateIntAsState(
-        targetValue = if (startAnimation) uiState.history.size else 0,
+        targetValue = if (startAnimation) displayHistory.size else 0,
         animationSpec = tween(1200),
         label = "episode_count"
     )
@@ -163,8 +196,8 @@ fun ProfileScreen(
     // Banner: prioritas foto custom upload (khusus Premium), fallback ke poster
     // favorit/riwayat pertama (kayak Kuroflix), fallback terakhir warna solid.
     val backdropImage = uiState.bannerUrl
-        ?: uiState.favorites.firstOrNull()?.posterUrl
-        ?: uiState.history.firstOrNull()?.posterUrl
+        ?: displayFavorites.firstOrNull()?.posterUrl
+        ?: displayHistory.firstOrNull()?.posterUrl
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -197,7 +230,8 @@ fun ProfileScreen(
                 onBackClick = onBackClick,
                 onClanClick = onClanClick,
                 onLeaderboardClick = onXpLeaderboardClick,
-                onEditClick = { viewModel.openEditDialog() }
+                onEditClick = { viewModel.openEditDialog() },
+                isOwnProfile = uiState.isOwnProfile
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -217,8 +251,9 @@ fun ProfileScreen(
                 )
 
                 1 -> ProfileFavoritTab(
-                    favorites = uiState.favorites,
-                    onAnimeClick = onAnimeClick
+                    favorites = displayFavorites,
+                    onAnimeClick = onAnimeClick,
+                    isPrivate = favoritesLocked
                 )
 
                 2 -> {
@@ -236,19 +271,24 @@ fun ProfileScreen(
                 }
 
                 else -> ProfileRiwayatTab(
-                    history = uiState.history,
+                    history = displayHistory,
                     username = uiState.username.ifBlank { "Pengguna Zenime" },
                     avatarUrl = uiState.avatarUrl,
                     firebaseUid = firebaseUid,
                     isPremium = uiState.isPremium,
                     onHistoryClick = onHistoryClick,
-                    onClearAllClick = { showClearHistoryDialog = true }
+                    onClearAllClick = { showClearHistoryDialog = true },
+                    isPrivate = historyLocked,
+                    canClearAll = uiState.isOwnProfile
                 )
             }
         }
     }
 
-    if (uiState.isEditDialogOpen) {
+    // Edit Profil (termasuk toggle privasi) cuma masuk akal di profil sendiri
+    // -- ProfileViewModel juga udah nolak setFavoritesPublic/setHistoryPublic
+    // kalau dipanggil dari profil orang lain, ini lapis kedua di sisi UI.
+    if (uiState.isEditDialogOpen && uiState.isOwnProfile) {
         val context = LocalContext.current
         EditProfileDialog(
             currentUsername = uiState.username,
@@ -260,10 +300,14 @@ fun ProfileScreen(
             isUploadingAvatar = uiState.isUploadingAvatar,
             isUploadingBanner = uiState.isUploadingBanner,
             errorMessage = uiState.editError,
+            favoritesPublic = uiState.favoritesPublic,
+            historyPublic = uiState.historyPublic,
             onPickAvatar = { uri -> viewModel.uploadAvatar(context, uri) },
             onPickBanner = { uri -> viewModel.uploadBanner(context, uri) },
             onNonPremiumBannerTap = { viewModel.notifyBannerRequiresPremium() },
             onSaveUsername = { newName -> viewModel.saveUsername(newName) },
+            onFavoritesPublicChange = { viewModel.setFavoritesPublic(it) },
+            onHistoryPublicChange = { viewModel.setHistoryPublic(it) },
             onDismiss = { viewModel.closeEditDialog() }
         )
     }
@@ -317,7 +361,8 @@ private fun ProfileHeroSection(
     onBackClick: () -> Unit,
     onClanClick: () -> Unit,
     onLeaderboardClick: () -> Unit,
-    onEditClick: () -> Unit
+    onEditClick: () -> Unit,
+    isOwnProfile: Boolean = true
 ) {
     Box(modifier = Modifier.fillMaxWidth()) {
         // Background banner, ukurannya nempel persis ke Column konten di bawah.
@@ -669,7 +714,12 @@ private fun ProfileSemuaTab(
 
 /** Isi tab "Favorit": grid poster anime favorit. */
 @Composable
-private fun ProfileFavoritTab(favorites: List<FavoriteEntity>, onAnimeClick: (String) -> Unit) {
+private fun ProfileFavoritTab(
+    favorites: List<FavoriteEntity>,
+    onAnimeClick: (String) -> Unit,
+    // true kalau ini profil ORANG LAIN dan dia matiin toggle "Favorit publik".
+    isPrivate: Boolean = false
+) {
     Column {
         SectionHeader(
             iconVector = Icons.Filled.Favorite,
@@ -677,7 +727,9 @@ private fun ProfileFavoritTab(favorites: List<FavoriteEntity>, onAnimeClick: (St
             title = "Favorite Shows",
             trailing = if (favorites.isNotEmpty()) "${favorites.size} Anime" else null
         )
-        if (favorites.isEmpty()) {
+        if (isPrivate) {
+            EmptySectionBox(text = "Pengguna ini menyembunyikan daftar favoritnya.")
+        } else if (favorites.isEmpty()) {
             EmptySectionBox(text = "Belum ada anime favorit.")
         } else {
             LazyRow(
@@ -701,7 +753,11 @@ private fun ProfileRiwayatTab(
     firebaseUid: String,
     isPremium: Boolean,
     onHistoryClick: (WatchHistoryEntity) -> Unit,
-    onClearAllClick: () -> Unit
+    onClearAllClick: () -> Unit,
+    // true kalau ini profil ORANG LAIN dan dia matiin toggle "Riwayat publik".
+    isPrivate: Boolean = false,
+    // Tombol "Hapus Semua Riwayat" cuma masuk akal di profil sendiri.
+    canClearAll: Boolean = true
 ) {
     Column {
         Row(
@@ -728,7 +784,7 @@ private fun ProfileRiwayatTab(
                     fontWeight = FontWeight.Bold
                 )
             }
-            if (history.isNotEmpty()) {
+            if (canClearAll && history.isNotEmpty()) {
                 IconButton(onClick = onClearAllClick) {
                     Icon(
                         imageVector = Icons.Filled.DeleteSweep,
@@ -739,7 +795,9 @@ private fun ProfileRiwayatTab(
             }
         }
 
-        if (history.isEmpty()) {
+        if (isPrivate) {
+            EmptySectionBox(text = "Pengguna ini menyembunyikan riwayat tontonannya.")
+        } else if (history.isEmpty()) {
             EmptySectionBox(text = "Belum ada riwayat tontonan.")
         } else {
             Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
@@ -1209,10 +1267,14 @@ private fun EditProfileDialog(
     isUploadingAvatar: Boolean,
     isUploadingBanner: Boolean,
     errorMessage: String?,
+    favoritesPublic: Boolean,
+    historyPublic: Boolean,
     onPickAvatar: (Uri) -> Unit,
     onPickBanner: (Uri) -> Unit,
     onNonPremiumBannerTap: () -> Unit,
     onSaveUsername: (String) -> Unit,
+    onFavoritesPublicChange: (Boolean) -> Unit,
+    onHistoryPublicChange: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     var usernameInput by remember { mutableStateOf(currentUsername) }
@@ -1376,6 +1438,56 @@ private fun EditProfileDialog(
                         cursorColor = ZenimePrimary
                     )
                 )
+
+                // --- Privasi Favorit & Riwayat ---
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(ZenimeBackgroundDark)
+                        .border(1.dp, CardOutlineBorder, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Favorit publik", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                "User lain bisa lihat daftar favoritmu",
+                                color = Color.White.copy(alpha = 0.5f),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                        Switch(
+                            checked = favoritesPublic,
+                            onCheckedChange = onFavoritesPublicChange,
+                            colors = SwitchDefaults.colors(checkedTrackColor = ZenimePrimary)
+                        )
+                    }
+                    HorizontalDivider(color = CardOutlineBorder, thickness = 1.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Riwayat publik", color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                "User lain bisa lihat riwayat tontonanmu",
+                                color = Color.White.copy(alpha = 0.5f),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                        Switch(
+                            checked = historyPublic,
+                            onCheckedChange = onHistoryPublicChange,
+                            colors = SwitchDefaults.colors(checkedTrackColor = ZenimePrimary)
+                        )
+                    }
+                }
 
                 errorMessage?.let {
                     Text(

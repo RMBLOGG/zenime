@@ -130,6 +130,7 @@ fun ChatScreen(
     currentFirebaseUid: String,
     onBackClick: () -> Unit,
     onOwnAvatarClick: () -> Unit = {},
+    onOtherUserClick: (uid: String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -263,7 +264,8 @@ fun ChatScreen(
                                     canDeleteOthers = uiState.canDeleteOthersMessages,
                                     onReply = { viewModel.setReplyTarget(message) },
                                     onDeleteRequest = { pendingDelete = message },
-                                    onOwnAvatarClick = onOwnAvatarClick
+                                    onOwnAvatarClick = onOwnAvatarClick,
+                                    onOtherUserClick = onOtherUserClick
                                 )
                             }
                         }
@@ -379,6 +381,8 @@ private fun ChatBubble(
     onReply: () -> Unit,
     onDeleteRequest: () -> Unit,
     onOwnAvatarClick: () -> Unit,
+    // Tap avatar/username pengirim LAIN -> buka profil publik mereka.
+    onOtherUserClick: (uid: String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val usernameColor = parseUsernameColor(senderUsernameColor)
@@ -459,7 +463,9 @@ private fun ChatBubble(
         horizontalArrangement = if (isOwnMessage) Arrangement.End else Arrangement.Start
     ) {
         if (!isOwnMessage) {
-            ChatAvatar(url = senderAvatarUrl, seed = message.firebaseUid, label = message.username)
+            Box(modifier = Modifier.clickable { onOtherUserClick(message.firebaseUid) }) {
+                ChatAvatar(url = senderAvatarUrl, seed = message.firebaseUid, label = message.username)
+            }
             Spacer(modifier = Modifier.width(8.dp))
         }
 

@@ -74,7 +74,7 @@ interface ZenimeSupabaseApi {
     @GET("rest/v1/chat_profiles")
     suspend fun getChatProfile(
         @Query("firebase_uid") firebaseUidEq: String,
-        @Query("select") select: String = "firebase_uid,username,avatar_url,banner_url,username_color,user_number,updated_at",
+        @Query("select") select: String = "firebase_uid,username,avatar_url,banner_url,username_color,user_number,updated_at,favorites_public,history_public",
         @Query("limit") limit: Int = 1
     ): List<ChatProfile>
 
@@ -114,6 +114,60 @@ interface ZenimeSupabaseApi {
         @Query("on_conflict") onConflict: String = "firebase_uid",
         @Body body: ChatProfileUpsert
     ): List<ChatProfile>
+
+    // --- Favorit & Riwayat Tontonan publik ---
+    // Salinan server dari FavoriteEntity/WatchHistoryEntity (Room). Insert/
+    // update/delete PostgREST langsung, sama pola kayak tabel lain. SELECT
+    // (buat lihat punya user LAIN) juga langsung ke PostgREST -- RLS di
+    // backend/supabase/public_profile_setup.sql yang ngecek toggle privasi
+    // pemilik baris, jadi gak perlu Edge Function.
+
+    @Headers("Prefer: resolution=merge-duplicates")
+    @POST("rest/v1/user_favorites")
+    suspend fun upsertFavorite(
+        @Query("on_conflict") onConflict: String = "firebase_uid,anime_id",
+        @Body body: com.example.data.model.FavoriteUpsert
+    ): Response<Void>
+
+    @DELETE("rest/v1/user_favorites")
+    suspend fun deleteFavoriteRemote(
+        @Query("firebase_uid") firebaseUidEq: String,
+        @Query("anime_id") animeIdEq: String
+    ): Response<Void>
+
+    @Headers("Prefer: resolution=merge-duplicates")
+    @POST("rest/v1/user_watch_history")
+    suspend fun upsertWatchHistoryRemote(
+        @Query("on_conflict") onConflict: String = "firebase_uid,anime_id",
+        @Body body: com.example.data.model.WatchHistoryUpsert
+    ): Response<Void>
+
+    @DELETE("rest/v1/user_watch_history")
+    suspend fun deleteWatchHistoryRemote(
+        @Query("firebase_uid") firebaseUidEq: String,
+        @Query("anime_id") animeIdEq: String
+    ): Response<Void>
+
+    /**
+     * Favorit punya user LAIN. Kalau toggle `favorites_public` mereka mati,
+     * RLS bikin query ini balikin list kosong -- ProfileViewModel bedain itu
+     * dari "privat" pakai flag `favoritesPublic` yang dibaca terpisah dari
+     * `chat_profiles` (lihat PublicProfileRepository), bukan dari respons ini.
+     */
+    @GET("rest/v1/user_favorites")
+    suspend fun getPublicFavorites(
+        @Query("firebase_uid") firebaseUidEq: String,
+        @Query("select") select: String = "anime_id,title,poster_url,type,status",
+        @Query("order") order: String = "created_at.desc"
+    ): List<com.example.data.model.PublicFavoriteRow>
+
+    /** Riwayat tontonan punya user LAIN -- sama polanya kayak [getPublicFavorites]. */
+    @GET("rest/v1/user_watch_history")
+    suspend fun getPublicWatchHistory(
+        @Query("firebase_uid") firebaseUidEq: String,
+        @Query("select") select: String = "anime_id,anime_title,poster_url,episode_id,episode_title,episode_index,progress_ms,duration_ms",
+        @Query("order") order: String = "last_updated.desc"
+    ): List<com.example.data.model.PublicWatchHistoryRow>
 
     // --- Komentar Episode ---
     // Sama pola-nya kayak Chat Global: langsung ke tabel `episode_comments`

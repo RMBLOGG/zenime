@@ -24,7 +24,13 @@ data class ChatProfile(
     @Json(name = "updated_at") val updatedAt: String? = null,
     // ID urut user (disalin dari profiles.user_number lewat trigger SQL) --
     // dipakai buat nampilin "#ID" di Chat Global tanpa Edge Function.
-    @Json(name = "user_number") val userNumber: Long? = null
+    @Json(name = "user_number") val userNumber: Long? = null,
+    // Toggle privasi Favorit/Riwayat -- diatur user sendiri di ProfileScreen.
+    // Default false (privat) sampai user sengaja nyalain. Dicek langsung di
+    // RLS `user_favorites`/`user_watch_history` (lihat public_profile_setup.sql)
+    // buat mutusin apa favorit/riwayat dia boleh keliatan user lain.
+    @Json(name = "favorites_public") val favoritesPublic: Boolean = false,
+    @Json(name = "history_public") val historyPublic: Boolean = false
 )
 
 /** Body buat upsert profil (insert kalau belum ada, update kalau udah ada). */
@@ -34,5 +40,10 @@ data class ChatProfileUpsert(
     @Json(name = "username") val username: String,
     @Json(name = "avatar_url") val avatarUrl: String?,
     @Json(name = "banner_url") val bannerUrl: String? = null,
-    @Json(name = "username_color") val usernameColor: String? = null
+    @Json(name = "username_color") val usernameColor: String? = null,
+    // WAJIB selalu kirim nilai toggle yang lagi aktif (bukan cuma pas
+    // diubah) -- sama aturannya kayak field lain di sini, upsert ini
+    // nge-replace SEMUA kolom yang dikirim.
+    @Json(name = "favorites_public") val favoritesPublic: Boolean = false,
+    @Json(name = "history_public") val historyPublic: Boolean = false
 )

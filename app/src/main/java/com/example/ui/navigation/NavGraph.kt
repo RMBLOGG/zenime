@@ -186,6 +186,12 @@ sealed class Screen(
 
     data object Profile : Screen("profile")
 
+    // Lihat profil user LAIN (favorit/riwayat dibatasi toggle privasi
+    // mereka) -- dibuka dari nge-tap avatar/nama orang lain di Chat Global.
+    data object PublicProfile : Screen("profile/{targetUid}") {
+        fun createRoute(targetUid: String) = "profile/$targetUid"
+    }
+
     data object ViewClan : Screen("clan/{clanId}") {
         fun createRoute(clanId: String) = "clan/$clanId"
     }
@@ -807,7 +813,10 @@ fun ZenimeAppNavHost(
                         viewModel = chatViewModel,
                         currentFirebaseUid = uid,
                         onBackClick = { navController.popBackStack() },
-                        onOwnAvatarClick = { navController.navigate(Screen.Profile.route) }
+                        onOwnAvatarClick = { navController.navigate(Screen.Profile.route) },
+                        onOtherUserClick = { otherUid ->
+                            navController.navigate(Screen.PublicProfile.createRoute(otherUid))
+                        }
                     )
                 }
             }
@@ -834,6 +843,51 @@ fun ZenimeAppNavHost(
                     ProfileScreen(
                         viewModel = profileViewModel,
                         firebaseUid = uid,
+                        onBackClick = { navController.popBackStack() },
+                        onAnimeClick = { animeId ->
+                            navController.navigate(Screen.Detail.createRoute(animeId))
+                        },
+                        onHistoryClick = { history ->
+                            navController.navigate(Screen.Player.createRoute(history.episodeId, history.animeId))
+                        },
+                        onUpgradeClick = { navController.navigate(Screen.Premium.route) },
+                        onClanClick = { navController.navigate(Screen.BrowseClans.route) },
+                        onXpLeaderboardClick = { navController.navigate(Screen.XpLeaderboard.route) }
+                    )
+                }
+            }
+
+            // Profil user LAIN -- sama komponennya kayak Profil Saya, tapi
+            // ProfileViewModel dikasih `viewedFirebaseUid` (uid target) beda
+            // dari `firebaseUid` (uid yang lagi login). Favorit/riwayat cuma
+            // keliatan kalau target-nya nyalain toggle privasi (lihat
+            // ProfileViewModel.loadPublicContent). Dibuka dari nge-tap
+            // avatar/nama user lain di Chat Global.
+            composable(
+                route = Screen.PublicProfile.route,
+                arguments = listOf(navArgument("targetUid") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val uid = currentUser?.uid
+                val targetUid = backStackEntry.arguments?.getString("targetUid")
+                if (uid != null && targetUid != null) {
+                    val publicProfileViewModel: ProfileViewModel = viewModel(
+                        key = "public_profile_$targetUid",
+                        factory = viewModelFactory {
+                            initializer {
+                                ProfileViewModel(
+                                    repository = repository,
+                                    chatRepository = ChatRepository(),
+                                    premiumRepository = PremiumRepository(),
+                                    firebaseUid = uid,
+                                    fallbackUsername = currentUser?.displayName ?: "Pengguna",
+                                    viewedFirebaseUid = targetUid
+                                )
+                            }
+                        }
+                    )
+                    ProfileScreen(
+                        viewModel = publicProfileViewModel,
+                        firebaseUid = targetUid,
                         onBackClick = { navController.popBackStack() },
                         onAnimeClick = { animeId ->
                             navController.navigate(Screen.Detail.createRoute(animeId))

@@ -7,11 +7,14 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.local.FavoriteEntity
 import com.example.data.local.WatchHistoryEntity
 import com.example.data.model.EpisodeComment
+import com.example.data.model.PublicFavoriteRow
+import com.example.data.model.PublicWatchHistoryRow
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.ChatRepository
 import com.example.data.repository.ClanRepository
 import com.example.data.repository.CommentRepository
 import com.example.data.repository.PremiumRepository
+import com.example.data.repository.PublicProfileRepository
 import com.example.util.AvatarUploader
 import com.example.util.BannerUploader
 import com.example.util.friendlyErrorMessage
@@ -39,8 +42,25 @@ data class ProfileUiState(
     // gantiin centang biru + badge "Premium" yang lama.
     val userNumber: Long? = null,
     val clanTag: String? = null,
+
+    // true kalau ini profil MILIK SENDIRI (firebaseUid == viewedFirebaseUid).
+    // Kalau false, `favorites`/`history` diisi dari Edge Function (baca punya
+    // orang lain) bukan dari Room, dan toggle privasi gak bisa diedit.
+    val isOwnProfile: Boolean = true,
+
+    // Sumber favorit/riwayat buat DITAMPILKAN -- lokal (Room) kalau profil
+    // sendiri, hasil Edge Function kalau profil orang lain.
     val favorites: List<FavoriteEntity> = emptyList(),
     val history: List<WatchHistoryEntity> = emptyList(),
+    val publicFavorites: List<PublicFavoriteRow> = emptyList(),
+    val publicHistory: List<PublicWatchHistoryRow> = emptyList(),
+
+    // Toggle privasi -- punya SENDIRI (bisa diedit lewat setFavoritesPublic/
+    // setHistoryPublic) kalau isOwnProfile, atau punya USER YANG DILIHAT
+    // (read-only, dipakai buat mutusin nampilin list atau pesan "privat").
+    val favoritesPublic: Boolean = false,
+    val historyPublic: Boolean = false,
+    val isLoadingPublicContent: Boolean = false,
 
     // Tab "Komentar" -- lazy-load, cuma ditarik pas tab-nya pertama kali
     // dibuka (bukan bareng data lain pas Profil ke-buka), biar gak nembak
@@ -60,7 +80,19 @@ data class ProfileUiState(
 
 /**
  * ViewModel buat [ProfileScreen] -- ambil profil (`chat_profiles`, sama tabel
- * yang dipakai fitur Chat Global) + status premium + favorit/riwayat lokal.
+ * yang dipakai fitur Chat Global) + status premium + favorit/riwayat.
+ *
+ * Dukung 2 mode:
+ * - Profil SENDIRI (`viewedFirebaseUid` null atau == `firebaseUid`): favorit/
+ *   riwayat diambil dari Room (repository.favorites/watchHistory) kayak
+ *   sebelumnya, dan user bisa ubah toggle privasi (favoritesPublic/
+ *   historyPublic) lewat [setFavoritesPublic]/[setHistoryPublic].
+ * - Profil ORANG LAIN (`viewedFirebaseUid` beda dari `firebaseUid`): favorit/
+ *   riwayat diambil SEKALI lewat PostgREST langsung (RLS-gated)
+ *   (lihat [PublicProfileRepository.getPublicContent]), dan cuma keisi kalau
+ *   toggle privasi user itu nyala -- kalau enggak, list-nya kosong tapi
+ *   `favoritesPublic`/`historyPublic` di state bakal false, dipakai
+ *   ProfileScreen buat nampilin pesan "akun ini privat".
  *
  * Upload avatar BEBAS buat semua user (gak perlu premium). Upload banner
  * TETEP dibatasi khusus member Premium. Kalau premium user habis masa
@@ -74,21 +106,52 @@ class ProfileViewModel(
     private val premiumRepository: PremiumRepository = PremiumRepository(),
     private val clanRepository: ClanRepository = ClanRepository(),
     private val commentRepository: CommentRepository = CommentRepository(),
+    private val publicProfileRepository: PublicProfileRepository = PublicProfileRepository(),
     private val firebaseUid: String,
-    private val fallbackUsername: String
+    private val fallbackUsername: String,
+    // null = lihat profil sendiri. Isi uid user lain buat lihat profil mereka.
+    viewedFirebaseUid: String? = null
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ProfileUiState(username = fallbackUsername))
+    private val targetFirebaseUid: String = viewedFirebaseUid ?: firebaseUid
+    private val isOwnProfile: Boolean = targetFirebaseUid == firebaseUid
+
+    private val _uiState = MutableStateFlow(
+        ProfileUiState(username = fallbackUsername, isOwnProfile = isOwnProfile)
+    )
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
     init {
-        viewModelScope.launch {
-            combine(repository.favorites, repository.watchHistory) { favs, hist -> favs to hist }
-                .collect { (favs, hist) ->
-                    _uiState.value = _uiState.value.copy(favorites = favs, history = hist)
-                }
+        if (isOwnProfile) {
+            viewModelScope.launch {
+                combine(repository.favorites, repository.watchHistory) { favs, hist -> favs to hist }
+                    .collect { (favs, hist) ->
+                        _uiState.value = _uiState.value.copy(favorites = favs, history = hist)
+                    }
+            }
+        } else {
+            loadPublicContent()
         }
         loadProfileAndPremium()
+    }
+
+    private fun loadPublicContent() {
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isLoadingPublicContent = true)
+            publicProfileRepository.getPublicContent(targetFirebaseUid)
+                .onSuccess { response ->
+                    _uiState.value = _uiState.value.copy(
+                        isLoadingPublicContent = false,
+                        favoritesPublic = response.favoritesPublic,
+                        historyPublic = response.historyPublic,
+                        publicFavorites = response.favorites.orEmpty(),
+                        publicHistory = response.history.orEmpty()
+                    )
+                }
+                .onFailure {
+                    _uiState.value = _uiState.value.copy(isLoadingPublicContent = false)
+                }
+        }
     }
 
     private fun loadProfileAndPremium() {
@@ -98,14 +161,14 @@ class ProfileViewModel(
             // Profil & status Premium gak saling butuh -- ditarik BARENGAN,
             // bukan satu-satu, biar halaman Profil gak nunggu 2 round-trip
             // berturut-turut cuma buat nampilin header.
-            val profileDeferred = async { runCatching { chatRepository.getProfile(firebaseUid) }.getOrNull() }
-            val premiumDeferred = async { premiumRepository.checkPremiumStatus(firebaseUid) }
-            val clanTagDeferred = async { clanRepository.getClanTagsForUids(listOf(firebaseUid)) }
+            val profileDeferred = async { runCatching { chatRepository.getProfile(targetFirebaseUid) }.getOrNull() }
+            val premiumDeferred = async { premiumRepository.checkPremiumStatus(targetFirebaseUid) }
+            val clanTagDeferred = async { clanRepository.getClanTagsForUids(listOf(targetFirebaseUid)) }
 
             val profile = profileDeferred.await()
             val premiumResult = premiumDeferred.await()
             val isPremium = premiumResult.getOrNull()?.isPremium ?: false
-            val clanTag = clanTagDeferred.await().getOrNull()?.get(firebaseUid)
+            val clanTag = clanTagDeferred.await().getOrNull()?.get(targetFirebaseUid)
 
             // Avatar sekarang BEBAS semua user (gak perlu premium) --
             // banner tetap premium-only. Foto custom avatar selalu dipasang
@@ -121,7 +184,15 @@ class ProfileViewModel(
                 usernameColor = profile?.usernameColor,
                 isPremium = isPremium,
                 userNumber = profile?.userNumber,
-                clanTag = clanTag
+                clanTag = clanTag,
+                // Buat profil sendiri, ini toggle yang bisa diedit. Buat
+                // profil orang lain, bakal ke-override lagi sama respons
+                // Edge Function di loadPublicContent() (sumber yang bener
+                // buat mutusin tampil/enggaknya list, karena SELECT langsung
+                // ke chat_profiles ini kepake juga buat header/username jadi
+                // gak dijamin nyampur sama hasil cek privasi Edge Function).
+                favoritesPublic = if (isOwnProfile) (profile?.favoritesPublic ?: false) else _uiState.value.favoritesPublic,
+                historyPublic = if (isOwnProfile) (profile?.historyPublic ?: false) else _uiState.value.historyPublic
             )
         }
     }
@@ -157,7 +228,9 @@ class ProfileViewModel(
                     username = trimmed,
                     avatarUrl = _uiState.value.avatarUrl,
                     bannerUrl = _uiState.value.bannerUrl,
-                    usernameColor = _uiState.value.usernameColor
+                    usernameColor = _uiState.value.usernameColor,
+                    favoritesPublic = _uiState.value.favoritesPublic,
+                    historyPublic = _uiState.value.historyPublic
                 )
                 _uiState.value = _uiState.value.copy(
                     isSavingUsername = false,
@@ -183,7 +256,9 @@ class ProfileViewModel(
                     username = _uiState.value.username,
                     avatarUrl = url,
                     bannerUrl = _uiState.value.bannerUrl,
-                    usernameColor = _uiState.value.usernameColor
+                    usernameColor = _uiState.value.usernameColor,
+                    favoritesPublic = _uiState.value.favoritesPublic,
+                    historyPublic = _uiState.value.historyPublic
                 )
                 _uiState.value = _uiState.value.copy(
                     isUploadingAvatar = false,
@@ -214,7 +289,9 @@ class ProfileViewModel(
                     username = _uiState.value.username,
                     avatarUrl = _uiState.value.avatarUrl,
                     bannerUrl = url,
-                    usernameColor = _uiState.value.usernameColor
+                    usernameColor = _uiState.value.usernameColor,
+                    favoritesPublic = _uiState.value.favoritesPublic,
+                    historyPublic = _uiState.value.historyPublic
                 )
                 _uiState.value = _uiState.value.copy(
                     isUploadingBanner = false,
@@ -229,9 +306,62 @@ class ProfileViewModel(
         }
     }
 
+    // --- Toggle privasi Favorit/Riwayat (cuma berlaku di profil sendiri) ---
+
+    fun setFavoritesPublic(isPublic: Boolean) {
+        if (!isOwnProfile) return
+        val previous = _uiState.value.favoritesPublic
+        _uiState.value = _uiState.value.copy(favoritesPublic = isPublic)
+        viewModelScope.launch {
+            try {
+                chatRepository.saveProfile(
+                    firebaseUid = firebaseUid,
+                    username = _uiState.value.username,
+                    avatarUrl = _uiState.value.avatarUrl,
+                    bannerUrl = _uiState.value.bannerUrl,
+                    usernameColor = _uiState.value.usernameColor,
+                    favoritesPublic = isPublic,
+                    historyPublic = _uiState.value.historyPublic
+                )
+            } catch (e: Exception) {
+                // Gagal simpan ke server -- balikin toggle-nya biar UI gak
+                // bohong soal status privasi yang sebenarnya kesimpen.
+                _uiState.value = _uiState.value.copy(
+                    favoritesPublic = previous,
+                    editError = friendlyErrorMessage(e, "Gagal menyimpan pengaturan privasi")
+                )
+            }
+        }
+    }
+
+    fun setHistoryPublic(isPublic: Boolean) {
+        if (!isOwnProfile) return
+        val previous = _uiState.value.historyPublic
+        _uiState.value = _uiState.value.copy(historyPublic = isPublic)
+        viewModelScope.launch {
+            try {
+                chatRepository.saveProfile(
+                    firebaseUid = firebaseUid,
+                    username = _uiState.value.username,
+                    avatarUrl = _uiState.value.avatarUrl,
+                    bannerUrl = _uiState.value.bannerUrl,
+                    usernameColor = _uiState.value.usernameColor,
+                    favoritesPublic = _uiState.value.favoritesPublic,
+                    historyPublic = isPublic
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    historyPublic = previous,
+                    editError = friendlyErrorMessage(e, "Gagal menyimpan pengaturan privasi")
+                )
+            }
+        }
+    }
+
     // --- Riwayat Tontonan ---
 
     fun clearAllHistory() {
+        if (!isOwnProfile) return
         viewModelScope.launch { repository.clearHistory() }
     }
 
@@ -242,7 +372,7 @@ class ProfileViewModel(
         if (_uiState.value.hasLoadedComments || _uiState.value.isLoadingComments) return
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoadingComments = true, commentsError = null)
-            runCatching { commentRepository.getMyComments(firebaseUid) }
+            runCatching { commentRepository.getMyComments(targetFirebaseUid) }
                 .onSuccess { list ->
                     _uiState.value = _uiState.value.copy(
                         isLoadingComments = false,

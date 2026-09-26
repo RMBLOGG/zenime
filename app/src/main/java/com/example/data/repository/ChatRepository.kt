@@ -128,7 +128,9 @@ class ChatRepository(
         username: String,
         avatarUrl: String?,
         bannerUrl: String? = null,
-        usernameColor: String? = null
+        usernameColor: String? = null,
+        favoritesPublic: Boolean = false,
+        historyPublic: Boolean = false
     ): ChatProfile {
         val result = api.upsertChatProfile(
             body = ChatProfileUpsert(
@@ -136,7 +138,9 @@ class ChatRepository(
                 username = username,
                 avatarUrl = avatarUrl,
                 bannerUrl = bannerUrl,
-                usernameColor = usernameColor
+                usernameColor = usernameColor,
+                favoritesPublic = favoritesPublic,
+                historyPublic = historyPublic
             )
         )
         return result.first()
