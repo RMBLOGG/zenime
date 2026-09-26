@@ -48,6 +48,16 @@ class AuthRepository(
     private val _currentUser = MutableStateFlow(firebaseAuth.currentUser)
     val currentUser: StateFlow<FirebaseUser?> = _currentUser.asStateFlow()
 
+    // Nyala SELAMA proses daftar/cek-verifikasi email jalan. Firebase Auth
+    // otomatis nganggep user "current" begitu createUser/signIn sukses --
+    // padahal proses kita masih lanjut (cek isEmailVerified, dst) dan BISA
+    // berakhir signOut lagi kalau ternyata belum verified. Tanpa flag ini,
+    // listener di bawah bakal keburu nembak currentUser=non-null ke
+    // ZenimeAppNavHost, yang langsung navigate ke Home SEBELUM kita sempat
+    // signOut -- itu penyebab user "berhasil masuk" walau belum verifikasi.
+    @Volatile
+    private var suppressAuthListener = false
+
     // Scope umur-panjang khusus buat ensureProfile di listener bawah --
     // addAuthStateListener BUKAN suspend function, jadi butuh scope sendiri
     // buat manggil suspend fun ensureProfile. AuthRepository sendiri
@@ -57,6 +67,7 @@ class AuthRepository(
 
     init {
         firebaseAuth.addAuthStateListener { auth ->
+            if (suppressAuthListener) return@addAuthStateListener
             _currentUser.value = auth.currentUser
             val user = auth.currentUser
             if (user != null) {
@@ -75,6 +86,27 @@ class AuthRepository(
                     )
                 }
             }
+        }
+    }
+
+    /**
+     * Dipanggil manual (BUKAN dari listener) pas signInWithEmail berhasil
+     * & email-nya udah kepastian verified -- soalnya listener lagi
+     * suppressAuthListener=true sepanjang proses itu, jadi update
+     * currentUser + ensureProfile-nya harus ditrigger manual di sini,
+     * niru persis apa yang listener biasanya lakuin.
+     */
+    private fun activateVerifiedSession(user: FirebaseUser) {
+        _currentUser.value = user
+        val defaultUsername = user.displayName?.takeIf { it.isNotBlank() }
+            ?: user.email?.substringBefore("@")?.takeIf { it.isNotBlank() }
+            ?: "User${user.uid.take(6)}"
+        scope.launch {
+            chatRepository.ensureProfile(
+                firebaseUid = user.uid,
+                defaultUsername = defaultUsername,
+                defaultAvatarUrl = user.photoUrl?.toString()
+            )
         }
     }
 
@@ -181,6 +213,7 @@ class AuthRepository(
         if (trimmedUsername.isEmpty()) {
             return Result.failure(Exception("Username gak boleh kosong."))
         }
+        suppressAuthListener = true
         return try {
             withTimeout(20_000) {
                 val authResult = firebaseAuth.createUserWithEmailAndPassword(email.trim(), password).await()
@@ -206,6 +239,11 @@ class AuthRepository(
             Result.failure(Exception("Format email gak valid."))
         } catch (e: Exception) {
             Result.failure(e)
+        } finally {
+            // Firebase udah signOut (atau emang gagal duluan sebelum sempat
+            // sign-in) -- currentUser real emang null, jadi aman langsung
+            // nyalain listener lagi tanpa perlu forcing update manual.
+            suppressAuthListener = false
         }
     }
 
@@ -216,6 +254,7 @@ class AuthRepository(
      * email verifikasi".
      */
     suspend fun signInWithEmail(email: String, password: String): Result<FirebaseUser> {
+        suppressAuthListener = true
         return try {
             withTimeout(20_000) {
                 val authResult = firebaseAuth.signInWithEmailAndPassword(email.trim(), password).await()
@@ -229,6 +268,10 @@ class AuthRepository(
                         Exception("Email kamu belum diverifikasi. Cek inbox (atau folder spam), klik link verifikasinya, baru masuk lagi.")
                     )
                 }
+                // Verified beneran -- baru sekarang aman biarin currentUser
+                // ke-expose ke NavGraph (manual, soalnya listener lagi
+                // dibekuin dari awal function ini).
+                activateVerifiedSession(user)
                 Result.success(user)
             }
         } catch (e: TimeoutCancellationException) {
@@ -239,6 +282,8 @@ class AuthRepository(
             Result.failure(Exception("Email atau password salah."))
         } catch (e: Exception) {
             Result.failure(e)
+        } finally {
+            suppressAuthListener = false
         }
     }
 
@@ -249,6 +294,7 @@ class AuthRepository(
      * pas signInWithEmail gagal karena belum verified.
      */
     suspend fun resendVerificationEmail(email: String, password: String): Result<Unit> {
+        suppressAuthListener = true
         return try {
             withTimeout(20_000) {
                 val authResult = firebaseAuth.signInWithEmailAndPassword(email.trim(), password).await()
@@ -273,6 +319,8 @@ class AuthRepository(
             Result.failure(Exception("Email atau password salah."))
         } catch (e: Exception) {
             Result.failure(e)
+        } finally {
+            suppressAuthListener = false
         }
     }
 }
