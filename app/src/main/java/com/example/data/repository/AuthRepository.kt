@@ -10,8 +10,13 @@ import com.example.R
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
+import com.google.firebase.auth.FirebaseAuthWeakPasswordException
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.UserProfileChangeRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -154,5 +159,120 @@ class AuthRepository(
 
     fun signOut() {
         firebaseAuth.signOut()
+    }
+
+    // ------------------------------------------------------------------
+    // Daftar/masuk manual pakai email + password (alternatif buat yang
+    // gak punya/gak mau pakai akun Google di HP-nya). Verifikasi email
+    // WAJIB sebelum akun bisa dipakai -- makanya signUp & signIn di bawah
+    // ini SENGAJA langsung signOut() lagi kalau belum verified, biar
+    // currentUser tetap null dan user gak ke-lempar masuk app (lihat
+    // ZenimeAppNavHost yang navigate ke Home begitu currentUser != null).
+    // ------------------------------------------------------------------
+
+    /**
+     * Daftar akun baru pakai email+password, set displayName = username
+     * (biar dipake juga sebagai default username chat_profiles lewat
+     * listener di init{} atas), kirim email verifikasi, LALU langsung
+     * signOut -- user WAJIB verifikasi dulu sebelum bisa masuk.
+     */
+    suspend fun signUpWithEmail(username: String, email: String, password: String): Result<Unit> {
+        val trimmedUsername = username.trim()
+        if (trimmedUsername.isEmpty()) {
+            return Result.failure(Exception("Username gak boleh kosong."))
+        }
+        return try {
+            withTimeout(20_000) {
+                val authResult = firebaseAuth.createUserWithEmailAndPassword(email.trim(), password).await()
+                val user = authResult.user
+                    ?: return@withTimeout Result.failure(IllegalStateException("Daftar berhasil tapi data user kosong"))
+
+                val profileUpdate = UserProfileChangeRequest.Builder()
+                    .setDisplayName(trimmedUsername)
+                    .build()
+                user.updateProfile(profileUpdate).await()
+
+                user.sendEmailVerification().await()
+                firebaseAuth.signOut()
+                Result.success(Unit)
+            }
+        } catch (e: TimeoutCancellationException) {
+            Result.failure(Exception("Koneksi timeout, coba lagi di jaringan yang lebih stabil."))
+        } catch (e: FirebaseAuthUserCollisionException) {
+            Result.failure(Exception("Email ini udah kepake akun lain. Coba masuk, atau pakai email lain."))
+        } catch (e: FirebaseAuthWeakPasswordException) {
+            Result.failure(Exception("Password terlalu lemah, minimal 6 karakter."))
+        } catch (e: FirebaseAuthInvalidCredentialsException) {
+            Result.failure(Exception("Format email gak valid."))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Masuk pakai email+password. Kalau email belum diverifikasi, langsung
+     * signOut lagi & balikin failure khusus (pesan mengandung "belum
+     * diverifikasi") biar LoginViewModel bisa nampilin tombol "Kirim ulang
+     * email verifikasi".
+     */
+    suspend fun signInWithEmail(email: String, password: String): Result<FirebaseUser> {
+        return try {
+            withTimeout(20_000) {
+                val authResult = firebaseAuth.signInWithEmailAndPassword(email.trim(), password).await()
+                val user = authResult.user
+                    ?: return@withTimeout Result.failure(IllegalStateException("Login berhasil tapi data user kosong"))
+
+                user.reload().await()
+                if (!user.isEmailVerified) {
+                    firebaseAuth.signOut()
+                    return@withTimeout Result.failure(
+                        Exception("Email kamu belum diverifikasi. Cek inbox (atau folder spam), klik link verifikasinya, baru masuk lagi.")
+                    )
+                }
+                Result.success(user)
+            }
+        } catch (e: TimeoutCancellationException) {
+            Result.failure(Exception("Koneksi timeout, coba lagi di jaringan yang lebih stabil."))
+        } catch (e: FirebaseAuthInvalidUserException) {
+            Result.failure(Exception("Akun dengan email ini gak ketemu. Daftar dulu ya."))
+        } catch (e: FirebaseAuthInvalidCredentialsException) {
+            Result.failure(Exception("Email atau password salah."))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Kirim ulang email verifikasi. Butuh sign-in ulang sebentar (soalnya
+     * sendEmailVerification() butuh currentUser yang aktif), abis itu
+     * signOut lagi -- dipanggil dari tombol "Kirim ulang email verifikasi"
+     * pas signInWithEmail gagal karena belum verified.
+     */
+    suspend fun resendVerificationEmail(email: String, password: String): Result<Unit> {
+        return try {
+            withTimeout(20_000) {
+                val authResult = firebaseAuth.signInWithEmailAndPassword(email.trim(), password).await()
+                val user = authResult.user
+                if (user == null) {
+                    Result.failure<Unit>(IllegalStateException("Gagal masuk sementara buat kirim ulang email"))
+                } else {
+                    user.reload().await()
+                    if (user.isEmailVerified) {
+                        firebaseAuth.signOut()
+                        Result.failure<Unit>(Exception("Email kamu udah diverifikasi kok, coba masuk lagi."))
+                    } else {
+                        user.sendEmailVerification().await()
+                        firebaseAuth.signOut()
+                        Result.success(Unit)
+                    }
+                }
+            }
+        } catch (e: TimeoutCancellationException) {
+            Result.failure(Exception("Koneksi timeout, coba lagi di jaringan yang lebih stabil."))
+        } catch (e: FirebaseAuthInvalidCredentialsException) {
+            Result.failure(Exception("Email atau password salah."))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }
