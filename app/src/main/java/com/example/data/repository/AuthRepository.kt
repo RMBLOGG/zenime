@@ -70,6 +70,11 @@ class AuthRepository(
             if (suppressAuthListener) return@addAuthStateListener
             _currentUser.value = auth.currentUser
             val user = auth.currentUser
+            // Tempelin uid ke tiap crash report Crashlytics -- biar pas ada
+            // laporan crash dari user, gampang dicek ini kejadian di akun
+            // siapa (tanpa nyimpen data pribadi apa pun, cuma uid).
+            com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance()
+                .setUserId(user?.uid.orEmpty())
             if (user != null) {
                 // Pastiin baris chat_profiles ADA dari saat ini juga (login),
                 // BUKAN nunggu user buka Profil/Chat sendiri -- biar leaderboard
@@ -98,6 +103,7 @@ class AuthRepository(
      */
     private fun activateVerifiedSession(user: FirebaseUser) {
         _currentUser.value = user
+        com.google.firebase.crashlytics.FirebaseCrashlytics.getInstance().setUserId(user.uid)
         val defaultUsername = user.displayName?.takeIf { it.isNotBlank() }
             ?: user.email?.substringBefore("@")?.takeIf { it.isNotBlank() }
             ?: "User${user.uid.take(6)}"

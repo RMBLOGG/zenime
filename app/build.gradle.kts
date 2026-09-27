@@ -7,6 +7,7 @@ plugins {
   alias(libs.plugins.roborazzi)
   alias(libs.plugins.secrets)
   alias(libs.plugins.google.services)
+  alias(libs.plugins.firebase.crashlytics)
 }
 
 android {
@@ -131,6 +132,10 @@ dependencies {
   implementation(libs.androidx.credentials.play.services)
   implementation(libs.googleid)
   implementation(libs.firebase.appcheck.recaptcha)
+  // Laporan crash otomatis (stack trace, device info) ke Firebase Console.
+  implementation(libs.firebase.crashlytics)
+  // Direkomendasikan Firebase biar Crashlytics dapat data sesi pengguna.
+  implementation(libs.firebase.analytics)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.kotlinx.coroutines.play.services)
