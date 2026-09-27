@@ -61,9 +61,6 @@ class PublicProfileRepository(
 
     suspend fun syncFavoriteAdded(firebaseUid: String, favorite: FavoriteEntity) {
         runCatching {
-            // Lewat RPC (fungsi security definer) -- bypass RLS di internal
-            // upsert-nya, jadi gak kena bug 42501 pas toggle privasi lagi off.
-            // Lihat catatan di ZenimeSupabaseApi.kt.
             val response = api.upsertFavorite(
                 body = FavoriteUpsert(
                     firebaseUid = firebaseUid,
@@ -87,9 +84,6 @@ class PublicProfileRepository(
 
     suspend fun syncWatchProgress(firebaseUid: String, history: WatchHistoryEntity) {
         runCatching {
-            // Lewat RPC (fungsi security definer) -- bypass RLS di internal
-            // upsert-nya, jadi gak kena bug 42501 pas toggle privasi lagi off.
-            // Lihat catatan di ZenimeSupabaseApi.kt.
             val response = api.upsertWatchHistoryRemote(
                 body = WatchHistoryUpsert(
                     firebaseUid = firebaseUid,
