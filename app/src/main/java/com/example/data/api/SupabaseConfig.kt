@@ -11,8 +11,8 @@ package com.example.data.api
  * Edge Function yang cuma nerima request tertentu.
  */
 object SupabaseConfig {
-    const val SUPABASE_URL = "https://lryvtlnozwixjnuwfexj.supabase.co"
-    const val SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxyeXZ0bG5vendpeGpudXdmZXhqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxNTUzMDQsImV4cCI6MjEwMjczMTMwNH0.qMEvt6OGBYqlkMwXZNZmoAdUt0-5hBdcme5DMCR0dxw"
+    const val SUPABASE_URL = "https://supabase.zenime.biz.id"
+    const val SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6InN1cGFiYXNlIiwiaWF0IjoxNzkwMTc4Njg0LCJleHAiOjE5NDc4NTg2ODR9.SH96iiwN4sQciG-8iIvO1bOFqEt58glG07z3AVYVrxE"
 
     /** Halaman storefront buat checkout pembayaran premium. */
     const val STOREFRONT_URL = "https://zenime.biz.id/beli-premium"
