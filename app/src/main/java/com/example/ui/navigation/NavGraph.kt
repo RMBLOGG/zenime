@@ -478,10 +478,18 @@ fun ZenimeAppNavHost(
                         navController.navigate(Screen.Detail.createRoute(animeId))
                     },
                     onSearchClick = {
-                        navController.navigate(Screen.Search.createRoute())
+                        navController.navigate(Screen.Search.createRoute()) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     },
                     onSeeAllOngoingClick = {
-                        navController.navigate(Screen.Search.createRoute(status = "ONGOING"))
+                        navController.navigate(Screen.Search.createRoute(status = "ONGOING")) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     },
                     onChatClick = {
                         navController.navigate(Screen.Chat.route)
@@ -493,7 +501,11 @@ fun ZenimeAppNavHost(
                         navController.navigate(Screen.ComicDetail.createRoute(slug))
                     },
                     onSeeAllComicClick = {
-                        navController.navigate(Screen.Comic.route)
+                        navController.navigate(Screen.Comic.route) {
+                            popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
                     },
                     onProfileClick = {
                         navController.navigate(Screen.Profile.route)
