@@ -552,7 +552,16 @@ private fun ChatBubble(
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(weight = 1f, fill = false)
                             )
-                            if (isSenderPremium) {
+                            if (roleCheckColor != null) {
+                                Icon(
+                                    imageVector = Icons.Filled.Verified,
+                                    contentDescription = senderRole,
+                                    tint = roleCheckColor,
+                                    modifier = Modifier
+                                        .padding(start = 3.dp)
+                                        .size(17.dp)
+                                )
+                            } else if (isSenderPremium) {
                                 Icon(
                                     imageVector = Icons.Filled.Verified,
                                     contentDescription = "Premium",
