@@ -122,10 +122,22 @@ interface ZenimeSupabaseApi {
     // backend/supabase/public_profile_setup.sql yang ngecek toggle privasi
     // pemilik baris, jadi gak perlu Edge Function.
 
-    @Headers("Prefer: resolution=merge-duplicates")
-    @POST("rest/v1/user_favorites")
+    // CATATAN soal RPC (BUKAN upsert langsung ke tabel via on_conflict):
+    // `INSERT ... ON CONFLICT DO UPDATE` di Postgres, waktu RLS nyala, harus
+    // bisa "lihat" row lama buat mastiin ada bentrok -- proses "lihat" ini
+    // kena policy SELECT, BUKAN policy UPDATE/INSERT. Policy SELECT tabel ini
+    // sengaja disyaratkan favorites_public/history_public = true (buat
+    // privasi ke user LAIN). Akibatnya kalau toggle lagi OFF dan barisnya
+    // udah ada, upsert langsung ke tabel GAGAL 42501 walau policy
+    // INSERT/UPDATE-nya sendiri unconditional. Fix-nya: upsert lewat fungsi
+    // database `security definer` (lihat backend/supabase -- fungsi
+    // upsert_favorite / upsert_watch_history), yang jalan dengan privilege
+    // pemilik tabel dan otomatis BYPASS RLS buat baca/tulis internalnya --
+    // GET langsung ke tabel (getPublicFavorites/getPublicWatchHistory) tetap
+    // kena RLS seperti biasa, jadi privasi ke user lain gak berubah.
+
+    @POST("rest/v1/rpc/upsert_favorite")
     suspend fun upsertFavorite(
-        @Query("on_conflict") onConflict: String = "firebase_uid,anime_id",
         @Body body: com.example.data.model.FavoriteUpsert
     ): Response<Void>
 
@@ -135,10 +147,8 @@ interface ZenimeSupabaseApi {
         @Query("anime_id") animeIdEq: String
     ): Response<Void>
 
-    @Headers("Prefer: resolution=merge-duplicates")
-    @POST("rest/v1/user_watch_history")
+    @POST("rest/v1/rpc/upsert_watch_history")
     suspend fun upsertWatchHistoryRemote(
-        @Query("on_conflict") onConflict: String = "firebase_uid,anime_id",
         @Body body: com.example.data.model.WatchHistoryUpsert
     ): Response<Void>
 
