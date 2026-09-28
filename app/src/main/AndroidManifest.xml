@@ -18,6 +18,16 @@
         android:name="android.software.picture-in-picture"
         android:required="false" />
 
+    <!-- Wajib buat IntegrityGuard.detectedTool() -- tanpa ini,
+         queryIntentActivities gak bisa lihat app lain di Android 11+
+         (package visibility), jadi deteksi app proxy/MITM gak jalan. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:name=".ZenimeApp"
         android:allowBackup="true"

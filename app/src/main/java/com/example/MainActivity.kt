@@ -32,6 +32,8 @@ import com.example.data.local.ZenimeDatabase
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.ComicRepository
 import com.example.notifications.setupAnnouncementNotifications
+import com.example.security.BlockedToolScreen
+import com.example.security.IntegrityGuard
 import com.example.ui.navigation.ZenimeAppNavHost
 import com.example.ui.screens.announcement.AnnouncementPopupHost
 import com.example.ui.screens.maintenance.MaintenanceScreen
@@ -62,6 +64,14 @@ class MainActivity : ComponentActivity() {
     // false = versi udah paling baru (atau repo belum ada release/fetch
     // gagal), lanjut app seperti biasa.
     private var needsUpdate by mutableStateOf<Boolean?>(null)
+
+    // Nama app proxy/MITM (Reqable, HTTP Toolkit, dll) yang kedetek
+    // terpasang di device, atau null kalau aman. Dicek PALING DULUAN dari
+    // semuanya (sebelum isMaintenanceMode) -- kalau kedetek, gak ada
+    // request API/Remote Config sama sekali yang jalan. Diupdate lagi di
+    // onResume, jadi begitu app-nya di-uninstall app otomatis kebuka
+    // normal tanpa perlu di-force-close.
+    private var blockedTool by mutableStateOf<String?>(null)
 
     // true = "maintenance_mode" aktif di Firebase Remote Config -> app
     // diblokir total, cuma MaintenanceScreen yang di-compose (dicek PALING
@@ -192,7 +202,12 @@ class MainActivity : ComponentActivity() {
         // forceRefresh() di cold start mahalnya cuma 1 request tambahan
         // per buka app (jauh di bawah quota Remote Config), harga yang
         // wajar buat kill-switch yang harus REAL-TIME.
-        lifecycleScope.launch { checkAppState(isRetry = true) }
+        // Dicek SEBELUM checkAppState dipanggil -- kalau kedetek, gak ada
+        // request Remote Config/API sama sekali yang jalan di cold start.
+        blockedTool = IntegrityGuard.detectedTool(this)
+        if (blockedTool == null) {
+            lifecycleScope.launch { checkAppState(isRetry = true) }
+        }
 
         setContent {
             val themeMode by userPrefs.themeModeFlow.collectAsStateWithLifecycle(initialValue = "DARK")
@@ -209,6 +224,11 @@ class MainActivity : ComponentActivity() {
                 dynamicColor = dynamicColor
             ) {
                 when {
+                    blockedTool != null -> {
+                        BlockedToolScreen(toolName = blockedTool!!) {
+                            finishAffinity()
+                        }
+                    }
                     isMaintenanceMode -> {
                         MaintenanceScreen(
                             title = RemoteConfigManager.maintenanceTitle(),
@@ -276,6 +296,21 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Re-cek tiap app balik ke foreground -- nangkep dua arah:
+        // (1) user install app proxy/MITM pas Zenime lagi kebuka, harus
+        //     LANGSUNG keblokir begitu balik dari recent apps/app lain.
+        // (2) user uninstall app itu buat lanjut -- begitu kedetek udah
+        //     gak ada lagi, recreate() supaya onCreate jalan dari nol
+        //     (checkAppState ke-trigger lagi) tanpa perlu force-close manual.
+        val wasBlocked = blockedTool != null
+        blockedTool = IntegrityGuard.detectedTool(this)
+        if (wasBlocked && blockedTool == null) {
+            recreate()
         }
     }
 
