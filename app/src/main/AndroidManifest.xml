@@ -18,7 +18,7 @@
         android:name="android.software.picture-in-picture"
         android:required="false" />
 
-    <!-- Wajib buat IntegrityGuard.detectedTool() -- tanpa ini,
+    <!-- Wajib buat IntegrityGuard.detectedTool(): tanpa ini,
          queryIntentActivities gak bisa lihat app lain di Android 11+
          (package visibility), jadi deteksi app proxy/MITM gak jalan. -->
     <queries>
