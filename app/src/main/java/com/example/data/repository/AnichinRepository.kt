@@ -12,6 +12,7 @@ import com.example.data.model.AnichinListResponse
 import com.example.data.model.AnichinMedia
 import com.example.data.model.AnichinPlayer
 import com.example.data.model.AnichinVideoSource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
@@ -23,11 +24,17 @@ class AnichinRepository(
     // kayak ComicRepository, jadi gampang dipakai di ViewModel yang ada.
     private fun <T> request(block: suspend () -> T): Flow<Result<T>> = flow {
         emit(Result.Loading)
-        try {
-            emit(Result.Success(block()))
+        // try/catch cuma ngebungkus request-nya, BUKAN emit(). Kalau emit() ada di dalam
+        // try, pembatalan dari collector (mis. operator first{}) ketangkep catch lalu
+        // flow emit lagi -> crash "Flow exception transparency is violated".
+        val result: Result<T> = try {
+            Result.Success(block())
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
-            emit(Result.Error(e))
+            Result.Error(e)
         }
+        emit(result)
     }
 
     fun getHome(page: Int = 1): Flow<Result<AnichinHomeResponse>> =
