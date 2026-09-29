@@ -6,6 +6,8 @@ import com.example.data.common.Result
 import com.example.data.model.AnichinEpisodeDetail
 import com.example.data.model.AnichinVideoSource
 import com.example.data.repository.AnichinRepository
+import com.example.data.repository.XpRepository
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,7 +21,8 @@ import kotlinx.coroutines.launch
  */
 class DonghuaPlayerViewModel(
     private val repository: AnichinRepository,
-    private val episodeSlug: String
+    private val episodeSlug: String,
+    private val xpRepository: XpRepository = XpRepository()
 ) : ViewModel() {
 
     val slug: String get() = episodeSlug
@@ -33,6 +36,17 @@ class DonghuaPlayerViewModel(
     init {
         loadVideo()
         loadEpisodeInfo()
+    }
+
+    /**
+     * Dipanggil PlayerScreen tiap user udah nonton [minutes] menit SECARA AKTIF
+     * (video playing). Sama persis dengan player anime: XP dihitung server
+     * lewat RPC add_watch_xp, jadi masuk ke level/leaderboard/clan yang sama.
+     * Silent-fail: gagal kirim (offline / belum login) gak boleh ganggu playback.
+     */
+    fun sendWatchHeartbeat(minutes: Int = 1) {
+        if (FirebaseAuth.getInstance().currentUser == null) return
+        viewModelScope.launch { xpRepository.sendHeartbeat(minutes) }
     }
 
     fun loadVideo() {

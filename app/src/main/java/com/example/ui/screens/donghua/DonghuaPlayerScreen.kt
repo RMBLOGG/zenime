@@ -360,6 +360,22 @@ fun DonghuaPlayerScreen(
         }
     }
 
+    // XP nonton: kirim heartbeat tiap 60 detik video BENERAN playing (pause/buffering
+    // gak dihitung). Key cuma exoPlayer supaya pause/buffer sekejap gak me-reset hitungan.
+    LaunchedEffect(exoPlayer) {
+        var secondsSinceLastHeartbeat = 0
+        while (true) {
+            delay(1000)
+            if (exoPlayer.isPlaying) {
+                secondsSinceLastHeartbeat++
+                if (secondsSinceLastHeartbeat >= 60) {
+                    secondsSinceLastHeartbeat = 0
+                    viewModel.sendWatchHeartbeat(minutes = 1)
+                }
+            }
+        }
+    }
+
     // Auto-hide kontrol
     LaunchedEffect(isControlsVisible, isPlaying) {
         if (isControlsVisible && isPlaying) {
