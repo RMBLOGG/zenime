@@ -490,6 +490,7 @@ fun ZenimeAppNavHost(
                                 chatRepository = ChatRepository(),
                                 premiumRepository = PremiumRepository(),
                                 coinRepository = CoinRepository(),
+                                anichinRepository = anichinRepository,
                                 firebaseUid = uid
                             )
                         }
@@ -525,6 +526,9 @@ fun ZenimeAppNavHost(
                     },
                     onDonghuaClick = {
                         navController.navigate(Screen.Donghua.route)
+                    },
+                    onDonghuaCardClick = { slug ->
+                        navController.navigate(Screen.DonghuaDetail.createRoute(slug))
                     },
                     onSeeAllComicClick = {
                         navController.navigate(Screen.Comic.route) {

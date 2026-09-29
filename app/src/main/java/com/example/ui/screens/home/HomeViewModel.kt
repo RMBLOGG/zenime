@@ -13,6 +13,8 @@ import com.example.data.model.ManraItem
 import com.example.data.model.HomeResponse
 import com.example.data.model.TopSupporter
 import com.example.data.model.UserXpDisplay
+import com.example.data.model.AnichinCard
+import com.example.data.repository.AnichinRepository
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.ChatRepository
 import com.example.data.repository.ClanRepository
@@ -57,6 +59,7 @@ class HomeViewModel(
     private val xpRepository: XpRepository = XpRepository(),
     private val clanRepository: ClanRepository = ClanRepository(),
     private val supportRepository: SupportRepository = SupportRepository(),
+    private val anichinRepository: AnichinRepository = AnichinRepository(),
     private val firebaseUid: String? = null
 ) : ViewModel() {
 
@@ -107,6 +110,10 @@ class HomeViewModel(
     private val _manraItems = MutableStateFlow<List<ManraItem>>(emptyList())
     val manraItems: StateFlow<List<ManraItem>> = _manraItems.asStateFlow()
 
+    // Section "Donghua" (bento top 3) di Beranda. Gagal/kosong -> section tidak tampil.
+    private val _donghuaHot = MutableStateFlow<List<AnichinCard>>(emptyList())
+    val donghuaHot: StateFlow<List<AnichinCard>> = _donghuaHot.asStateFlow()
+
     private val _profileState = MutableStateFlow(HomeProfileUiState())
     val profileState: StateFlow<HomeProfileUiState> = _profileState.asStateFlow()
 
@@ -121,6 +128,7 @@ class HomeViewModel(
         loadComicLatest()
         loadCuplix()
         loadManra()
+        loadDonghuaHot()
         loadProfileHeader()
         loadHeroLeaderboard()
         prefetchChat()
@@ -192,6 +200,20 @@ class HomeViewModel(
                 level = myXp?.level ?: 1,
                 clanTag = clanTag
             )
+        }
+    }
+
+    private fun loadDonghuaHot() {
+        viewModelScope.launch {
+            anichinRepository.getHome().collect { res ->
+                if (res is Result.Success) {
+                    _donghuaHot.value = res.data.results.orEmpty()
+                        .flatMap { it.cards.orEmpty() }
+                        .filter { !it.slug.isNullOrBlank() && !it.thumbnail.isNullOrBlank() }
+                        .distinctBy { it.slug }
+                        .take(3)
+                }
+            }
         }
     }
 

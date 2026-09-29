@@ -124,7 +124,7 @@ import com.example.ui.components.LevelBadge
 import com.example.data.model.CuplixItem
 import com.example.ui.components.AnimeCoverBannerSection
 import com.example.ui.components.AnimeRankedSection
-import com.example.ui.components.DonghuaEntryBanner
+import com.example.ui.components.DonghuaHotSection
 import com.example.ui.components.ManraHomeSection
 import com.example.ui.components.SectionHeader
 import com.example.ui.components.ShimmerBanner
@@ -150,6 +150,7 @@ fun HomeScreen(
     onComicClick: (String) -> Unit = {},
     onSeeAllComicClick: () -> Unit = {},
     onDonghuaClick: () -> Unit = {},
+    onDonghuaCardClick: (String) -> Unit = {},
     onProfileClick: () -> Unit = {},
     onPremiumClick: () -> Unit = {},
     onCoinClick: () -> Unit = {},
@@ -163,6 +164,7 @@ fun HomeScreen(
 ) {
     val homeState by viewModel.homeState.collectAsStateWithLifecycle()
     val comicLatestState by viewModel.comicLatestState.collectAsStateWithLifecycle()
+    val donghuaHot by viewModel.donghuaHot.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val profileState by viewModel.profileState.collectAsStateWithLifecycle()
     val cuplixClips by viewModel.cuplixClips.collectAsStateWithLifecycle()
@@ -432,8 +434,14 @@ fun HomeScreen(
                         }
 
                         // Banner masuk ke halaman Donghua (API Anichin)
-                        item {
-                            DonghuaEntryBanner(onClick = onDonghuaClick)
+                        if (donghuaHot.isNotEmpty()) {
+                            item {
+                                DonghuaHotSection(
+                                    cards = donghuaHot,
+                                    onCardClick = onDonghuaCardClick,
+                                    onSeeAllClick = onDonghuaClick
+                                )
+                            }
                         }
 
                         // Section: Komik Terbaru -- sumber terpisah dari data
