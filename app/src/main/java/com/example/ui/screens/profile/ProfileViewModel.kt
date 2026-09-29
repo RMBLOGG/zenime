@@ -69,6 +69,9 @@ data class ProfileUiState(
     val isLoadingComments: Boolean = false,
     val hasLoadedComments: Boolean = false,
     val commentsError: String? = null,
+    // Total komentar user (stat di hero profil) -- dihitung server-side,
+    // terpisah dari `comments` yang cuma 50 terakhir & lazy-load.
+    val commentCount: Int = 0,
 
     // Dialog "Edit Profil".
     val isEditDialogOpen: Boolean = false,
@@ -132,6 +135,7 @@ class ProfileViewModel(
         } else {
             loadPublicContent()
         }
+        loadCommentCount()
         loadProfileAndPremium()
     }
 
@@ -386,6 +390,14 @@ class ProfileViewModel(
                         commentsError = friendlyErrorMessage(e, "Gagal memuat komentar")
                     )
                 }
+        }
+    }
+
+    private fun loadCommentCount() {
+        viewModelScope.launch {
+            runCatching { commentRepository.getMyCommentCount(targetFirebaseUid) }
+                .getOrNull()
+                ?.let { count -> _uiState.value = _uiState.value.copy(commentCount = count) }
         }
     }
 }

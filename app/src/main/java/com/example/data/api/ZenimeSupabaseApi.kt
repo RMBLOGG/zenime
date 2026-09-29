@@ -196,6 +196,17 @@ interface ZenimeSupabaseApi {
         @Query("limit") limit: Int = 50
     ): List<EpisodeComment>
 
+    // Total komentar+balasan milik 1 user (buat stat di profil). Cuma minta
+    // 1 baris + Prefer: count=exact, angka totalnya dibaca dari header
+    // Content-Range ("0-0/123" atau "*/0"), bukan dari body.
+    @Headers("Prefer: count=exact")
+    @GET("rest/v1/episode_comments")
+    suspend fun countEpisodeComments(
+        @Query("firebase_uid") firebaseUidEq: String,
+        @Query("select") select: String = "id",
+        @Query("limit") limit: Int = 1
+    ): Response<Void>
+
     @Headers("Prefer: return=representation")
     @POST("rest/v1/episode_comments")
     suspend fun postEpisodeComment(@Body body: EpisodeCommentInsert): List<EpisodeComment>

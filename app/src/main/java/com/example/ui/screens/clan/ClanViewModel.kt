@@ -154,10 +154,19 @@ class ClanViewModel(
             }
             val roles = rolesDeferred.await()
 
+            // Urutan: leader clan tetap paling atas, lalu member yang punya
+            // role global (developer/admin/moderator) walau belum donasi,
+            // sisanya ikut urutan asli. sortedWith stabil, jadi urutan
+            // relatif di tiap grup gak berubah.
+            val sortedMembers = members.sortedWith(
+                compareByDescending<ClanMemberDisplay> { it.role == "leader" }
+                    .thenByDescending { roles.containsKey(it.firebaseUid) }
+            )
+
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 clan = clan,
-                members = members,
+                members = sortedMembers,
                 memberLevels = levelsDeferred.await(),
                 premiumUids = premiumDeferred.await().filterValues { it }.keys.toSet(),
                 rolesByUid = roles.mapValues { it.value.role },

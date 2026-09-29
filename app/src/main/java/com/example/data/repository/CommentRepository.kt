@@ -69,6 +69,15 @@ class CommentRepository(
         return api.getMyEpisodeComments(firebaseUidEq = "eq.$firebaseUid")
     }
 
+    /** Total komentar/balasan milik 1 user (bukan cuma 50 terakhir). Null kalau gagal. */
+    suspend fun getMyCommentCount(firebaseUid: String): Int? {
+        val response = api.countEpisodeComments(firebaseUidEq = "eq.$firebaseUid")
+        if (!response.isSuccessful) return null
+        return response.headers()["Content-Range"]
+            ?.substringAfter('/', "")
+            ?.toIntOrNull()
+    }
+
     /** Hapus komentar/balasan milik sendiri -- firebase_uid ikut difilter di query. */
     suspend fun deleteComment(id: Long, firebaseUid: String) {
         val response = api.deleteEpisodeComment(

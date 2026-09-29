@@ -193,6 +193,12 @@ fun ProfileScreen(
         label = "episode_count"
     )
 
+    val animatedCommentCount by animateIntAsState(
+        targetValue = if (startAnimation) uiState.commentCount else 0,
+        animationSpec = tween(1200),
+        label = "comment_count"
+    )
+
     // Banner: prioritas foto custom upload (khusus Premium), fallback ke poster
     // favorit/riwayat pertama (kayak Kuroflix), fallback terakhir warna solid.
     val backdropImage = uiState.bannerUrl
@@ -225,7 +231,7 @@ fun ProfileScreen(
                     animatedFavoriteCount.toString() to "Favorit",
                     animatedAnimeCount.toString() to "Anime Ditonton",
                     animatedEpisodeCount.toString() to "Episode",
-                    level.toString() to "Level"
+                    animatedCommentCount.toString() to "Komentar"
                 ),
                 onBackClick = onBackClick,
                 onClanClick = onClanClick,
