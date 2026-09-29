@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.data.api.AnichinNetwork
 import com.example.data.model.AnichinCard
 import com.example.ui.theme.ZenimePrimary
 
@@ -56,7 +57,7 @@ fun DonghuaPosterCard(
             Box(modifier = Modifier.fillMaxSize()) {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
-                        .data(card.thumbnail)
+                        .data(AnichinNetwork.imageUrl(card.thumbnail))
                         .crossfade(true)
                         .build(),
                     contentDescription = card.title,

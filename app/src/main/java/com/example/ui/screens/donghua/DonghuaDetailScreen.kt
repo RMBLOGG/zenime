@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.data.api.AnichinNetwork
 import com.example.data.common.Result
 import com.example.data.model.AnichinAnimeDetail
 import com.example.data.model.AnichinEpisodeRef
@@ -138,7 +139,7 @@ private fun DetailContent(
                 ) {
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
-                            .data(detail.thumbnail)
+                            .data(AnichinNetwork.imageUrl(detail.thumbnail))
                             .crossfade(true)
                             .build(),
                         contentDescription = detail.name,
@@ -163,7 +164,7 @@ private fun DetailContent(
                         }
                     }
                     // Info dari situs sumber: tampilkan beberapa yang umum aja (key-nya dinamis)
-                    detail.info.entries.take(4).forEach { (k, v) ->
+                    orderedInfo(detail.info).take(5).forEach { (k, v) ->
                         Spacer(Modifier.height(4.dp))
                         Text(
                             text = "${prettyKey(k)}: $v",
@@ -297,3 +298,17 @@ private fun EpisodeRow(ep: AnichinEpisodeRef, onClick: () -> Unit) {
 // "diperbarui_pada" -> "Diperbarui pada"
 private fun prettyKey(key: String): String =
     key.replace('_', ' ').replaceFirstChar { it.uppercase() }
+
+// Field info dari situs sumber (key-nya dinamis). Tampilkan yang berguna dulu,
+// buang yang isinya metadata admin (tanggal posting/update, nama pengunggah).
+private val PREFERRED_INFO = listOf(
+    "status", "tipe", "type", "studio", "durasi", "negara", "network", "season", "tanggal_rilis", "rilis"
+)
+private val HIDDEN_INFO = setOf("diperbarui_pada", "diposting_oleh", "ditambahkan", "updated_on", "posted_by", "released_on")
+
+private fun orderedInfo(info: Map<String, String>): List<Pair<String, String>> {
+    val visible = info.filterKeys { it !in HIDDEN_INFO }
+    val first = PREFERRED_INFO.mapNotNull { k -> visible[k]?.let { k to it } }
+    val rest = visible.filterKeys { it !in PREFERRED_INFO }.toList()
+    return first + rest
+}

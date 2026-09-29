@@ -31,11 +31,17 @@ class AnichinRepository(
     }
 
     fun getHome(page: Int = 1): Flow<Result<AnichinHomeResponse>> =
-        request { api.getHome(if (page > 1) page else null).throwIfError { it.error } }
+        request {
+            api.getHome(if (page > 1) page else null)
+                .also { AnichinNetwork.updateSourceBase(it.source) }
+                .throwIfError { it.error }
+        }
 
     fun search(query: String): Flow<Result<AnichinListResponse>> = request {
         // "/" di path bakal kena 404 di server, jadi diganti spasi
-        api.search(query.trim().replace('/', ' ')).throwIfError { it.error }
+        api.search(query.trim().replace('/', ' '))
+            .also { AnichinNetwork.updateSourceBase(it.source) }
+            .throwIfError { it.error }
     }
 
     fun getAnimeList(
@@ -50,7 +56,9 @@ class AnichinRepository(
             order?.let { put("order", it) }
             putAll(extra)
         }
-        api.getAnimeList(params).throwIfError { it.error }
+        api.getAnimeList(params)
+            .also { AnichinNetwork.updateSourceBase(it.source) }
+            .throwIfError { it.error }
     }
 
     fun getGenres(): Flow<Result<List<AnichinGenre>>> = request {
@@ -60,11 +68,13 @@ class AnichinRepository(
     }
 
     fun getByGenre(slug: String, page: Int = 1): Flow<Result<AnichinListResponse>> = request {
-        api.getByGenre(slug, if (page > 1) page else null).throwIfError { it.error }
+        api.getByGenre(slug, if (page > 1) page else null)
+            .also { AnichinNetwork.updateSourceBase(it.source) }
+            .throwIfError { it.error }
     }
 
     fun getDetail(slug: String): Flow<Result<AnichinAnimeDetail>> = request {
-        val res = api.getDetail(slug)
+        val res = api.getDetail(slug).also { AnichinNetwork.updateSourceBase(it.source) }
         val map = res.result ?: throw IllegalStateException(res.error ?: "Anime tidak ditemukan")
         AnichinAnimeDetail(
             name = map.str("name") ?: "Unknown",
@@ -78,7 +88,7 @@ class AnichinRepository(
     }
 
     fun getEpisode(slug: String): Flow<Result<AnichinEpisodeDetail>> = request {
-        val res = api.getEpisode(slug)
+        val res = api.getEpisode(slug).also { AnichinNetwork.updateSourceBase(it.source) }
         val map = res.result ?: throw IllegalStateException(res.error ?: "Episode tidak ditemukan")
         AnichinEpisodeDetail(
             name = map.str("name") ?: "Unknown",

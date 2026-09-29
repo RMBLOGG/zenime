@@ -23,6 +23,29 @@ object AnichinNetwork {
         "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36"
     const val VIDEO_REFERER = "https://ok.ru/"
 
+    // Thumbnail dari API berbentuk path relatif ("/wp-content/uploads/...") -- host-nya
+    // ikut situs sumber. Default di bawah, lalu otomatis diperbarui dari field "source"
+    // di tiap response (jadi kalau situs sumber ganti domain, gak perlu update app).
+    @Volatile
+    var sourceBase: String = "https://anichin.moe"
+        private set
+
+    fun updateSourceBase(source: String?) {
+        val uri = runCatching { java.net.URI(source ?: return) }.getOrNull() ?: return
+        val scheme = uri.scheme ?: return
+        val host = uri.host ?: return
+        sourceBase = "$scheme://$host"
+    }
+
+    /** Ubah path relatif dari API jadi URL absolut yang bisa dimuat Coil. */
+    fun imageUrl(path: String?): String? = when {
+        path.isNullOrBlank() -> null
+        path.startsWith("http://") || path.startsWith("https://") -> path
+        path.startsWith("//") -> "https:$path"
+        path.startsWith("/") -> sourceBase + path
+        else -> "$sourceBase/$path"
+    }
+
     private val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             // GET aman diulang sekali kalau koneksi putus (timeout sengaja gak diulang)
