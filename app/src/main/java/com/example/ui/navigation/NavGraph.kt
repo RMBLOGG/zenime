@@ -80,6 +80,13 @@ import com.example.data.repository.AnimeRepository
 import com.example.data.repository.AuthRepository
 import com.example.data.repository.ChatRepository
 import com.example.data.repository.ComicRepository
+import com.example.data.repository.AnichinRepository
+import com.example.ui.screens.donghua.DonghuaDetailScreen
+import com.example.ui.screens.donghua.DonghuaDetailViewModel
+import com.example.ui.screens.donghua.DonghuaPlayerScreen
+import com.example.ui.screens.donghua.DonghuaPlayerViewModel
+import com.example.ui.screens.donghua.DonghuaScreen
+import com.example.ui.screens.donghua.DonghuaViewModel
 import com.example.data.repository.CoinRepository
 import com.example.data.local.PremiumStatusCache
 import com.example.data.repository.PremiumRepository
@@ -226,6 +233,18 @@ sealed class Screen(
         fun createRoute(episodeId: String, animeId: String) = "player/$episodeId/$animeId"
     }
 
+    // Donghua (API Anichin). Sengaja TIDAK masuk bottomNavScreens -- dibuka dari
+    // banner di Beranda, layarnya penuh.
+    data object Donghua : Screen("donghua")
+
+    data object DonghuaDetail : Screen("donghua-detail/{slug}") {
+        fun createRoute(slug: String) = "donghua-detail/$slug"
+    }
+
+    data object DonghuaPlayer : Screen("donghua-player/{slug}") {
+        fun createRoute(slug: String) = "donghua-player/$slug"
+    }
+
     data object ComicDetail : Screen("comic-detail/{slug}") {
         fun createRoute(slug: String) = "comic-detail/$slug"
     }
@@ -272,6 +291,7 @@ fun ZenimeAppNavHost(
     // biar status login yang dicek buat mutusin navigasi (Splash -> Login
     // atau Home) sama persis sama yang di-observe screen lain.
     val authRepository = remember { AuthRepository() }
+    val anichinRepository = remember { AnichinRepository() }
     val currentUser by authRepository.currentUser.collectAsStateWithLifecycle()
 
     // Promo Premium full-screen -- muncul TIAP kali app dibuka (cold start
@@ -500,6 +520,9 @@ fun ZenimeAppNavHost(
                     onComicClick = { slug ->
                         navController.navigate(Screen.ComicDetail.createRoute(slug))
                     },
+                    onDonghuaClick = {
+                        navController.navigate(Screen.Donghua.route)
+                    },
                     onSeeAllComicClick = {
                         navController.navigate(Screen.Comic.route) {
                             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -604,6 +627,54 @@ fun ZenimeAppNavHost(
                 ManraReaderScreen(
                     viewModel = manraReaderViewModel,
                     onBackClick = { navController.popBackStack() }
+                )
+            }
+
+            // Donghua -- daftar (terbaru/ongoing/semua), cari, filter genre
+            composable(Screen.Donghua.route) {
+                val donghuaViewModel: DonghuaViewModel = viewModel(
+                    factory = viewModelFactory { initializer { DonghuaViewModel(anichinRepository) } }
+                )
+                DonghuaScreen(
+                    viewModel = donghuaViewModel,
+                    onBackClick = { navController.popBackStack() },
+                    onDonghuaClick = { slug ->
+                        navController.navigate(Screen.DonghuaDetail.createRoute(slug))
+                    }
+                )
+            }
+
+            composable(
+                route = Screen.DonghuaDetail.route,
+                arguments = listOf(navArgument("slug") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val slug = backStackEntry.arguments?.getString("slug") ?: ""
+                val donghuaDetailViewModel = remember(slug) { DonghuaDetailViewModel(anichinRepository, slug) }
+                DonghuaDetailScreen(
+                    viewModel = donghuaDetailViewModel,
+                    onBackClick = { navController.popBackStack() },
+                    onEpisodeClick = { episodeSlug ->
+                        navController.navigate(Screen.DonghuaPlayer.createRoute(episodeSlug))
+                    }
+                )
+            }
+
+            composable(
+                route = Screen.DonghuaPlayer.route,
+                arguments = listOf(navArgument("slug") { type = NavType.StringType })
+            ) { backStackEntry ->
+                val slug = backStackEntry.arguments?.getString("slug") ?: ""
+                val donghuaPlayerViewModel = remember(slug) { DonghuaPlayerViewModel(anichinRepository, slug) }
+                DonghuaPlayerScreen(
+                    viewModel = donghuaPlayerViewModel,
+                    firebaseUid = currentUser?.uid,
+                    onBackClick = { navController.popBackStack() },
+                    onEpisodeChange = { nextSlug ->
+                        navController.navigate(Screen.DonghuaPlayer.createRoute(nextSlug)) {
+                            popUpTo(Screen.DonghuaPlayer.route) { inclusive = true }
+                        }
+                    },
+                    onUpgradeClick = { navController.navigate(Screen.Premium.route) }
                 )
             }
 

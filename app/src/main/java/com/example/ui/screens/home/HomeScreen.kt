@@ -124,6 +124,7 @@ import com.example.ui.components.LevelBadge
 import com.example.data.model.CuplixItem
 import com.example.ui.components.AnimeCoverBannerSection
 import com.example.ui.components.AnimeRankedSection
+import com.example.ui.components.DonghuaEntryBanner
 import com.example.ui.components.ManraHomeSection
 import com.example.ui.components.SectionHeader
 import com.example.ui.components.ShimmerBanner
@@ -148,6 +149,7 @@ fun HomeScreen(
     onPlayEpisodeClick: (episodeId: String, animeId: String) -> Unit,
     onComicClick: (String) -> Unit = {},
     onSeeAllComicClick: () -> Unit = {},
+    onDonghuaClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
     onPremiumClick: () -> Unit = {},
     onCoinClick: () -> Unit = {},
@@ -427,6 +429,11 @@ fun HomeScreen(
                                     )
                                 }
                             }
+                        }
+
+                        // Banner masuk ke halaman Donghua (API Anichin)
+                        item {
+                            DonghuaEntryBanner(onClick = onDonghuaClick)
                         }
 
                         // Section: Komik Terbaru -- sumber terpisah dari data
