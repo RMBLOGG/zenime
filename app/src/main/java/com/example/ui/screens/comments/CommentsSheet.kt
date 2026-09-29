@@ -72,6 +72,7 @@ import com.example.ui.theme.ZenimePrimary
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.example.ui.components.UserCheckBadge
 
 private val PremiumBlue = Color(0xFF3897F0)
 private val PinnedGold = Color(0xFFE8A317)
@@ -476,16 +477,12 @@ private fun CommentItem(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(end = 3.dp)
                 )
-                if (isPremiumSender) {
-                    Icon(
-                        imageVector = Icons.Filled.Verified,
-                        contentDescription = "Premium",
-                        tint = PremiumBlue,
-                        modifier = Modifier
-                            .padding(end = 3.dp)
-                            .size(15.dp)
-                    )
-                }
+                UserCheckBadge(
+                    firebaseUid = comment.firebaseUid,
+                    isPremium = isPremiumSender,
+                    size = 15.dp,
+                    modifier = Modifier.padding(end = 3.dp)
+                )
                 if (userNumber != null) {
                     Text(
                         text = "#$userNumber",

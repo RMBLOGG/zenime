@@ -106,6 +106,7 @@ import java.text.SimpleDateFormat
 import java.time.Instant
 import java.util.Date
 import java.util.Locale
+import com.example.ui.components.UserCheckBadge
 
 /**
  * Profil Saya -- dirombak total ngikutin pola Wibuku: banner full-bleed jadi
@@ -443,14 +444,12 @@ private fun ProfileHeroSection(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        if (isPremium) {
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Image(
-                                painter = painterResource(id = R.drawable.ic_verified_badge),
-                                contentDescription = "Verified",
-                                modifier = Modifier.size(13.dp)
-                            )
-                        }
+                        UserCheckBadge(
+                            firebaseUid = firebaseUid,
+                            isPremium = isPremium,
+                            size = 13.dp,
+                            modifier = Modifier.padding(start = 4.dp)
+                        )
                     }
                 }
             }
@@ -926,14 +925,12 @@ private fun CommentFeedRow(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
             )
-            if (isPremium) {
-                Spacer(modifier = Modifier.width(4.dp))
-                Image(
-                    painter = painterResource(id = R.drawable.ic_verified_badge),
-                    contentDescription = "Verified",
-                    modifier = Modifier.size(14.dp)
-                )
-            }
+            UserCheckBadge(
+                firebaseUid = firebaseUid,
+                isPremium = isPremium,
+                size = 14.dp,
+                modifier = Modifier.padding(start = 4.dp)
+            )
             Spacer(modifier = Modifier.weight(1f))
             Text(
                 text = formatRelativeTime(parseCommentTimeMs(item.createdAt)),
@@ -1144,14 +1141,12 @@ private fun HistoryRow(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false)
             )
-            if (isPremium) {
-                Spacer(modifier = Modifier.width(4.dp))
-                Image(
-                    painter = painterResource(id = R.drawable.ic_verified_badge),
-                    contentDescription = "Verified",
-                    modifier = Modifier.size(14.dp)
-                )
-            }
+            UserCheckBadge(
+                firebaseUid = firebaseUid,
+                isPremium = isPremium,
+                size = 14.dp,
+                modifier = Modifier.padding(start = 4.dp)
+            )
             Spacer(modifier = Modifier.weight(1f))
             Text(
                 text = formatRelativeTime(item.lastUpdated),

@@ -57,6 +57,7 @@ import com.example.ui.components.GeneratedAvatar
 import com.example.ui.components.LevelBadge
 import com.example.ui.theme.ZenimePrimary
 import com.example.ui.theme.ZenimeSurfaceDark
+import com.example.ui.components.UserCheckBadge
 
 /**
  * Leaderboard XP -- desain podium top-3 + list ala referensi yang dikasih
@@ -285,15 +286,12 @@ private fun PodiumCard(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.weight(1f, fill = false)
             )
-            if (entry.isPremium) {
-                Spacer(Modifier.width(3.dp))
-                Icon(
-                    imageVector = Icons.Filled.Verified,
-                    contentDescription = "Premium",
-                    tint = Color(0xFF3897F0),
-                    modifier = Modifier.size(14.dp)
-                )
-            }
+            UserCheckBadge(
+                firebaseUid = entry.firebaseUid,
+                isPremium = entry.isPremium,
+                size = 14.dp,
+                modifier = Modifier.padding(start = 3.dp)
+            )
         }
         if (entry.clanTag != null) {
             Spacer(Modifier.height(4.dp))
@@ -350,15 +348,12 @@ private fun XpLeaderboardRow(rank: Int, entry: UserXpDisplay, isMe: Boolean, onC
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false)
                 )
-                if (entry.isPremium) {
-                    Spacer(Modifier.width(4.dp))
-                    Icon(
-                        imageVector = Icons.Filled.Verified,
-                        contentDescription = "Premium",
-                        tint = Color(0xFF3897F0),
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+                UserCheckBadge(
+                    firebaseUid = entry.firebaseUid,
+                    isPremium = entry.isPremium,
+                    size = 16.dp,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
             }
             Spacer(Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
