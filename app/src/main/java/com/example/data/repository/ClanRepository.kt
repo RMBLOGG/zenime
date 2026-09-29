@@ -137,7 +137,8 @@ class ClanRepository(
                 totalContribution = member.totalContribution,
                 joinedAt = member.joinedAt,
                 username = profile?.username ?: "Pengguna",
-                avatarUrl = profile?.avatarUrl
+                avatarUrl = profile?.avatarUrl,
+                userNumber = profile?.userNumber
             )
         }
     }

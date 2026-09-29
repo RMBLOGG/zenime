@@ -1017,7 +1017,10 @@ fun ZenimeAppNavHost(
                     ClanScreen(
                         viewModel = clanViewModel,
                         onBackClick = { navController.popBackStack() },
-                        onManageClanClick = { navController.navigate(Screen.ManageClan.createRoute(clanId)) }
+                        onManageClanClick = { navController.navigate(Screen.ManageClan.createRoute(clanId)) },
+                        onMemberClick = { targetUid ->
+                            navController.navigate(Screen.PublicProfile.createRoute(targetUid))
+                        }
                     )
                 }
             }

@@ -41,7 +41,9 @@ data class ClanMemberDisplay(
     val totalContribution: Long,
     val joinedAt: String,
     val username: String,
-    val avatarUrl: String?
+    val avatarUrl: String?,
+    // ID urut user (#ID) -- sama kayak yang tampil di Chat Global.
+    val userNumber: Long? = null
 )
 
 /** Baris "Donasi Hari Ini" -- hasil agregasi clan_donation_log per user hari ini. */

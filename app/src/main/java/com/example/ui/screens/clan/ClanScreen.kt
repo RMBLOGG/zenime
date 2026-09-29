@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Diamond
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -72,7 +73,8 @@ private val ClanHeaderGradientBottom = Color(0xFF1C1533)
 fun ClanScreen(
     viewModel: ClanViewModel,
     onBackClick: () -> Unit,
-    onManageClanClick: (clanId: String) -> Unit = {}
+    onManageClanClick: (clanId: String) -> Unit = {},
+    onMemberClick: (uid: String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -115,7 +117,8 @@ fun ClanScreen(
                         onRequestJoinClick = viewModel::requestJoin,
                         onManageClanClick = { onManageClanClick(uiState.clan!!.id) },
                         onDonateClick = { viewModel.onDonateDialogToggle(true) },
-                        onLeaveClick = { viewModel.onLeaveDialogToggle(true) }
+                        onLeaveClick = { viewModel.onLeaveDialogToggle(true) },
+                        onMemberClick = onMemberClick
                     )
                 }
             }
@@ -151,7 +154,8 @@ private fun ClanContent(
     onRequestJoinClick: () -> Unit,
     onManageClanClick: () -> Unit,
     onDonateClick: () -> Unit,
-    onLeaveClick: () -> Unit
+    onLeaveClick: () -> Unit,
+    onMemberClick: (uid: String) -> Unit = {}
 ) {
     val clan = uiState.clan ?: return
 
@@ -209,7 +213,11 @@ private fun ClanContent(
                             MemberListItem(
                                 member = member,
                                 clanTag = clan.tag,
-                                level = uiState.memberLevels[member.firebaseUid]
+                                level = uiState.memberLevels[member.firebaseUid],
+                                isPremium = uiState.premiumUids.contains(member.firebaseUid),
+                                globalRole = uiState.rolesByUid[member.firebaseUid],
+                                globalRoleBadgeColor = uiState.roleBadgeColorsByUid[member.firebaseUid],
+                                onClick = { onMemberClick(member.firebaseUid) }
                             )
                         }
                         item { Spacer(Modifier.height(16.dp)) }
@@ -555,12 +563,33 @@ private fun TodayDonationSummary(uiState: ClanUiState) {
 }
 
 @Composable
-private fun MemberListItem(member: ClanMemberDisplay, clanTag: String, level: Int?) {
+private fun MemberListItem(
+    member: ClanMemberDisplay,
+    clanTag: String,
+    level: Int?,
+    isPremium: Boolean = false,
+    globalRole: String? = null,
+    globalRoleBadgeColor: String? = null,
+    onClick: () -> Unit = {}
+) {
+    // Sama kayak Chat Global: role (developer/admin/moderator) menang atas
+    // Premium -- satu centang aja, biar gak dobel.
+    val roleCheckColor: Color? = globalRole?.let { role ->
+        val hex = globalRoleBadgeColor ?: when (role) {
+            "developer" -> "#E53935"
+            "admin" -> "#43A047"
+            "moderator" -> "#8E24AA"
+            else -> null
+        }
+        hex?.let { runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull() }
+    }
+    val checkColor: Color? = roleCheckColor ?: if (isPremium) Color(0xFF3897F0) else null
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onClick)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -571,12 +600,36 @@ private fun MemberListItem(member: ClanMemberDisplay, clanTag: String, level: In
         }
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = member.username,
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1
-            )
+            // Urutan: username -> #id -> centang
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = member.username,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                if (member.userNumber != null) {
+                    Text(
+                        text = "#${member.userNumber}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        maxLines = 1,
+                        modifier = Modifier.padding(start = 4.dp)
+                    )
+                }
+                if (checkColor != null) {
+                    Icon(
+                        imageVector = Icons.Filled.Verified,
+                        contentDescription = globalRole ?: "Premium",
+                        tint = checkColor,
+                        modifier = Modifier
+                            .padding(start = 3.dp)
+                            .size(17.dp)
+                    )
+                }
+            }
             Spacer(Modifier.height(5.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ClanRainbowBadge(text = clanTag, modifier = Modifier.padding(end = 6.dp))

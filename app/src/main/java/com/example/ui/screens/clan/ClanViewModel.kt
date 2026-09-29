@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.model.Clan
 import com.example.data.model.ClanDonationEntry
 import com.example.data.model.ClanMemberDisplay
+import com.example.data.repository.AdminRepository
 import com.example.data.repository.ClanRepository
+import com.example.data.repository.PremiumRepository
 import com.example.data.repository.XpRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,6 +33,10 @@ data class ClanUiState(
     val clan: Clan? = null,
     val members: List<ClanMemberDisplay> = emptyList(),
     val memberLevels: Map<String, Int> = emptyMap(),
+    // Badge centang di list member -- pola sama kayak Chat Global.
+    val premiumUids: Set<String> = emptySet(),
+    val rolesByUid: Map<String, String> = emptyMap(),
+    val roleBadgeColorsByUid: Map<String, String> = emptyMap(),
     val donationsToday: List<ClanDonationEntry> = emptyList(),
     val selectedTab: ClanTab = ClanTab.MEMBERS,
     val searchQuery: String = "",
@@ -74,7 +80,9 @@ class ClanViewModel(
     private val clanId: String,
     private val firebaseUid: String,
     private val repository: ClanRepository = ClanRepository(),
-    private val xpRepository: XpRepository = XpRepository()
+    private val xpRepository: XpRepository = XpRepository(),
+    private val premiumRepository: PremiumRepository = PremiumRepository(),
+    private val adminRepository: AdminRepository = AdminRepository()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ClanUiState())
@@ -126,11 +134,34 @@ class ClanViewModel(
                 }
             }
 
+            // Premium & role (centang) juga ditarik BARENGAN, best-effort:
+            // gagal = centang gak muncul, bukan bikin layar error.
+            val premiumDeferred = async {
+                if (members.isNotEmpty()) {
+                    runCatching { premiumRepository.getPremiumStatusForUids(members.map { it.firebaseUid }) }
+                        .getOrDefault(emptyMap())
+                } else {
+                    emptyMap()
+                }
+            }
+            val rolesDeferred = async {
+                if (members.isNotEmpty()) {
+                    runCatching { adminRepository.getRolesForUids(members.map { it.firebaseUid }) }
+                        .getOrDefault(emptyMap())
+                } else {
+                    emptyMap()
+                }
+            }
+            val roles = rolesDeferred.await()
+
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 clan = clan,
                 members = members,
                 memberLevels = levelsDeferred.await(),
+                premiumUids = premiumDeferred.await().filterValues { it }.keys.toSet(),
+                rolesByUid = roles.mapValues { it.value.role },
+                roleBadgeColorsByUid = roles.mapNotNull { (uid, r) -> r.badgeColor?.let { uid to it } }.toMap(),
                 donationsToday = donationsDeferred.await(),
                 cta = cta
             )
