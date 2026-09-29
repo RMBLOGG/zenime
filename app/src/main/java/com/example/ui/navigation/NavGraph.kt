@@ -1044,7 +1044,15 @@ fun ZenimeAppNavHost(
                 XpLeaderboardScreen(
                     viewModel = xpLeaderboardViewModel,
                     myFirebaseUid = currentUser?.uid,
-                    onBackClick = { navController.popBackStack() }
+                    onBackClick = { navController.popBackStack() },
+                    onUserClick = { targetUid ->
+                        // Diri sendiri -> halaman Profil biasa; user lain -> profil publik.
+                        if (targetUid == currentUser?.uid) {
+                            navController.navigate(Screen.Profile.route)
+                        } else {
+                            navController.navigate(Screen.PublicProfile.createRoute(targetUid))
+                        }
+                    }
                 )
             }
 

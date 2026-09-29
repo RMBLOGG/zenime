@@ -1,6 +1,7 @@
 package com.example.ui.screens.xp
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -67,7 +68,8 @@ import com.example.ui.theme.ZenimeSurfaceDark
 fun XpLeaderboardScreen(
     viewModel: XpLeaderboardViewModel,
     myFirebaseUid: String?,
-    onBackClick: () -> Unit
+    onBackClick: () -> Unit,
+    onUserClick: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -122,14 +124,15 @@ fun XpLeaderboardScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         if (top3.isNotEmpty()) {
-                            item { PodiumTop3(entries = top3, myFirebaseUid = myFirebaseUid) }
+                            item { PodiumTop3(entries = top3, myFirebaseUid = myFirebaseUid, onUserClick = onUserClick) }
                             item { Spacer(Modifier.height(4.dp)) }
                         }
                         itemsIndexed(rest) { index, entry ->
                             XpLeaderboardRow(
                                 rank = index + 4,
                                 entry = entry,
-                                isMe = entry.firebaseUid == myFirebaseUid
+                                isMe = entry.firebaseUid == myFirebaseUid,
+                                onClick = { onUserClick(entry.firebaseUid) }
                             )
                         }
                         item { Spacer(Modifier.height(24.dp)) }
@@ -146,7 +149,11 @@ fun XpLeaderboardScreen(
  * diminta), dibiarin keliatan tapi redup biar gak dikira rusak/ke-skip.
  */
 @Composable
-private fun PodiumTop3(entries: List<UserXpDisplay>, myFirebaseUid: String?) {
+private fun PodiumTop3(
+    entries: List<UserXpDisplay>,
+    myFirebaseUid: String?,
+    onUserClick: (String) -> Unit
+) {
     // Urutan tampil: #2 (kiri) - #1 (tengah, lebih tinggi) - #3 (kanan) --
     // sama kayak podium referensi.
     val first = entries.getOrNull(0)
@@ -174,6 +181,7 @@ private fun PodiumTop3(entries: List<UserXpDisplay>, myFirebaseUid: String?) {
                     entry = it,
                     rank = 2,
                     isMe = it.firebaseUid == myFirebaseUid,
+                    onClick = { onUserClick(it.firebaseUid) },
                     avatarSize = 64.dp,
                     ringColor = Color(0xFFC0C0C0)
                 )
@@ -183,6 +191,7 @@ private fun PodiumTop3(entries: List<UserXpDisplay>, myFirebaseUid: String?) {
                     entry = it,
                     rank = 1,
                     isMe = it.firebaseUid == myFirebaseUid,
+                    onClick = { onUserClick(it.firebaseUid) },
                     avatarSize = 80.dp,
                     ringColor = Color(0xFFFFD700),
                     showCrown = true
@@ -193,6 +202,7 @@ private fun PodiumTop3(entries: List<UserXpDisplay>, myFirebaseUid: String?) {
                     entry = it,
                     rank = 3,
                     isMe = it.firebaseUid == myFirebaseUid,
+                    onClick = { onUserClick(it.firebaseUid) },
                     avatarSize = 64.dp,
                     ringColor = Color(0xFFCD7F32)
                 )
@@ -208,11 +218,15 @@ private fun PodiumCard(
     isMe: Boolean,
     avatarSize: Dp,
     ringColor: Color,
+    onClick: () -> Unit,
     showCrown: Boolean = false
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.width(100.dp)
+        modifier = Modifier
+            .width(100.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
     ) {
         if (showCrown) {
             Icon(
@@ -296,12 +310,13 @@ private fun PodiumCard(
 }
 
 @Composable
-private fun XpLeaderboardRow(rank: Int, entry: UserXpDisplay, isMe: Boolean) {
+private fun XpLeaderboardRow(rank: Int, entry: UserXpDisplay, isMe: Boolean, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(if (isMe) ZenimePrimary.copy(alpha = 0.15f) else ZenimeSurfaceDark)
+            .clickable(onClick = onClick)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
