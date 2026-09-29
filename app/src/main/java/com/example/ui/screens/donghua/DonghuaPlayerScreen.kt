@@ -563,7 +563,7 @@ fun DonghuaPlayerScreen(
 
                     if (!isInPip) {
                         // Flash "+10/-10" pas double-tap
-                        AnimatedVisibility(
+                        this@Column.AnimatedVisibility(
                             visible = showSeekFlash,
                             enter = fadeIn(tween(120)),
                             exit = fadeOut(tween(200)),
@@ -584,7 +584,7 @@ fun DonghuaPlayerScreen(
                         }
 
                         // Indikator brightness (kiri)
-                        AnimatedVisibility(
+                        this@Column.AnimatedVisibility(
                             visible = showBrightnessIndicator,
                             enter = fadeIn(tween(100)),
                             exit = fadeOut(tween(200)),
@@ -599,7 +599,7 @@ fun DonghuaPlayerScreen(
                         }
 
                         // Indikator volume (kanan)
-                        AnimatedVisibility(
+                        this@Column.AnimatedVisibility(
                             visible = showVolumeIndicator,
                             enter = fadeIn(tween(100)),
                             exit = fadeOut(tween(200)),
@@ -614,7 +614,7 @@ fun DonghuaPlayerScreen(
                         }
 
                         // ---- Overlay kontrol custom ----
-                        AnimatedVisibility(
+                        this@Column.AnimatedVisibility(
                             visible = isControlsVisible,
                             enter = fadeIn(tween(150)),
                             exit = fadeOut(tween(150)),
