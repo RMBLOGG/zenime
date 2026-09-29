@@ -216,12 +216,13 @@ fun PremiumPromoDialog(
 @Composable
 private fun PremiumPromoPackageCard(pkg: PremiumPackage) {
     val benefits = listOf(
-        "Custom banner profil",
-        "Download anime buat ditonton offline",
+        "Semua donghua tanpa batas",
+        "Resolusi unlock sampai 1080p",
         "Bebas iklan sepenuhnya",
-        "Resolusi unlock, dari terendah sampai 1080p",
-        "Baca semua komik tanpa batas",
+        "Download anime buat ditonton offline",
+        "XP nonton dobel (×2)",
         "Kirim voice note di chat publik",
+        "Custom banner profil",
         "Badge khusus Premium"
     )
 
