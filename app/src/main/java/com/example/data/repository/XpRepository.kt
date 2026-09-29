@@ -9,7 +9,7 @@ import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.tasks.await
 
 /**
- * Repository fitur XP nonton (leveling ala Aniku: 45 XP/menit nonton, level
+ * Repository fitur XP nonton (leveling ala Aniku: 70 XP/menit nonton, x2 buat Premium, level
  * makin tinggi butuh XP makin banyak).
  *
  * [sendHeartbeat] WAJIB nempelin Firebase ID Token asli sebagai header
@@ -76,38 +76,38 @@ class XpRepository(
     }
 
     /**
-     * Top 100 leaderboard (total_xp kumulatif, TIDAK reset), digabung
+     * Top 100 leaderboard BULANAN (XP nonton bulan berjalan, zona WIB, reset
+     * otomatis tiap tanggal 1 karena ganti baris period), digabung
      * username/avatar dari chat_profiles + tag clan + status Premium.
      *
-     * DIBATASIN ke top 100 (limit dari xpApi.getLeaderboard()) -- gak lagi
-     * nyakup SEMUA user terdaftar (termasuk yang 0 XP nangkring di bawah
-     * kayak sebelumnya). Alasannya dua: (1) diminta biar list-nya gak
-     * kepanjangan buat leaderboard yang cuma relevan buat top performer,
-     * dan (2) performa -- sebelumnya ini narik profil SEMUA user (bisa
-     * ratusan) buat 1 leaderboard, sekarang cuma narik profil buat 100 uid
-     * yang beneran tampil, lewat 1 request batch (bukan lagi getAllProfiles
-     * yang berat).
+     * Level tetap diambil dari user_xp (kumulatif, TIDAK ikut reset). User
+     * yang belum nonton bulan ini gak muncul di list.
      */
     suspend fun getLeaderboardDisplay(): Result<List<UserXpDisplay>> = runCatching {
-        val topXp = xpApi.getLeaderboard()
+        val period = java.time.ZonedDateTime
+            .now(java.time.ZoneId.of("Asia/Jakarta"))
+            .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM"))
+        val topXp = xpApi.getMonthlyLeaderboard(periodEq = "eq.$period")
+        if (topXp.isEmpty()) return@runCatching emptyList()
         val relevantUids = topXp.map { it.firebaseUid }
 
-        // Profil, tag clan, & status Premium buat 100 uid ini SEKALIGUS
+        // Profil, tag clan, Premium, & level buat uid-uid ini SEKALIGUS
         // BARENGAN (bukan berurutan) -- masing-masing 1 request batch.
         val profiles = chatRepository.getProfilesForUids(relevantUids)
         val clanTags = clanRepository.getClanTagsForUids(relevantUids).getOrDefault(emptyMap())
         val premiumUids = premiumRepository.getPremiumStatusForUids(relevantUids)
+        val levels = getLevelsForUids(relevantUids).getOrDefault(emptyMap())
 
-        topXp.map { xp ->
-            val profile = profiles[xp.firebaseUid]
+        topXp.map { row ->
+            val profile = profiles[row.firebaseUid]
             UserXpDisplay(
-                firebaseUid = xp.firebaseUid,
-                totalXp = xp.totalXp,
-                level = xp.level,
+                firebaseUid = row.firebaseUid,
+                totalXp = row.xp,
+                level = levels[row.firebaseUid] ?: 1,
                 username = profile?.username?.ifBlank { "Pengguna" } ?: "Pengguna",
                 avatarUrl = profile?.avatarUrl,
-                clanTag = clanTags[xp.firebaseUid],
-                isPremium = premiumUids[xp.firebaseUid] == true
+                clanTag = clanTags[row.firebaseUid],
+                isPremium = premiumUids[row.firebaseUid] == true
             )
         }.sortedByDescending { it.totalXp }
     }

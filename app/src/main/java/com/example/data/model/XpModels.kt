@@ -12,9 +12,17 @@ data class UserXp(
     @Json(name = "updated_at") val updatedAt: String? = null
 )
 
+/** Baris tabel user_xp_monthly -- XP nonton per bulan buat leaderboard (level gak ikut reset). */
+@JsonClass(generateAdapter = true)
+data class UserXpMonthly(
+    @Json(name = "firebase_uid") val firebaseUid: String,
+    @Json(name = "xp") val xp: Long = 0
+)
+
 /** user_xp digabung sama chat_profiles (username/avatar) + tag clan buat dirender di leaderboard. */
 data class UserXpDisplay(
     val firebaseUid: String,
+    /** Di leaderboard ini isinya XP BULAN BERJALAN (bukan total kumulatif). Nama field dibiarin biar UI gak perlu diubah. */
     val totalXp: Long,
     val level: Int,
     val username: String,

@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.UserXpDisplay
 import com.example.ui.components.ClanRainbowBadge
@@ -58,9 +59,8 @@ import com.example.ui.theme.ZenimeSurfaceDark
 
 /**
  * Leaderboard XP -- desain podium top-3 + list ala referensi yang dikasih
- * user. Fungsinya TETEP sama kayak sebelumnya (total_xp kumulatif, gak
- * reset harian) -- cuma tampilannya yang di-samain, gak ada tab
- * Harian/Mingguan/Bulanan.
+ * user. XP yang ditampilin adalah XP nonton BULAN BERJALAN (reset otomatis
+ * tiap tanggal 1 WIB); level tetap kumulatif dan gak ikut reset.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,7 +75,16 @@ fun XpLeaderboardScreen(
         containerColor = Color(0xFF0B0B12),
         topBar = {
             TopAppBar(
-                title = { Text("Leaderboard XP", fontWeight = FontWeight.Bold) },
+                title = {
+                    Column {
+                        Text("Leaderboard XP", fontWeight = FontWeight.Bold)
+                        Text(
+                            "Bulan ini \u2022 reset tiap tanggal 1",
+                            fontSize = 11.sp,
+                            color = Color(0xFF9CA3AF)
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
@@ -100,7 +109,7 @@ fun XpLeaderboardScreen(
                 uiState.entries.isEmpty() -> {
                     EmptyStateView(
                         title = "Belum Ada yang Nonton",
-                        description = "Jadi yang pertama naik XP hari ini!"
+                        description = "Jadi yang pertama naik XP bulan ini!"
                     )
                 }
                 else -> {

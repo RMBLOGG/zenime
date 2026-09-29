@@ -1,6 +1,7 @@
 package com.example.data.api
 
 import com.example.data.model.UserXp
+import com.example.data.model.UserXpMonthly
 import com.example.data.model.WatchXpHeartbeatRequest
 import com.example.data.model.WatchXpHeartbeatResponse
 import retrofit2.http.Body
@@ -51,4 +52,18 @@ interface ZenimeXpApi {
         @Query("order") order: String = "total_xp.desc",
         @Query("limit") limit: Int = 100
     ): List<UserXp>
+
+    /**
+     * Leaderboard BULANAN: XP nonton yang dikumpulin selama satu bulan (WIB),
+     * dicatat trigger `trg_monthly_xp` di tabel user_xp_monthly. [periodEq]
+     * formatnya "eq.2026-09". Ganti bulan = baris baru, jadi otomatis mulai
+     * dari 0 tanpa ada yang dihapus. Level TETAP dari user_xp, gak kesentuh.
+     */
+    @GET("rest/v1/user_xp_monthly")
+    suspend fun getMonthlyLeaderboard(
+        @Query("period") periodEq: String,
+        @Query("select") select: String = "firebase_uid,xp",
+        @Query("order") order: String = "xp.desc",
+        @Query("limit") limit: Int = 100
+    ): List<UserXpMonthly>
 }
