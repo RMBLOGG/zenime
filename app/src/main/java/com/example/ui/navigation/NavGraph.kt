@@ -379,13 +379,16 @@ fun ZenimeAppNavHost(
     // bawah, biar buka episode baru gak ujug-ujug fullscreen bawaan dari
     // sesi nonton sebelumnya.
     val isPlayerFullscreen by PlayerFullscreenController.isFullscreen.collectAsState()
+    // Player anime DAN player donghua sama-sama pakai mode fullscreen/orientasi yang sama.
+    val isPlayerLikeRoute = currentRoute == Screen.Player.route ||
+        currentRoute == Screen.DonghuaPlayer.route
 
     LaunchedEffect(currentRoute, isPlayerFullscreen) {
         val activity = context.findActivity() ?: return@LaunchedEffect
         activity.requestedOrientation = when {
-            currentRoute == Screen.Player.route && isPlayerFullscreen ->
+            isPlayerLikeRoute && isPlayerFullscreen ->
                 ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-            currentRoute == Screen.Player.route ->
+            isPlayerLikeRoute ->
                 // Portrait biasa, tapi tetep boleh ngikutin sensor device
                 // (bukan di-lock) -- ini juga yang bikin PlayerScreen bisa
                 // otomatis masuk fullscreen pas user rotate device manual.
@@ -410,7 +413,7 @@ fun ZenimeAppNavHost(
     LaunchedEffect(navBackStackEntry, isPlayerFullscreen) {
         val activity = context.findActivity() ?: return@LaunchedEffect
         val window = activity.window
-        val isPlayerRoute = currentRoute == Screen.Player.route
+        val isPlayerRoute = isPlayerLikeRoute
 
         // Keep-screen-on tetep nyala selama nonton, fullscreen atau nggak.
         if (isPlayerRoute) {

@@ -197,7 +197,7 @@ private const val MIN_DURATION_FOR_SKIP_MS = INTRO_SKIP_MS * 3
 // kontrol player konsisten di atas video apa pun (gak ikut ganti-ganti kalau
 // tema app diubah), sama kayak kebanyakan app streaming yang punya identitas
 // warna sendiri buat player-nya.
-private val PlayerAccent = Color(0xFF4DD8FF)
+internal val PlayerAccent = Color(0xFF4DD8FF)
 
 @UnstableOptIn(UnstableApi::class)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1499,14 +1499,14 @@ private fun EpisodeLockedContent(
 }
 
 /** Pilih ikon brightness yang paling nyambung sama level saat ini. */
-private fun brightnessIconFor(level: Float): ImageVector = when {
+internal fun brightnessIconFor(level: Float): ImageVector = when {
     level < 0.15f -> Icons.Default.BrightnessLow
     level < 0.7f -> Icons.Default.BrightnessMedium
     else -> Icons.Default.BrightnessHigh
 }
 
 /** Pilih ikon volume yang paling nyambung sama level saat ini. */
-private fun volumeIconFor(level: Float): ImageVector = when {
+internal fun volumeIconFor(level: Float): ImageVector = when {
     level <= 0f -> Icons.Default.VolumeOff
     level < 0.5f -> Icons.Default.VolumeDown
     else -> Icons.Default.VolumeUp
@@ -1519,7 +1519,7 @@ private fun volumeIconFor(level: Float): ImageVector = when {
  * beberapa saat setelah dilepas.
  */
 @Composable
-private fun GestureLevelIndicator(
+internal fun GestureLevelIndicator(
     icon: ImageVector,
     level: Float,
     modifier: Modifier = Modifier
@@ -1572,7 +1572,7 @@ private fun GestureLevelIndicator(
  * apa pun (masalah utama di desain lama, ikon polos gampang ilang di frame terang).
  */
 @Composable
-private fun PlayerIconButton(
+internal fun PlayerIconButton(
     icon: ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
@@ -1685,7 +1685,7 @@ private fun DownloadIconButton(
     }
 }
 
-private data class PlayerMenuOption(
+internal data class PlayerMenuOption(
     val label: String,
     val isSelected: Boolean,
     val onClick: () -> Unit,
@@ -1699,7 +1699,7 @@ private data class PlayerMenuOption(
  * Doronime -- tiap opsi kualitas dikasih label warna + kalimat penjelas,
  * bukan cuma angka polos, biar user awam lebih gampang milih.
  */
-private fun qualityTag(quality: String?): String =
+internal fun qualityTag(quality: String?): String =
     when (qualityValueP(quality)) {
         null -> "Alternatif"
         in 1080..Int.MAX_VALUE -> "Premium"
@@ -1708,7 +1708,7 @@ private fun qualityTag(quality: String?): String =
         else -> "Hemat"
     }
 
-private fun qualityAccentColor(quality: String?): Color =
+internal fun qualityAccentColor(quality: String?): Color =
     when (qualityValueP(quality)) {
         null -> Color.White
         in 1080..Int.MAX_VALUE -> Color(0xFFFFC107)
@@ -1717,7 +1717,7 @@ private fun qualityAccentColor(quality: String?): Color =
         else -> Color.White.copy(alpha = 0.85f)
     }
 
-private fun qualityDescription(quality: String?): String =
+internal fun qualityDescription(quality: String?): String =
     when (qualityValueP(quality)) {
         null -> "Kualitas alternatif buat nonton episode ini."
         in 1080..Int.MAX_VALUE -> "Kualitas paling tinggi untuk tampilan maksimal, terbaik di jaringan cepat."
@@ -1815,7 +1815,7 @@ private fun PlayerMenuSection(title: String, options: List<PlayerMenuOption>) {
  * yang dipakai tombol "Kualitas" di halaman episode bawah video.
  */
 @Composable
-private fun PlayerSettingsMenu(
+internal fun PlayerSettingsMenu(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
     qualityOptions: List<PlayerMenuOption>,
@@ -1882,7 +1882,7 @@ private fun PlayerSettingsMenu(
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun QualityPickerSheet(
+internal fun QualityPickerSheet(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
     qualityOptions: List<PlayerMenuOption>,
@@ -2275,7 +2275,7 @@ private fun EpisodeListRow(
  * ujung membulat, thumb kecil yang membesar pas lagi di-drag.
  */
 @Composable
-private fun VideoProgressBar(
+internal fun VideoProgressBar(
     progressFraction: Float,
     accentColor: Color,
     onSeek: (Float) -> Unit,
@@ -2356,7 +2356,7 @@ private fun VideoProgressBar(
     }
 }
 
-private fun formatTime(ms: Long): String {
+internal fun formatTime(ms: Long): String {
     val totalSeconds = ms / 1000
     val hours = totalSeconds / 3600
     val minutes = (totalSeconds % 3600) / 60
@@ -2655,7 +2655,7 @@ private fun PlayerDetailsSection(
  * yang udah ada (bedanya itu SociaBuzz, ini Trakteer).
  */
 @Composable
-private fun TrakteerDonationButton(modifier: Modifier = Modifier) {
+internal fun TrakteerDonationButton(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     Surface(
         shape = RoundedCornerShape(14.dp),
@@ -2704,7 +2704,7 @@ private fun TrakteerDonationButton(modifier: Modifier = Modifier) {
 
 /** Chip kecil buat baris tombol aksi (kualitas/download/lapor/bagikan). */
 @Composable
-private fun PlayerActionChip(
+internal fun PlayerActionChip(
     icon: ImageVector,
     label: String,
     onClick: () -> Unit,
