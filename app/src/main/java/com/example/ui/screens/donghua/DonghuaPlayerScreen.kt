@@ -120,6 +120,8 @@ import coil.request.ImageRequest
 import com.example.data.api.AnichinNetwork
 import com.example.data.common.Result
 import com.example.data.local.PremiumStatusCache
+import com.example.util.PlaybackCoordinator
+import com.example.util.WatchXpGate
 import com.example.data.model.AnichinEpisodeDetail
 import com.example.data.model.AnichinEpisodeRef
 import com.example.data.model.AnichinMedia
@@ -334,9 +336,12 @@ fun DonghuaPlayerScreen(
                 PipController.setAspectRatio(videoSize.width, videoSize.height)
             }
         }
+        PlaybackCoordinator.attach(exoPlayer)
         exoPlayer.addListener(listener)
         onDispose {
             exoPlayer.removeListener(listener)
+            PlaybackCoordinator.detach(exoPlayer)
+            WatchXpGate.release(exoPlayer)
             exoPlayer.release()
         }
     }
@@ -363,15 +368,11 @@ fun DonghuaPlayerScreen(
     // XP nonton: kirim heartbeat tiap 60 detik video BENERAN playing (pause/buffering
     // gak dihitung). Key cuma exoPlayer supaya pause/buffer sekejap gak me-reset hitungan.
     LaunchedEffect(exoPlayer) {
-        var secondsSinceLastHeartbeat = 0
         while (true) {
             delay(1000)
-            if (exoPlayer.isPlaying) {
-                secondsSinceLastHeartbeat++
-                if (secondsSinceLastHeartbeat >= 60) {
-                    secondsSinceLastHeartbeat = 0
-                    viewModel.sendWatchHeartbeat(minutes = 1)
-                }
+            // Hitungan XP global (bukan per player) -- lihat WatchXpGate.
+            if (exoPlayer.isPlaying && WatchXpGate.onActiveSecond(exoPlayer)) {
+                viewModel.sendWatchHeartbeat(minutes = 1)
             }
         }
     }

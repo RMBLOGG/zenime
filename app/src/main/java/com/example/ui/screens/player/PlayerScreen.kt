@@ -176,6 +176,8 @@ import com.example.util.PlayerFullscreenController
 import com.example.util.findActivity
 import com.example.util.isDownloadAllowed
 import com.example.util.isEpisodeLocked
+import com.example.util.PlaybackCoordinator
+import com.example.util.WatchXpGate
 import com.example.ui.components.PremiumLockedScreen
 import com.example.util.isQualityLocked
 import com.example.util.qualityValueP
@@ -532,15 +534,13 @@ fun PlayerScreen(
         // secondsSinceLastHeartbeat ke 0 -- akibatnya heartbeat GAK PERNAH
         // sempet nyampe 60 detik kalau nontonnya sesekali kesendat buffer,
         // padahal itu wajar banget di streaming video.
-        var secondsSinceLastHeartbeat = 0
         while (true) {
             if (exoPlayer.isPlaying) {
                 currentPosition = exoPlayer.currentPosition
                 duration = if (exoPlayer.duration > 0) exoPlayer.duration else 0L
 
-                secondsSinceLastHeartbeat++
-                if (secondsSinceLastHeartbeat >= 60) {
-                    secondsSinceLastHeartbeat = 0
+                // Hitungan XP global (bukan per player) -- lihat WatchXpGate.
+                if (WatchXpGate.onActiveSecond(exoPlayer)) {
                     viewModel.sendWatchHeartbeat(minutes = 1)
                 }
 
@@ -675,10 +675,12 @@ fun PlayerScreen(
                 }
             }
         }
+        PlaybackCoordinator.attach(exoPlayer)
         exoPlayer.addListener(listener)
 
         onDispose {
             exoPlayer.removeListener(listener)
+            WatchXpGate.release(exoPlayer)
             if (isMinimizingToMiniPlayer) {
                 // Serahin ke MiniPlayerManager -- JANGAN release, video-nya
                 // harus tetep jalan di mini player.
@@ -693,6 +695,7 @@ fun PlayerScreen(
                     )
                 )
             } else {
+                PlaybackCoordinator.detach(exoPlayer)
                 exoPlayer.release()
             }
         }

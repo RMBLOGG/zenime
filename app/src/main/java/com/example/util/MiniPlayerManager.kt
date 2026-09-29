@@ -90,6 +90,7 @@ object MiniPlayerManager {
     fun release() {
         listener?.let { player?.removeListener(it) }
         listener = null
+        player?.let { PlaybackCoordinator.detach(it) }
         player?.release()
         player = null
         _info.value = null

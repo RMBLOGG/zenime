@@ -135,10 +135,11 @@ interface ZenimeSupabaseApi {
         @Query("anime_id") animeIdEq: String
     ): Response<Void>
 
-    @Headers("Prefer: resolution=merge-duplicates")
-    @POST("rest/v1/user_watch_history")
+    // Lewat RPC `upsert_watch_history` (SECURITY DEFINER) biar lolos RLS pas
+    // toggle "Riwayat publik" mati -- upsert langsung ke tabel kena 42501
+    // karena policy SELECT cuma meloloskan baris kalau history_public = true.
+    @POST("rest/v1/rpc/upsert_watch_history")
     suspend fun upsertWatchHistoryRemote(
-        @Query("on_conflict") onConflict: String = "firebase_uid,anime_id",
         @Body body: com.example.data.model.WatchHistoryUpsert
     ): Response<Void>
 
