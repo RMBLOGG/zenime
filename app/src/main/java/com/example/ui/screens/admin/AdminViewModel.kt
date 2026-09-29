@@ -193,7 +193,7 @@ class AdminViewModel(
         }
     }
 
-    /** Moderator/developer: ban akun. */
+    /** Admin/developer: ban akun. */
     fun banUser(targetUid: String, reason: String?) {
         if (targetUid == myUid) {
             _uiState.value = _uiState.value.copy(actionError = "Gak bisa ban diri sendiri")

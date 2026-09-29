@@ -361,7 +361,7 @@ private fun UserRow(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                 }
-                if (myRole == ZenimeRole.MODERATOR || myRole == ZenimeRole.DEVELOPER) {
+                if (myRole == ZenimeRole.ADMIN || myRole == ZenimeRole.DEVELOPER) {
                     ActionChip(
                         text = if (user.bannedAccount) "Unban Akun" else "Ban Akun",
                         onClick = if (user.bannedAccount) onUnbanAccount else onBanAccount,

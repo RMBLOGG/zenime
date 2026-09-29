@@ -96,7 +96,7 @@ class AdminRepository(
         Result.failure(e)
     }
 
-    /** Ban akun (moderator/developer). Server nolak kalau target punya role. */
+    /** Ban akun (admin/developer). Server nolak kalau target punya role. */
     suspend fun banUser(targetUid: String, reason: String? = null): Result<Unit> = try {
         val response = api.banUser(authHeader(), TargetUidRequest(targetUid, reason))
         if (response.success) Result.success(Unit) else Result.failure(IllegalStateException(response.error ?: "Gagal ban user"))
