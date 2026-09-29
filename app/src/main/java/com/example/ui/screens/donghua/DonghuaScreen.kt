@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.pager.HorizontalPager
@@ -48,6 +49,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -71,6 +75,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import kotlinx.coroutines.flow.distinctUntilChanged
 import coil.request.ImageRequest
 import com.example.data.api.AnichinNetwork
 import com.example.data.model.AnichinCard
@@ -653,6 +658,9 @@ private fun ShimmerGrid() {
     }
 }
 
+/** Berapa item dari ujung bawah grid sebelum halaman berikutnya mulai dimuat (2 baris). */
+private const val PREFETCH_DISTANCE = 6
+
 @Composable
 private fun DonghuaGrid(
     state: DonghuaGridState,
@@ -667,53 +675,91 @@ private fun DonghuaGrid(
         state.errorMessage != null && state.items.isEmpty() ->
             ErrorStateView(message = state.errorMessage, onRetry = onRetry)
         state.isEmpty -> EmptyStateView(title = emptyTitle, description = emptyDescription)
-        else -> LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            items(state.items, key = { it.slug!! }) { card: AnichinCard ->
-                DonghuaCard(card = card, onClick = { card.slug?.let(onClick) })
+        else -> {
+            val gridState = rememberLazyGridState()
+            val currentState by rememberUpdatedState(state)
+            val currentLoadMore by rememberUpdatedState(onLoadMore)
+
+            // Ukuran list saat terakhir kali minta halaman berikutnya. Reset kalau list
+            // diganti total (ganti tab/genre -> item pertama beda).
+            var requestedAtSize by remember(state.items.firstOrNull()?.slug) { mutableIntStateOf(-1) }
+
+            // Auto load more: begitu jempol scroll mendekati ujung bawah. Emit ulang tiap
+            // total item berubah, jadi kalau halaman baru masih pendek dan ujung masih
+            // kelihatan, halaman berikutnya langsung ikut dimuat.
+            LaunchedEffect(gridState) {
+                snapshotFlow {
+                    val info = gridState.layoutInfo
+                    val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+                    Pair(lastVisible >= info.totalItemsCount - 1 - PREFETCH_DISTANCE, info.totalItemsCount)
+                }
+                    .distinctUntilChanged()
+                    .collect { (nearEnd, _) ->
+                        val s = currentState
+                        // requestedAtSize mencegah loop retry otomatis kalau request gagal:
+                        // gagal = ukuran list gak berubah -> nunggu user tap "Coba lagi".
+                        if (nearEnd && s.hasNextPage && !s.isLoadingMore && s.items.size != requestedAtSize) {
+                            requestedAtSize = s.items.size
+                            currentLoadMore()
+                        }
+                    }
             }
-            if (state.hasNextPage) {
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    LoadMoreButton(isLoading = state.isLoadingMore, onClick = onLoadMore)
+
+            val loadFailed = state.hasNextPage && !state.isLoadingMore && requestedAtSize == state.items.size
+
+            LazyVerticalGrid(
+                state = gridState,
+                columns = GridCells.Fixed(3),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 32.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(state.items, key = { it.slug!! }) { card: AnichinCard ->
+                    DonghuaCard(card = card, onClick = { card.slug?.let(onClick) })
+                }
+                if (state.hasNextPage) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        LoadMoreFooter(
+                            isLoading = state.isLoadingMore,
+                            failed = loadFailed,
+                            onRetry = {
+                                requestedAtSize = state.items.size
+                                onLoadMore()
+                            }
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+/** Footer grid: spinner selama memuat; tombol "Coba lagi" cuma muncul kalau request gagal. */
 @Composable
-private fun LoadMoreButton(isLoading: Boolean, onClick: () -> Unit) {
+private fun LoadMoreFooter(isLoading: Boolean, failed: Boolean, onRetry: () -> Unit) {
     Box(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        modifier = Modifier.fillMaxWidth().height(56.dp),
         contentAlignment = Alignment.Center
     ) {
-        Surface(
-            shape = RoundedCornerShape(12.dp),
-            color = MaterialTheme.colorScheme.surface,
-            border = BorderStroke(1.dp, CardOutlineBorder),
-            modifier = Modifier.clickable(enabled = !isLoading) { onClick() }
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
+        when {
+            isLoading -> CircularProgressIndicator(
+                color = ZenimePrimary,
+                strokeWidth = 2.5.dp,
+                modifier = Modifier.size(24.dp)
+            )
+            failed -> Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, CardOutlineBorder),
+                modifier = Modifier.clickable { onRetry() }
             ) {
-                if (isLoading) {
-                    CircularProgressIndicator(color = ZenimePrimary, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-                    Text("Memuat...", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                } else {
-                    Text(
-                        "Muat Lebih Banyak",
-                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                        color = Color.White
-                    )
-                    Icon(Icons.Filled.ExpandMore, contentDescription = null, tint = ZenimePrimary, modifier = Modifier.size(18.dp))
-                }
+                Text(
+                    "Gagal memuat. Coba lagi",
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp)
+                )
             }
         }
     }
