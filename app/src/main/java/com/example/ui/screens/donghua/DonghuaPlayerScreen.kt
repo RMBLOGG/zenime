@@ -69,6 +69,7 @@ import com.example.ui.components.ErrorStateView
 import com.example.ui.theme.CardOutlineBorder
 import com.example.ui.theme.ZenimePrimary
 import com.example.util.friendlyErrorMessage
+import retrofit2.HttpException
 
 @UnstableOptIn(UnstableApi::class)
 @Composable
@@ -168,6 +169,18 @@ fun DonghuaPlayerScreen(
                 .aspectRatio(16f / 9f)
         ) {
             when {
+                // 404 dari API = episode ini gak punya mirror OK.ru (bukan masalah koneksi)
+                videoState is Result.Error &&
+                    ((videoState as Result.Error).exception as? HttpException)?.code() == 404 -> {
+                    Text(
+                        text = "Video episode ini belum tersedia di sumber. Coba episode lain.",
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .padding(24.dp)
+                    )
+                }
                 videoState is Result.Error -> {
                     ErrorStateView(
                         message = friendlyErrorMessage(
