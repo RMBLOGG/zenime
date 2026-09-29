@@ -176,6 +176,7 @@ import com.example.util.PlayerFullscreenController
 import com.example.util.findActivity
 import com.example.util.isDownloadAllowed
 import com.example.util.isEpisodeLocked
+import com.example.ui.components.PremiumLockedScreen
 import com.example.util.isQualityLocked
 import com.example.util.qualityValueP
 import kotlinx.coroutines.delay
@@ -272,8 +273,14 @@ fun PlayerScreen(
     // lagi iklan interstitial yang perlu ditunggu sebelum mulai muter).
     var adGateOpen by remember { mutableStateOf(false) }
 
-    LaunchedEffect(currentEpisodeDetail?.id) {
-        if (currentEpisodeDetail == null) return@LaunchedEffect
+    // Status kunci baru pasti setelah daftar episode selesai dimuat (Success/Error).
+    // Sebelum itu totalEpisodes = 0 -> isEpisodeLocked salah nganggep "belum
+    // terkunci" -> video sempat muter (suara bocor) padahal episodenya terkunci.
+    // Premium gak perlu nunggu karena gak pernah terkunci.
+    val lockDecisionReady = isPremium || episodeListState !is Result.Loading
+
+    LaunchedEffect(currentEpisodeDetail?.id, lockDecisionReady) {
+        if (currentEpisodeDetail == null || !lockDecisionReady) return@LaunchedEffect
         adGateOpen = true
     }
 
@@ -487,6 +494,19 @@ fun PlayerScreen(
         }
     }
 
+    // Episode terkunci: matiin player TOTAL. Ini nutup semua jalur suara bocor --
+    // lock aktif belakangan (setelah video sempat jalan), pindah dari episode
+    // sebelumnya yang masih muter, atau exoPlayer hasil reuse dari mini player.
+    LaunchedEffect(isEpisodeLockedForUser) {
+        if (isEpisodeLockedForUser) {
+            adGateOpen = false
+            exoPlayer.playWhenReady = false
+            exoPlayer.pause()
+            exoPlayer.stop()
+            exoPlayer.clearMediaItems()
+        }
+    }
+
     // Auto-hide controls overlay
     LaunchedEffect(isControlsVisible, isPlaying) {
         if (isControlsVisible && isPlaying) {
@@ -560,15 +580,21 @@ fun PlayerScreen(
         // bikin video-nya restart/reset ke posisi 0. Cukup sekali skip di
         // awal; abis itu balik ke perilaku normal (misal user ganti
         // kualitas/server manual).
+        // Episode terkunci Premium -- jangan siapin/puter video sama sekali,
+        // gak peduli ada link server atau file offline-nya. Dicek DULUAN
+        // sebelum cabang reuse mini player biar media hasil reuse ikut mati.
+        if (isEpisodeLockedForUser) {
+            exoPlayer.playWhenReady = false
+            exoPlayer.stop()
+            exoPlayer.clearMediaItems()
+            return@LaunchedEffect
+        }
+
         if (reusedFromMiniPlayer && exoPlayer.mediaItemCount > 0) {
             reusedFromMiniPlayer = false
             hasAppliedResume = true
             return@LaunchedEffect
         }
-
-        // Episode terkunci Premium -- jangan siapin/puter video sama sekali,
-        // gak peduli ada link server atau file offline-nya.
-        if (isEpisodeLockedForUser) return@LaunchedEffect
 
         // Prioritaskan file yang udah di-download (offline) kalau ada dan
         // masih beneran ada di disk -- gak perlu internet/link server sama
@@ -615,7 +641,7 @@ fun PlayerScreen(
     // Begitu gate iklan kebuka (iklan kelar/di-skip, atau memang gak perlu
     // iklan sama sekali), baru video-nya boleh mulai muter.
     LaunchedEffect(adGateOpen) {
-        if (adGateOpen) {
+        if (adGateOpen && !isEpisodeLockedForUser) {
             exoPlayer.playWhenReady = true
         }
     }
@@ -1443,59 +1469,14 @@ private fun EpisodeLockedContent(
     onBackClick: () -> Unit,
     onUpgradeClick: () -> Unit
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {},
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(32.dp)
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = PlayerAccent.copy(alpha = 0.15f),
-                modifier = Modifier.size(72.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Lock,
-                        contentDescription = "Episode Premium",
-                        tint = PlayerAccent,
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(
-                text = if (episodeIndex != null) "Episode $episodeIndex Khusus Premium" else "Episode Khusus Premium",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = Color.White,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "$LOCKED_LATEST_EPISODES_COUNT episode terbaru khusus buat member Premium. Upgrade buat lanjut nonton, bebas iklan, kualitas HD, dan bisa download offline.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.7f),
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-            Button(
-                onClick = onUpgradeClick,
-                colors = ButtonDefaults.buttonColors(containerColor = PlayerAccent),
-                shape = RoundedCornerShape(24.dp)
-            ) {
-                Text("Upgrade Premium", color = Color.Black, fontWeight = FontWeight.Bold)
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            TextButton(onClick = onBackClick) {
-                Text("Kembali", color = Color.White.copy(alpha = 0.7f))
-            }
-        }
-    }
+    PremiumLockedScreen(
+        headline = if (episodeIndex != null) "Episode $episodeIndex khusus member Premium" else "Episode ini khusus member Premium",
+        description = "$LOCKED_LATEST_EPISODES_COUNT episode terbaru hanya bisa ditonton member Premium. Episode sebelumnya tetap gratis.",
+        benefits = listOf("Bebas iklan", "Kualitas HD", "Download untuk nonton offline"),
+        onUpgradeClick = onUpgradeClick,
+        onBackClick = onBackClick,
+        accent = PlayerAccent
+    )
 }
 
 /** Pilih ikon brightness yang paling nyambung sama level saat ini. */
