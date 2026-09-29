@@ -140,6 +140,8 @@ private fun DetailContent(
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(AnichinNetwork.imageUrl(detail.thumbnail))
+                            .addHeader("User-Agent", AnichinNetwork.USER_AGENT)
+                            .addHeader("Referer", AnichinNetwork.sourceBase + "/")
                             .crossfade(true)
                             .build(),
                         contentDescription = detail.name,

@@ -58,6 +58,8 @@ fun DonghuaPosterCard(
                 AsyncImage(
                     model = ImageRequest.Builder(LocalContext.current)
                         .data(AnichinNetwork.imageUrl(card.thumbnail))
+                        .addHeader("User-Agent", AnichinNetwork.USER_AGENT)
+                        .addHeader("Referer", AnichinNetwork.sourceBase + "/")
                         .crossfade(true)
                         .build(),
                     contentDescription = card.title,
