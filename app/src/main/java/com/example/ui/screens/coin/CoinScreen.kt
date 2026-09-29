@@ -22,11 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -43,9 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.res.painterResource
@@ -54,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
 import com.example.data.api.SupabaseConfig
 import com.example.data.model.CoinPackage
+import com.example.ui.components.CheckoutSheet
 import com.example.ui.components.ZenimeHeader
 import com.example.ui.components.ZenimeScreenTitle
 import com.example.ui.theme.CardOutlineBorder
@@ -65,6 +60,39 @@ fun CoinScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    val context = LocalContext.current
+    uiState.selectedPackage?.let { pkg ->
+        CheckoutSheet(
+            title = "${formatRupiah(pkg.totalCoin)} ZCoin",
+            priceText = "Rp ${formatRupiah(pkg.price)}",
+            isLoadingCode = uiState.isLoadingCode,
+            zenimeCode = uiState.zenimeCode,
+            codeError = uiState.codeError,
+            onRetryCode = viewModel::retryLoadCode,
+            onPayQris = {
+                uiState.zenimeCode?.let { code ->
+                    openCheckout(context, SupabaseConfig.COIN_STOREFRONT_URL, code, pkg.id)
+                    viewModel.loadBalance()
+                }
+            },
+            onPayManual = {
+                // Buat pembeli yang QRIS otomatisnya gak kebaca e-wallet/bank
+                // mereka (mis. luar negeri) -- verifikasi dilakukan manual admin.
+                uiState.zenimeCode?.let { code ->
+                    openCheckout(context, SupabaseConfig.COIN_MANUAL_STOREFRONT_URL, code, pkg.id)
+                    viewModel.loadBalance()
+                }
+            },
+            onDismiss = viewModel::clearSelection
+        ) {
+            Image(
+                painter = painterResource(id = R.drawable.ic_zcoin_badge),
+                contentDescription = null,
+                modifier = Modifier.size(34.dp).clip(CircleShape)
+            )
+        }
+    }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -98,7 +126,7 @@ fun CoinScreen(
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                 )
                 Text(
-                    "Salin kode akun setelah pilih paket, lalu selesaikan pembayaran lewat Zenime Store.",
+                    "Ketuk satu paket untuk lanjut ke pembayaran.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -133,17 +161,6 @@ fun CoinScreen(
                     }
                 }
 
-                if (uiState.selectedPackage != null) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    CoinCheckoutCard(
-                        pkg = uiState.selectedPackage!!,
-                        isLoadingCode = uiState.isLoadingCode,
-                        zenimeCode = uiState.zenimeCode,
-                        codeError = uiState.codeError,
-                        onRetryCode = viewModel::retryLoadCode,
-                        onReturnedFromCheckout = viewModel::loadBalance
-                    )
-                }
             }
         }
     }
@@ -295,148 +312,6 @@ private fun CoinPackageCard(
 }
 
 @Composable
-private fun CoinCheckoutCard(
-    pkg: CoinPackage,
-    isLoadingCode: Boolean,
-    zenimeCode: String?,
-    codeError: String?,
-    onRetryCode: () -> Unit,
-    onReturnedFromCheckout: () -> Unit
-) {
-    val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current
-
-    Card(
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.dp, ZenimePrimary.copy(alpha = 0.4f), RoundedCornerShape(18.dp))
-    ) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_zcoin_badge),
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp).clip(CircleShape)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    "${formatRupiah(pkg.totalCoin)} ZCoin · Rp ${formatRupiah(pkg.price)}",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            when {
-                isLoadingCode -> {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = ZenimePrimary, modifier = Modifier.size(28.dp))
-                    }
-                }
-
-                codeError != null -> {
-                    CoinErrorCard(message = codeError, onRetry = onRetryCode)
-                }
-
-                zenimeCode != null -> {
-                    Text(
-                        "Kode Akun Zenime Kamu",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .padding(horizontal = 14.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            zenimeCode,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
-                            color = ZenimePrimary
-                        )
-                        IconButton(
-                            onClick = { clipboardManager.setText(AnnotatedString(zenimeCode)) }
-                        ) {
-                            Icon(
-                                Icons.Filled.ContentCopy,
-                                contentDescription = "Salin kode",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    Text(
-                        "Salin kode di atas, lalu tempel kode-nya di halaman top up Zenime Store buat nambahin ZCoin ke akun ini.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Button(
-                        onClick = {
-                            val autoUri = Uri.parse(SupabaseConfig.COIN_STOREFRONT_URL)
-                                .buildUpon()
-                                .appendQueryParameter("code", zenimeCode)
-                                .appendQueryParameter("package_id", pkg.id)
-                                .build()
-                            val intent = Intent(Intent.ACTION_VIEW, autoUri)
-                            context.startActivity(intent)
-                            onReturnedFromCheckout()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = ZenimePrimary)
-                    ) {
-                        Icon(Icons.Filled.OpenInBrowser, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Pembayaran Otomatis", fontWeight = FontWeight.Bold)
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    OutlinedButton(
-                        onClick = {
-                            // Buat pembeli yang QRIS otomatisnya gak kebaca e-wallet/bank
-                            // mereka (mis. luar negeri) -- verifikasi dilakukan manual admin.
-                            val manualUri = Uri.parse(SupabaseConfig.COIN_MANUAL_STOREFRONT_URL)
-                                .buildUpon()
-                                .appendQueryParameter("code", zenimeCode)
-                                .appendQueryParameter("package_id", pkg.id)
-                                .build()
-                            val intent = Intent(Intent.ACTION_VIEW, manualUri)
-                            context.startActivity(intent)
-                            onReturnedFromCheckout()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = ZenimePrimary)
-                    ) {
-                        Icon(Icons.Filled.OpenInBrowser, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Pembayaran Manual", fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun CoinErrorCard(message: String, onRetry: () -> Unit) {
     Card(
         shape = RoundedCornerShape(14.dp),
@@ -470,4 +345,14 @@ private fun formatRupiah(amount: Long): String {
         sb.append(char)
     }
     return sb.reverse().toString()
+}
+
+/** Buka halaman storefront di browser dengan kode akun + id paket sebagai query. */
+private fun openCheckout(context: android.content.Context, baseUrl: String, code: String, packageId: String) {
+    val uri = Uri.parse(baseUrl)
+        .buildUpon()
+        .appendQueryParameter("code", code)
+        .appendQueryParameter("package_id", packageId)
+        .build()
+    context.startActivity(Intent(Intent.ACTION_VIEW, uri))
 }
