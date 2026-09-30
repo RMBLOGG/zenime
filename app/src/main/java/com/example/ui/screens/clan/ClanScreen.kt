@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Diamond
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PersonAdd
@@ -64,6 +65,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -82,42 +84,28 @@ import com.example.ui.components.ClanRainbowBadge
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.GeneratedAvatar
+import com.example.ui.components.LevelBadge
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-// --- Palet layar Clan (dibikin mirip referensi: gelap pekat + aksen emas) ---
-private val ClanBg = Color(0xFF0B0E14)
-private val ClanSurface = Color(0xFF151A24)
-private val ClanBorder = Color(0xFF2A3140)
-private val ClanMuted = Color(0xFF8B95A7)
-private val ClanGold = Color(0xFFFFC107)
-private val ClanGreen = Color(0xFF2F7D62)
+// --- Palet layar Clan: gelap pekat + aksen merah-koral (senada tombol utama app) + header ungu ---
+private val ClanBg = Color(0xFF0B0D14)
+private val ClanSurface = Color(0xFF141826)
+private val ClanBorder = Color(0xFF262C42)
+private val ClanMuted = Color(0xFF8E97AD)
+private val ClanAccent = Color(0xFFE63950)
+private val ClanAccentAlt = Color(0xFFFF7A59)
 private val GemBlue = Color(0xFF4FC3F7)
 private val VerifiedBlue = Color(0xFF3897F0)
+private val ClanAccentBrush get() = Brush.horizontalGradient(listOf(ClanAccent, ClanAccentAlt))
 
 private val RoleLeaderColor = Color(0xFFFFC107)      // kuning
 private val RoleViceColor = Color(0xFF9F7AEA)        // ungu
 private val RoleAdmiralColor = Color(0xFFE0912F)     // oranye
 private val RoleOfficerColor = Color(0xFF26A69A)     // teal
 private val RoleMemberColor = Color(0xFF607D8B)      // abu kebiruan
-
-/** Bentuk badge tag clan di header: kotak dengan ujung kanan lancip (panah). */
-private class ArrowTagShape : Shape {
-    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-        val notch = size.height * 0.4f
-        val path = Path().apply {
-            moveTo(0f, 0f)
-            lineTo(size.width - notch, 0f)
-            lineTo(size.width, size.height / 2f)
-            lineTo(size.width - notch, size.height)
-            lineTo(0f, size.height)
-            close()
-        }
-        return Outline.Generic(path)
-    }
-}
 
 @Composable
 fun ClanScreen(
@@ -133,14 +121,14 @@ fun ClanScreen(
         if (uiState.leftClan) onBackClick()
     }
 
-    val gradientEnd = with(LocalDensity.current) { 430.dp.toPx() }
+    val gradientEnd = with(LocalDensity.current) { 380.dp.toPx() }
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(ClanBg)
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(Color(0xFF212C4D), Color(0xFF151C30), ClanBg),
+                    colors = listOf(Color(0xFF2A1F52), Color(0xFF15122B), ClanBg),
                     startY = 0f,
                     endY = gradientEnd
                 )
@@ -149,15 +137,12 @@ fun ClanScreen(
     Scaffold(containerColor = Color.Transparent) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             Column(modifier = Modifier.fillMaxSize()) {
-                ClanTopBar(
-                    onBackClick = onBackClick,
-                    onTutorialClick = { viewModel.onTutorialToggle(true) }
-                )
+                ClanTopBar(onBackClick = onBackClick)
                 Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     when {
                         uiState.isLoading -> {
                             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(color = ClanGold)
+                                CircularProgressIndicator(color = ClanAccent)
                             }
                         }
                         uiState.error != null -> {
@@ -168,23 +153,17 @@ fun ClanScreen(
                                 uiState = uiState,
                                 onTabSelected = viewModel::onTabSelected,
                                 onSearchQueryChange = viewModel::onSearchQueryChange,
-                                onRoleFilterChange = viewModel::onRoleFilterChange,
                                 onToggleSort = viewModel::onToggleSort,
                                 onRequestJoinClick = viewModel::requestJoin,
                                 onManageClanClick = { onManageClanClick(uiState.clan!!.id) },
                                 onDonateClick = { viewModel.onDonateDialogToggle(true) },
                                 onLeaveClick = { viewModel.onLeaveDialogToggle(true) },
-                                onLevelInfoClick = { viewModel.onTutorialToggle(true) },
                                 onMemberClick = onMemberClick,
                                 onMemberActionClick = viewModel::onMemberActionClick
                             )
                         }
                     }
                 }
-            }
-
-            if (uiState.showTutorial) {
-                ClanTutorialDialog(onDismiss = { viewModel.onTutorialToggle(false) })
             }
 
             if (uiState.showDonateDialog) {
@@ -224,27 +203,13 @@ fun ClanScreen(
 }
 
 @Composable
-private fun ClanTopBar(onBackClick: () -> Unit, onTutorialClick: () -> Unit) {
+private fun ClanTopBar(onBackClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onBackClick) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali", tint = Color.White)
-        }
-        Spacer(Modifier.weight(1f))
-        Row(
-            modifier = Modifier
-                .clip(RoundedCornerShape(50))
-                .background(ClanSurface)
-                .border(1.dp, Color(0xFF4A4330), RoundedCornerShape(50))
-                .clickable(onClick = onTutorialClick)
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Filled.HelpOutline, contentDescription = null, tint = ClanGold, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Tutorial", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
         }
     }
 }
@@ -254,13 +219,11 @@ private fun ClanContent(
     uiState: ClanUiState,
     onTabSelected: (ClanTab) -> Unit,
     onSearchQueryChange: (String) -> Unit,
-    onRoleFilterChange: (String?) -> Unit,
     onToggleSort: () -> Unit,
     onRequestJoinClick: () -> Unit,
     onManageClanClick: () -> Unit,
     onDonateClick: () -> Unit,
     onLeaveClick: () -> Unit,
-    onLevelInfoClick: () -> Unit,
     onMemberClick: (uid: String) -> Unit,
     onMemberActionClick: (ClanMemberDisplay) -> Unit
 ) {
@@ -278,8 +241,7 @@ private fun ClanContent(
                 onRequestJoinClick = onRequestJoinClick,
                 onManageClanClick = onManageClanClick,
                 onDonateClick = onDonateClick,
-                onLeaveClick = onLeaveClick,
-                onLevelInfoClick = onLevelInfoClick
+                onLeaveClick = onLeaveClick
             )
             Spacer(Modifier.height(20.dp))
             ClanTabs(selected = uiState.selectedTab, onSelected = onTabSelected)
@@ -291,9 +253,6 @@ private fun ClanContent(
             SearchAndFilterRow(
                 query = uiState.searchQuery,
                 onQueryChange = onSearchQueryChange,
-                showRoleFilter = isMembersTab,
-                roleFilter = uiState.roleFilter,
-                onRoleFilterChange = onRoleFilterChange,
                 sortAscending = uiState.sortAscending,
                 onToggleSort = onToggleSort
             )
@@ -358,44 +317,54 @@ private fun ClanHeader(
     onRequestJoinClick: () -> Unit,
     onManageClanClick: () -> Unit,
     onDonateClick: () -> Unit,
-    onLeaveClick: () -> Unit,
-    onLevelInfoClick: () -> Unit
+    onLeaveClick: () -> Unit
 ) {
     val clan = uiState.clan ?: return
+    val cardShape = RoundedCornerShape(24.dp)
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(cardShape)
+            .background(
+                Brush.linearGradient(
+                    listOf(Color(0xFF3B2C7A), Color(0xFF231B4D), Color(0xFF16122E))
+                )
+            )
+            .border(1.dp, Color.White.copy(alpha = 0.10f), cardShape)
+            .padding(18.dp)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = clan.name.uppercase(),
+                    text = clan.name,
                     color = Color.White,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.ExtraBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    ClanTagBadge(text = clan.tag, height = 34.dp, textSize = 14.sp)
-                    Spacer(Modifier.width(14.dp))
-                    LevelPill(level = clan.level, onInfoClick = onLevelInfoClick)
+                    ClanRainbowBadge(text = clan.tag)
+                    Spacer(Modifier.width(8.dp))
+                    LevelBadge(level = clan.level)
                 }
             }
             Spacer(Modifier.width(12.dp))
-            Column(
+            Row(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(Color(0xFF2E323C))
-                    .border(1.dp, Color(0xFF3F4450), RoundedCornerShape(16.dp))
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White.copy(alpha = 0.10f))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Members", color = Color(0xFFA3AAB8), fontSize = 13.sp)
-                Spacer(Modifier.height(2.dp))
+                Icon(Icons.Filled.Groups, contentDescription = null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
                 Text(
                     "${clan.memberCount}/${clan.memberLimit}",
                     color = Color.White,
-                    fontSize = 18.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -403,7 +372,7 @@ private fun ClanHeader(
 
         Spacer(Modifier.height(18.dp))
         XpProgress(level = clan.level, totalXp = clan.totalXp)
-        Spacer(Modifier.height(22.dp))
+        Spacer(Modifier.height(18.dp))
 
         ClanActions(
             uiState = uiState,
@@ -415,61 +384,7 @@ private fun ClanHeader(
 
         uiState.joinFeedback?.let { feedback ->
             Spacer(Modifier.height(8.dp))
-            Text(feedback, color = ClanMuted, fontSize = 12.sp)
-        }
-    }
-}
-
-@Composable
-private fun ClanTagBadge(
-    text: String,
-    modifier: Modifier = Modifier,
-    height: Dp = 26.dp,
-    textSize: androidx.compose.ui.unit.TextUnit = 12.sp
-) {
-    Row(
-        modifier = modifier
-            .height(height)
-            .clip(ArrowTagShape())
-            .background(Brush.horizontalGradient(listOf(Color(0xFFFFCA28), Color(0xFFF59E0B))))
-            .padding(start = 10.dp, end = height * 0.6f),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(Modifier.size(height * 0.5f).clip(CircleShape).background(Color(0xFFE53935)))
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = text,
-            color = Color.White,
-            fontSize = textSize,
-            fontWeight = FontWeight.ExtraBold,
-            maxLines = 1
-        )
-    }
-}
-
-@Composable
-private fun LevelPill(level: Int, onInfoClick: () -> Unit) {
-    Box(modifier = Modifier.padding(top = 8.dp, end = 8.dp)) {
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(50))
-                .background(Color(0xFF3A3E48))
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-        ) {
-            Text("LEVEL $level", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-        }
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .offset(x = 8.dp, y = (-8).dp)
-                .size(20.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF1B1F27))
-                .border(1.5.dp, Color.White, CircleShape)
-                .clickable(onClick = onInfoClick),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("?", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+            Text(feedback, color = Color.White.copy(alpha = 0.7f), fontSize = 12.sp)
         }
     }
 }
@@ -491,28 +406,83 @@ private fun XpProgress(level: Int, totalXp: Long) {
     val needed = (ceil - floor).coerceAtLeast(1)
     val progress = (current.toFloat() / needed.toFloat()).coerceIn(0f, 1f)
 
-    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Menuju Level ${level + 1}", color = Color.White.copy(alpha = 0.65f), fontSize = 12.sp)
+            Text(
+                "${formatCompactId(current)} / ${formatCompactId(needed)} XP",
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+        Spacer(Modifier.height(8.dp))
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(5.dp)
+                .height(8.dp)
                 .clip(RoundedCornerShape(50))
-                .background(Color(0xFF2A303C))
+                .background(Color.White.copy(alpha = 0.12f))
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
                     .fillMaxWidth(progress)
                     .clip(RoundedCornerShape(50))
-                    .background(Color(0xFFEDEDED))
+                    .background(ClanAccentBrush)
             )
         }
-        Spacer(Modifier.height(10.dp))
-        Text(
-            "${formatCompactId(current)} / ${formatCompactId(needed)} XP",
-            color = Color(0xFFD5DAE3),
-            fontSize = 13.sp
-        )
+    }
+}
+
+@Composable
+private fun GradientButton(
+    text: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+    loading: Boolean = false,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .height(54.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(ClanAccentBrush, alpha = if (enabled) 1f else 0.45f)
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        if (loading) {
+            CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (icon != null) {
+                    Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text(text, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun GlassButton(text: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    Box(
+        modifier = modifier
+            .height(54.dp)
+            .clip(shape)
+            .background(Color.White.copy(alpha = 0.08f))
+            .border(1.dp, Color.White.copy(alpha = 0.25f), shape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
     }
 }
 
@@ -524,49 +494,30 @@ private fun ClanActions(
     onDonateClick: () -> Unit,
     onLeaveClick: () -> Unit
 ) {
-    val buttonShape = RoundedCornerShape(16.dp)
     when (uiState.cta) {
         ClanMembershipCta.REQUEST_JOIN -> {
-            Button(
-                onClick = onRequestJoinClick,
+            GradientButton(
+                text = "Join Clan",
+                icon = Icons.Filled.PersonAdd,
                 enabled = !uiState.isSubmittingJoin,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = buttonShape,
-                colors = ButtonDefaults.buttonColors(containerColor = ClanGreen, contentColor = Color.White)
-            ) {
-                if (uiState.isSubmittingJoin) {
-                    CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                } else {
-                    Icon(Icons.Filled.PersonAdd, contentDescription = null, modifier = Modifier.size(22.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text("Join Clan", fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                }
-            }
+                loading = uiState.isSubmittingJoin,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onRequestJoinClick
+            )
         }
         ClanMembershipCta.PENDING -> DisabledActionButton("Menunggu Persetujuan")
         ClanMembershipCta.BLOCKED_OTHER_CLAN -> DisabledActionButton("Kamu Sudah Gabung Clan Lain")
         else -> {
             // Sudah jadi member (role apa pun): Donasi + (kalau punya izin) Kelola Clan.
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                Button(
-                    onClick = onDonateClick,
-                    modifier = Modifier.weight(1f).height(56.dp),
-                    shape = buttonShape,
-                    colors = ButtonDefaults.buttonColors(containerColor = ClanGreen, contentColor = Color.White)
-                ) {
-                    Icon(Icons.Filled.Diamond, contentDescription = null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Donasi ZCoin", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                }
+                GradientButton(
+                    text = "Donasi ZCoin",
+                    icon = Icons.Filled.Diamond,
+                    modifier = Modifier.weight(1f),
+                    onClick = onDonateClick
+                )
                 if (ClanRoles.canManageClan(uiState.myRole)) {
-                    Button(
-                        onClick = onManageClanClick,
-                        modifier = Modifier.weight(1f).height(56.dp),
-                        shape = buttonShape,
-                        colors = ButtonDefaults.buttonColors(containerColor = ClanGold, contentColor = Color.Black)
-                    ) {
-                        Text("Kelola Clan", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                    }
+                    GlassButton(text = "Kelola Clan", modifier = Modifier.weight(1f), onClick = onManageClanClick)
                 }
             }
             if (uiState.canLeave) {
@@ -574,7 +525,7 @@ private fun ClanActions(
                     onClick = onLeaveClick,
                     modifier = Modifier.fillMaxWidth().height(44.dp)
                 ) {
-                    Text("Keluar Clan", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                    Text("Keluar Clan", fontWeight = FontWeight.SemiBold, color = Color(0xFFFF9AA5))
                 }
             }
         }
@@ -583,17 +534,15 @@ private fun ClanActions(
 
 @Composable
 private fun DisabledActionButton(text: String) {
-    Button(
-        onClick = {},
-        enabled = false,
-        modifier = Modifier.fillMaxWidth().height(56.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = ButtonDefaults.buttonColors(
-            disabledContainerColor = ClanSurface,
-            disabledContentColor = ClanMuted
-        )
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(54.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White.copy(alpha = 0.08f)),
+        contentAlignment = Alignment.Center
     ) {
-        Text(text, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        Text(text, color = Color.White.copy(alpha = 0.55f), fontWeight = FontWeight.Bold, fontSize = 15.sp)
     }
 }
 
@@ -603,30 +552,31 @@ private fun DisabledActionButton(text: String) {
 
 @Composable
 private fun ClanTabs(selected: ClanTab, onSelected: (ClanTab) -> Unit) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        listOf(ClanTab.MEMBERS to "MEMBERS", ClanTab.DONATION_TODAY to "DONASI").forEach { (tab, label) ->
+    val outer = RoundedCornerShape(16.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(outer)
+            .background(ClanSurface)
+            .border(1.dp, ClanBorder, outer)
+            .padding(4.dp)
+    ) {
+        listOf(ClanTab.MEMBERS to "Members", ClanTab.DONATION_TODAY to "Donasi").forEach { (tab, label) ->
             val isSelected = tab == selected
-            Column(
+            Box(
                 modifier = Modifier
                     .weight(1f)
-                    .clickable { onSelected(tab) }
-                    .padding(top = 12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .height(42.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .then(if (isSelected) Modifier.background(ClanAccentBrush) else Modifier)
+                    .clickable { onSelected(tab) },
+                contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = label,
                     color = if (isSelected) Color.White else ClanMuted,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 0.5.sp
-                )
-                Spacer(Modifier.height(10.dp))
-                Box(
-                    modifier = Modifier
-                        .width(42.dp)
-                        .height(3.dp)
-                        .clip(RoundedCornerShape(2.dp))
-                        .background(if (isSelected) ClanGold else Color.Transparent)
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
@@ -640,9 +590,10 @@ private fun DonationSummaryPill(uiState: ClanUiState) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(50))
-            .border(1.dp, ClanBorder, RoundedCornerShape(50))
-            .padding(horizontal = 18.dp, vertical = 12.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(ClanAccent.copy(alpha = 0.12f))
+            .border(1.dp, ClanAccent.copy(alpha = 0.35f), RoundedCornerShape(16.dp))
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         Text(
             "Hari ini · ${uiState.donorCountToday} dari $memberCount member donasi · $total ZCoin",
@@ -655,21 +606,10 @@ private fun DonationSummaryPill(uiState: ClanUiState) {
     }
 }
 
-private val RoleFilterOptions = listOf(
-    ClanRoles.LEADER,
-    ClanRoles.VICE_LEADER,
-    ClanRoles.ADMIRAL,
-    ClanRoles.OFFICER,
-    ClanRoles.MEMBER
-)
-
 @Composable
 private fun SearchAndFilterRow(
     query: String,
     onQueryChange: (String) -> Unit,
-    showRoleFilter: Boolean,
-    roleFilter: String?,
-    onRoleFilterChange: (String?) -> Unit,
     sortAscending: Boolean,
     onToggleSort: () -> Unit
 ) {
@@ -689,50 +629,13 @@ private fun SearchAndFilterRow(
             colors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = Color.White,
                 unfocusedTextColor = Color.White,
-                cursorColor = ClanGold,
-                focusedBorderColor = ClanGold,
+                cursorColor = ClanAccent,
+                focusedBorderColor = ClanAccent,
                 unfocusedBorderColor = ClanBorder,
                 focusedContainerColor = Color.Transparent,
                 unfocusedContainerColor = Color.Transparent
             )
         )
-
-        if (showRoleFilter) {
-            var expanded by remember { mutableStateOf(false) }
-            Box {
-                Row(
-                    modifier = Modifier
-                        .height(56.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(ClanSurface)
-                        .border(1.dp, ClanBorder, RoundedCornerShape(16.dp))
-                        .clickable { expanded = true }
-                        .padding(start = 14.dp, end = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = roleFilter?.let { ClanRoles.label(it).lowercase().replaceFirstChar { c -> c.uppercase() } } ?: "Role",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        maxLines = 1
-                    )
-                    Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = Color.White)
-                }
-                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    DropdownMenuItem(
-                        text = { Text("Semua role") },
-                        onClick = { onRoleFilterChange(null); expanded = false }
-                    )
-                    RoleFilterOptions.forEach { role ->
-                        DropdownMenuItem(
-                            text = { Text(ClanRoles.label(role)) },
-                            onClick = { onRoleFilterChange(role); expanded = false }
-                        )
-                    }
-                }
-            }
-        }
 
         Box(
             modifier = Modifier
@@ -783,8 +686,12 @@ private fun MemberRow(
     Box(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(ClanSurface)
+            .border(1.dp, ClanBorder, RoundedCornerShape(18.dp))
             .combinedClickable(onClick = onClick, onLongClick = onActionClick)
-            .padding(vertical = 10.dp)
+            .padding(horizontal = 12.dp, vertical = 12.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.width(50.dp).height(58.dp)) {
@@ -833,7 +740,7 @@ private fun MemberRow(
                     ClanRainbowBadge(text = clanTag)
                     if (level != null) {
                         Spacer(Modifier.width(8.dp))
-                        LevelChip(level = level)
+                        LevelBadge(level = level)
                     }
                 }
             }
@@ -857,34 +764,13 @@ private fun MemberRow(
 }
 
 @Composable
-private fun LevelChip(level: Int) {
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(Color(0xFF1B2627))
-            .padding(horizontal = 10.dp, vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(Modifier.size(12.dp).clip(CircleShape).background(Color(0xFF3FB6A8)))
-        Spacer(Modifier.width(6.dp))
-        Text(
-            "Lvl. ${"%,d".format(Locale("id", "ID"), level)}",
-            color = Color(0xFF9DB9B4),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            maxLines = 1
-        )
-    }
-}
-
-@Composable
 private fun GemPill(amount: Long) {
     Row(
         modifier = Modifier
             .widthIn(min = 84.dp)
             .clip(RoundedCornerShape(50))
-            .background(Color(0xFF171D29))
-            .border(1.dp, Color(0xFF2B3345), RoundedCornerShape(50))
+            .background(Brush.horizontalGradient(listOf(Color(0xFF1B2440), Color(0xFF16203A))))
+            .border(1.dp, GemBlue.copy(alpha = 0.30f), RoundedCornerShape(50))
             .padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center
@@ -897,17 +783,37 @@ private fun GemPill(amount: Long) {
 
 @Composable
 private fun DonationRow(rank: Int, entry: ClanDonationEntry, member: ClanMemberDisplay?) {
+    val medal: Color? = when (rank) {
+        1 -> Color(0xFFFFC107)
+        2 -> Color(0xFFB0BEC5)
+        3 -> Color(0xFFCD7F32)
+        else -> null
+    }
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 9.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(ClanSurface)
+            .border(1.dp, ClanBorder, RoundedCornerShape(18.dp))
+            .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            "$rank",
-            color = ClanMuted,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.ExtraBold,
-            modifier = Modifier.width(26.dp)
-        )
+        Box(
+            modifier = Modifier
+                .size(26.dp)
+                .clip(CircleShape)
+                .background(medal ?: Color.Transparent),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "$rank",
+                color = if (medal != null) Color.Black else ClanMuted,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.ExtraBold
+            )
+        }
+        Spacer(Modifier.width(8.dp))
         DonationAvatar(entry = entry, size = 48.dp)
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
@@ -990,44 +896,6 @@ private fun DonationAvatar(entry: ClanDonationEntry, size: Dp) {
         )
     } else {
         GeneratedAvatar(seed = entry.firebaseUid, label = entry.username, size = size)
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Dialog tutorial (tombol "Tutorial" & tanda "?" di level)
-// ---------------------------------------------------------------------------
-
-@Composable
-private fun ClanTutorialDialog(onDismiss: () -> Unit) {
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Role & Hak Akses Clan", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                TutorialLine(ClanRoles.LEADER, "Semua hak. Bisa ngangkat Vice Leader, Admiral, Officer.")
-                TutorialLine(ClanRoles.VICE_LEADER, "Terima/tolak request, kick, ubah role Admiral/Officer/Member.")
-                TutorialLine(ClanRoles.ADMIRAL, "Terima/tolak request, kick, ubah role Officer/Member.")
-                TutorialLine(ClanRoles.OFFICER, "Terima/tolak request join, kick member biasa.")
-                TutorialLine(ClanRoles.MEMBER, "Donasi ZCoin & ikut naikin level clan.")
-                Text(
-                    "Tap titik tiga (atau tahan lama) di member buat ngatur role/kick. Cuma bisa ke member yang pangkatnya lebih rendah.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        confirmButton = {
-            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Ngerti") }
-        }
-    )
-}
-
-@Composable
-private fun TutorialLine(role: String, desc: String) {
-    Column {
-        RoleBadge(role = role)
-        Spacer(Modifier.height(4.dp))
-        Text(desc, style = MaterialTheme.typography.bodySmall)
     }
 }
 
