@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.util.comicImageRequest
 import com.example.data.common.Result
 import com.example.data.local.ComicReadingProgressEntity
 import com.example.data.model.BacakomikChapterRef
@@ -157,10 +158,7 @@ private fun ComicDetailContent(
             ) {
                 Box {
                     AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(detail.cover)
-                            .crossfade(true)
-                            .build(),
+                        model = comicImageRequest(LocalContext.current, detail.cover),
                         contentDescription = detail.title,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier

@@ -41,7 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import coil.request.ImageRequest
+import com.example.util.comicImageRequest
 import com.example.data.model.BacakomikListItem
 import com.example.ui.theme.ZenimePrimary
 
@@ -75,10 +75,7 @@ fun ComicPosterCard(
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(comic.cover)
-                        .crossfade(true)
-                        .build(),
+                    model = comicImageRequest(LocalContext.current, comic.cover),
                     contentDescription = comic.title,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()

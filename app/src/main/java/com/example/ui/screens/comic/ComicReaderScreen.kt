@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
+import com.example.util.comicImageRequest
 import com.example.data.common.Result
 import com.example.data.model.BacakomikChapterResponse
 import com.example.data.model.extractChapterLabel
@@ -173,10 +174,7 @@ private fun ComicReaderContent(
                 // gambar di atas viewport -- akibatnya scroll keliatan
                 // ujug-ujug udah di tengah, bukan mulai dari paling atas.
                 SubcomposeAsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(imageUrl)
-                        .crossfade(true)
-                        .build(),
+                    model = comicImageRequest(LocalContext.current, imageUrl),
                     contentDescription = null,
                     contentScale = ContentScale.FillWidth,
                     modifier = Modifier.fillMaxWidth(),
