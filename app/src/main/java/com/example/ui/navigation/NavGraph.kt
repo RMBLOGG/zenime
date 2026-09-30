@@ -97,6 +97,7 @@ import com.example.data.repository.PremiumRepository
 import com.example.data.repository.SupportRepository
 import com.example.ui.screens.chat.ChatScreen
 import com.example.ui.screens.chat.ChatViewModel
+import com.example.ui.screens.chat.PrivateChatViewModel
 import com.example.ui.screens.clan.ClanScreen
 import com.example.ui.screens.clan.ClanViewModel
 import com.example.ui.screens.clan.BrowseClansScreen
@@ -944,6 +945,12 @@ fun ZenimeAppNavHost(
                             }
                         }
                     )
+                    val dmViewModel: PrivateChatViewModel = viewModel(
+                        key = "dm_$uid",
+                        factory = viewModelFactory {
+                            initializer { PrivateChatViewModel(myUid = uid) }
+                        }
+                    )
                     ChatScreen(
                         viewModel = chatViewModel,
                         currentFirebaseUid = uid,
@@ -951,7 +958,8 @@ fun ZenimeAppNavHost(
                         onOwnAvatarClick = { navController.navigate(Screen.Profile.route) },
                         onOtherUserClick = { otherUid ->
                             navController.navigate(Screen.PublicProfile.createRoute(otherUid))
-                        }
+                        },
+                        dmViewModel = dmViewModel
                     )
                 }
             }

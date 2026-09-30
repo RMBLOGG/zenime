@@ -87,6 +87,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.activity.compose.BackHandler
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -131,9 +135,17 @@ fun ChatScreen(
     onBackClick: () -> Unit,
     onOwnAvatarClick: () -> Unit = {},
     onOtherUserClick: (uid: String) -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Tab "Teman" (chat privat antar teman). null = tab-nya disembunyiin.
+    dmViewModel: PrivateChatViewModel? = null
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var chatTab by remember { mutableIntStateOf(0) }
+    val dmState = dmViewModel?.uiState?.collectAsStateWithLifecycle()?.value
+    // Back di dalam ruang chat teman -> balik ke daftar chat, bukan keluar layar.
+    BackHandler(enabled = chatTab == 1 && dmState?.selected != null) {
+        dmViewModel?.closeChat()
+    }
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val context = LocalContext.current
@@ -197,7 +209,7 @@ fun ChatScreen(
                             )
                         }
                         Spacer(modifier = Modifier.width(4.dp))
-                        ZenimeScreenTitle(title = "Chat Global")
+                        ZenimeScreenTitle(title = if (chatTab == 0) "Chat Global" else "Chat Teman")
                     }
                 },
                 actions = {
@@ -217,6 +229,29 @@ fun ChatScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            if (dmViewModel != null) {
+                TabRow(
+                    selectedTabIndex = chatTab,
+                    containerColor = ZenimeBackgroundDark,
+                    contentColor = ZenimePrimary
+                ) {
+                    Tab(
+                        selected = chatTab == 0,
+                        onClick = { chatTab = 0 },
+                        text = { Text("Global", fontWeight = FontWeight.Bold) },
+                        selectedContentColor = Color.White,
+                        unselectedContentColor = Color.White.copy(alpha = 0.5f)
+                    )
+                    Tab(
+                        selected = chatTab == 1,
+                        onClick = { chatTab = 1 },
+                        text = { Text("Teman", fontWeight = FontWeight.Bold) },
+                        selectedContentColor = Color.White,
+                        unselectedContentColor = Color.White.copy(alpha = 0.5f)
+                    )
+                }
+            }
+            if (chatTab == 0 || dmViewModel == null) {
             Box(modifier = Modifier.weight(1f)) {
                 when {
                     uiState.isLoading -> {
@@ -313,6 +348,13 @@ fun ChatScreen(
                     .navigationBarsPadding()
                     .imePadding()
             )
+            } else {
+                PrivateChatPane(
+                    viewModel = dmViewModel,
+                    myUid = currentFirebaseUid,
+                    onFriendProfileClick = onOtherUserClick
+                )
+            }
         }
     }
 

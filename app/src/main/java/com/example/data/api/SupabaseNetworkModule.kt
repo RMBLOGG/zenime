@@ -88,6 +88,10 @@ object SupabaseNetworkModule {
         retrofit.create(ZenimeAdminApi::class.java)
     }
 
+    val privateChatApi: ZenimePrivateChatApi by lazy {
+        retrofit.create(ZenimePrivateChatApi::class.java)
+    }
+
     val friendApi: ZenimeFriendApi by lazy {
         retrofit.create(ZenimeFriendApi::class.java)
     }
