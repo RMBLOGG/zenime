@@ -1,6 +1,9 @@
 package com.example.ui.screens.comic
 
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -18,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -55,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.SubcomposeAsyncImage
 import coil.request.ImageRequest
+import com.example.util.comicImageLoader
 import com.example.util.comicImageRequest
 import com.example.data.common.Result
 import com.example.data.model.BacakomikChapterResponse
@@ -168,33 +173,75 @@ private fun ComicReaderContent(
             items(images) { imageUrl ->
                 // SubcomposeAsyncImage + placeholder aspect ratio -- WAJIB
                 // biar tinggi tiap gambar udah "kereserve" duluan sebelum
-                // kekonten asli kesalin. Kalau pake AsyncImage biasa,
-                // tinggi item awalnya 0 terus baru "loncat" pas gambar
-                // kelar didekode, dan loncatan itu numpuk buat tiap
-                // gambar di atas viewport -- akibatnya scroll keliatan
-                // ujug-ujug udah di tengah, bukan mulai dari paling atas.
-                SubcomposeAsyncImage(
-                    model = comicImageRequest(LocalContext.current, imageUrl),
-                    contentDescription = null,
-                    contentScale = ContentScale.FillWidth,
-                    modifier = Modifier.fillMaxWidth(),
-                    loading = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(0.7f) // rasio umum halaman manhwa/manga
-                                .background(Color(0xFF15181F))
-                        )
-                    },
-                    error = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(0.7f)
-                                .background(Color(0xFF15181F))
-                        )
-                    }
-                )
+                // kekonten asli kesalin (lihat komentar lama: tanpa ini
+                // scroll "loncat"). Kalau gagal dimuat, tampil pesan + alasan
+                // singkat (mis. HTTP 403) dan bisa di-tap buat coba lagi --
+                // dulu error & loading sama-sama cuma kotak gelap kosong.
+                var retryKey by remember(imageUrl) { mutableIntStateOf(0) }
+                // Retry otomatis maksimal 2x (jeda 2 dtk) sebelum nyerah &
+                // minta tap manual -- cukup buat sinyal yang lagi putus-nyambung.
+                var autoRetries by remember(imageUrl) { mutableIntStateOf(0) }
+                key(retryKey) {
+                    val context = LocalContext.current
+                    SubcomposeAsyncImage(
+                        model = comicImageRequest(context, imageUrl),
+                        imageLoader = comicImageLoader(context),
+                        contentDescription = null,
+                        contentScale = ContentScale.FillWidth,
+                        modifier = Modifier.fillMaxWidth(),
+                        onError = { st ->
+                            Log.w("ComicReader", "Gagal muat gambar: $imageUrl", st.result.throwable)
+                        },
+                        loading = {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(0.7f) // rasio umum halaman manhwa/manga
+                                    .background(Color(0xFF15181F)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    color = ZenimePrimary.copy(alpha = 0.6f),
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                        },
+                        error = { st ->
+                            val t = st.result.throwable
+                            if (autoRetries < 2) {
+                                LaunchedEffect(Unit) {
+                                    delay(2000)
+                                    autoRetries++
+                                    retryKey++
+                                }
+                            }
+                            val reason = (t as? coil.network.HttpException)?.response?.code?.let { "HTTP $it" }
+                                ?: t.javaClass.simpleName
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .aspectRatio(0.7f)
+                                    .background(Color(0xFF15181F))
+                                    .clickable { retryKey++ },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        "Gambar gagal dimuat ($reason)",
+                                        color = Color.White.copy(alpha = 0.7f),
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                    Text(
+                                        "Tap untuk coba lagi",
+                                        color = ZenimePrimary,
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                }
+                            }
+                        }
+                    )
+                }
             }
 
             // Navigasi bawah -- selalu muncul di akhir list, biar user gak
