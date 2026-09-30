@@ -169,8 +169,8 @@ class PlayerViewModel(
 
     private fun loadResumePosition() {
         viewModelScope.launch {
-            val history = repository.getHistoryForAnime(animeId).first()
-            if (history != null && history.episodeId == episodeId) {
+            val history = repository.getHistoryForEpisode(animeId, episodeId).first()
+            if (history != null) {
                 val isNearlyFinished = history.durationMs > 0 &&
                     history.progressMs >= history.durationMs * 0.95
                 if (!isNearlyFinished && history.progressMs > 5000) {

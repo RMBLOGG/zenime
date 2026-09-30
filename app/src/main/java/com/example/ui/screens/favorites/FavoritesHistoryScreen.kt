@@ -295,7 +295,7 @@ fun FavoritesHistoryScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            items(watchHistory, key = { it.animeId }) { historyItem ->
+                            items(watchHistory, key = { "${it.animeId}_${it.episodeId}" }) { historyItem ->
                                 WatchHistoryCard(
                                     item = historyItem,
                                     // Tap di mana pun pada kartu -- bukan cuma
@@ -306,7 +306,7 @@ fun FavoritesHistoryScreen(
                                     // bukan "lihat info anime".
                                     onCardClick = { onPlayEpisodeClick(historyItem.episodeId, historyItem.animeId) },
                                     onResumeClick = { onPlayEpisodeClick(historyItem.episodeId, historyItem.animeId) },
-                                    onDeleteClick = { viewModel.deleteHistoryItem(historyItem.animeId) }
+                                    onDeleteClick = { viewModel.deleteHistoryItem(historyItem.animeId, historyItem.episodeId) }
                                 )
                             }
                         }

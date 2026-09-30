@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ComicFavoriteEntity::class,
         ComicReadingProgressEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(DownloadStatusConverter::class)
@@ -99,6 +99,36 @@ abstract class ZenimeDatabase : RoomDatabase() {
             }
         }
 
+        // v4 -> v5: watch_history dari 1 baris per anime jadi 1 baris per
+        // EPISODE (PK gabungan animeId + episodeId). SQLite gak bisa ganti PK
+        // langsung, jadi bikin tabel baru, salin data lama, lalu ganti nama.
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `watch_history_new` (
+                        `animeId` TEXT NOT NULL,
+                        `animeTitle` TEXT NOT NULL,
+                        `posterUrl` TEXT,
+                        `episodeId` TEXT NOT NULL,
+                        `episodeTitle` TEXT,
+                        `episodeIndex` TEXT,
+                        `progressMs` INTEGER NOT NULL,
+                        `durationMs` INTEGER NOT NULL,
+                        `lastUpdated` INTEGER NOT NULL,
+                        PRIMARY KEY(`animeId`, `episodeId`)
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    "INSERT INTO `watch_history_new` (animeId, animeTitle, posterUrl, episodeId, episodeTitle, episodeIndex, progressMs, durationMs, lastUpdated) " +
+                        "SELECT animeId, animeTitle, posterUrl, episodeId, episodeTitle, episodeIndex, progressMs, durationMs, lastUpdated FROM `watch_history`"
+                )
+                db.execSQL("DROP TABLE `watch_history`")
+                db.execSQL("ALTER TABLE `watch_history_new` RENAME TO `watch_history`")
+            }
+        }
+
         fun getInstance(context: Context): ZenimeDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -106,7 +136,7 @@ abstract class ZenimeDatabase : RoomDatabase() {
                     ZenimeDatabase::class.java,
                     "zenime_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                 INSTANCE = instance
                 instance

@@ -26,14 +26,19 @@ interface ZenimeDao {
     @Query("SELECT * FROM watch_history ORDER BY lastUpdated DESC")
     fun getAllHistory(): Flow<List<WatchHistoryEntity>>
 
-    @Query("SELECT * FROM watch_history WHERE animeId = :animeId LIMIT 1")
+    // Episode TERAKHIR yang ditonton untuk anime ini (dipakai DetailScreen).
+    @Query("SELECT * FROM watch_history WHERE animeId = :animeId ORDER BY lastUpdated DESC LIMIT 1")
     fun getHistoryForAnime(animeId: String): Flow<WatchHistoryEntity?>
+
+    // Progress satu episode spesifik (dipakai Player buat resume).
+    @Query("SELECT * FROM watch_history WHERE animeId = :animeId AND episodeId = :episodeId LIMIT 1")
+    fun getHistoryForEpisode(animeId: String, episodeId: String): Flow<WatchHistoryEntity?>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdateHistory(history: WatchHistoryEntity)
 
-    @Query("DELETE FROM watch_history WHERE animeId = :animeId")
-    suspend fun deleteHistory(animeId: String)
+    @Query("DELETE FROM watch_history WHERE animeId = :animeId AND episodeId = :episodeId")
+    suspend fun deleteHistory(animeId: String, episodeId: String)
 
     @Query("DELETE FROM watch_history")
     suspend fun clearHistory()

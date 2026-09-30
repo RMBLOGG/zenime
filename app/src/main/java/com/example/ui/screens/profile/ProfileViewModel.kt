@@ -7,14 +7,12 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.local.FavoriteEntity
 import com.example.data.local.WatchHistoryEntity
 import com.example.data.model.EpisodeComment
-import com.example.data.model.FriendRelation
 import com.example.data.model.PublicFavoriteRow
 import com.example.data.model.PublicWatchHistoryRow
 import com.example.data.repository.AnimeRepository
 import com.example.data.repository.ChatRepository
 import com.example.data.repository.ClanRepository
 import com.example.data.repository.CommentRepository
-import com.example.data.repository.FriendRepository
 import com.example.data.repository.PremiumRepository
 import com.example.data.repository.PublicProfileRepository
 import com.example.util.AvatarUploader
@@ -75,11 +73,6 @@ data class ProfileUiState(
     // terpisah dari `comments` yang cuma 50 terakhir & lazy-load.
     val commentCount: Int = 0,
 
-    // Add Friend -- cuma kepake di profil ORANG LAIN. null = belum ke-load.
-    val friendRelation: FriendRelation? = null,
-    val isFriendActionInFlight: Boolean = false,
-    val friendError: String? = null,
-
     // Dialog "Edit Profil".
     val isEditDialogOpen: Boolean = false,
     val isSavingUsername: Boolean = false,
@@ -117,7 +110,6 @@ class ProfileViewModel(
     private val clanRepository: ClanRepository = ClanRepository(),
     private val commentRepository: CommentRepository = CommentRepository(),
     private val publicProfileRepository: PublicProfileRepository = PublicProfileRepository(),
-    private val friendRepository: FriendRepository = FriendRepository(),
     private val firebaseUid: String,
     private val fallbackUsername: String,
     // null = lihat profil sendiri. Isi uid user lain buat lihat profil mereka.
@@ -142,57 +134,9 @@ class ProfileViewModel(
             }
         } else {
             loadPublicContent()
-            loadFriendRelation()
         }
         loadCommentCount()
         loadProfileAndPremium()
-    }
-
-    // --- Add Friend (profil orang lain) ---
-
-    private fun loadFriendRelation() {
-        viewModelScope.launch {
-            friendRepository.getRelation(firebaseUid, targetFirebaseUid)
-                .onSuccess { _uiState.value = _uiState.value.copy(friendRelation = it) }
-        }
-    }
-
-    private fun runFriendAction(action: suspend () -> Result<Unit>) {
-        if (isOwnProfile || _uiState.value.isFriendActionInFlight) return
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isFriendActionInFlight = true, friendError = null)
-            val result = action()
-            // Selalu sinkron ulang dari server -- kalau gagal karena dia kirim
-            // duluan barengan, tombolnya langsung berubah ke status yang bener.
-            val relation = friendRepository.getRelation(firebaseUid, targetFirebaseUid).getOrNull()
-            _uiState.value = _uiState.value.copy(
-                isFriendActionInFlight = false,
-                friendRelation = relation ?: _uiState.value.friendRelation,
-                friendError = result.exceptionOrNull()?.let { friendlyErrorMessage(it, "Gagal memproses permintaan teman") }
-            )
-        }
-    }
-
-    fun sendFriendRequest() = runFriendAction { friendRepository.sendRequest(firebaseUid, targetFirebaseUid) }
-
-    fun acceptFriendRequest() {
-        val rel = _uiState.value.friendRelation as? FriendRelation.IncomingPending ?: return
-        runFriendAction { friendRepository.accept(rel.friendshipId) }
-    }
-
-    /** Tolak permintaan masuk / batalin permintaan keluar / hapus teman. */
-    fun removeFriendship() {
-        val id = when (val rel = _uiState.value.friendRelation) {
-            is FriendRelation.IncomingPending -> rel.friendshipId
-            is FriendRelation.OutgoingPending -> rel.friendshipId
-            is FriendRelation.Friends -> rel.friendshipId
-            else -> return
-        }
-        runFriendAction { friendRepository.remove(id) }
-    }
-
-    fun clearFriendError() {
-        _uiState.value = _uiState.value.copy(friendError = null)
     }
 
     private fun loadPublicContent() {

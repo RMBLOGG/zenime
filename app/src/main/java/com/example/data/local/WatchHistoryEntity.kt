@@ -1,11 +1,11 @@
 package com.example.data.local
 
 import androidx.room.Entity
-import androidx.room.PrimaryKey
 
-@Entity(tableName = "watch_history")
+// Satu baris per EPISODE (bukan per anime) -- PK gabungan animeId + episodeId.
+@Entity(tableName = "watch_history", primaryKeys = ["animeId", "episodeId"])
 data class WatchHistoryEntity(
-    @PrimaryKey val animeId: String,
+    val animeId: String,
     val animeTitle: String,
     val posterUrl: String?,
     val episodeId: String,

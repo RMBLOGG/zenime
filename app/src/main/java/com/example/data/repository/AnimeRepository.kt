@@ -1024,6 +1024,9 @@ class AnimeRepository(
 
     fun getHistoryForAnime(animeId: String): Flow<WatchHistoryEntity?> = dao.getHistoryForAnime(animeId)
 
+    fun getHistoryForEpisode(animeId: String, episodeId: String): Flow<WatchHistoryEntity?> =
+        dao.getHistoryForEpisode(animeId, episodeId)
+
     suspend fun saveWatchProgress(
         animeId: String,
         animeTitle: String,
@@ -1051,10 +1054,10 @@ class AnimeRepository(
         }
     }
 
-    suspend fun deleteHistory(animeId: String) {
-        dao.deleteHistory(animeId)
+    suspend fun deleteHistory(animeId: String, episodeId: String) {
+        dao.deleteHistory(animeId, episodeId)
         currentFirebaseUidOrNull()?.let { uid ->
-            syncScope.launch { publicProfileRepository.syncHistoryRemoved(uid, animeId) }
+            syncScope.launch { publicProfileRepository.syncHistoryRemoved(uid, animeId, episodeId) }
         }
     }
 
@@ -1064,7 +1067,7 @@ class AnimeRepository(
     // history_public masih patuh ke toggle privasi user (yang emang jadi satu-
     // satunya gerbang tampil ke user lain), tapi kalau nanti mau bener-bener
     // ikut kehapus pas "Hapus Semua Riwayat" di ProfileScreen, tambahin loop
-    // hapus per-animeId di sini pakai snapshot repository.watchHistory.
+    // hapus per-episode di sini pakai snapshot repository.watchHistory.
     suspend fun clearHistory() = dao.clearHistory()
 
     // ---- Downloads (nonton offline, premium only) -------------------------

@@ -101,9 +101,9 @@ class PublicProfileRepository(
         }.onFailure { e -> logException("syncWatchProgress", e) }
     }
 
-    suspend fun syncHistoryRemoved(firebaseUid: String, animeId: String) {
+    suspend fun syncHistoryRemoved(firebaseUid: String, animeId: String, episodeId: String) {
         runCatching {
-            val response = api.deleteWatchHistoryRemote(firebaseUidEq = "eq.$firebaseUid", animeIdEq = "eq.$animeId")
+            val response = api.deleteWatchHistoryRemote(firebaseUidEq = "eq.$firebaseUid", animeIdEq = "eq.$animeId", episodeIdEq = "eq.$episodeId")
             logIfFailed("syncHistoryRemoved", response)
         }.onFailure { e -> logException("syncHistoryRemoved", e) }
     }

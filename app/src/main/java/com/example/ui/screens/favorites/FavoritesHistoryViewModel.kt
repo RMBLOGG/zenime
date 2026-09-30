@@ -57,9 +57,9 @@ class FavoritesHistoryViewModel(
             initialValue = emptyList()
         )
 
-    fun deleteHistoryItem(animeId: String) {
+    fun deleteHistoryItem(animeId: String, episodeId: String) {
         viewModelScope.launch {
-            repository.deleteHistory(animeId)
+            repository.deleteHistory(animeId, episodeId)
         }
     }
 

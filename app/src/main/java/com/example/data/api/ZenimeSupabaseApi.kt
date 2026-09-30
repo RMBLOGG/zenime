@@ -146,7 +146,8 @@ interface ZenimeSupabaseApi {
     @DELETE("rest/v1/user_watch_history")
     suspend fun deleteWatchHistoryRemote(
         @Query("firebase_uid") firebaseUidEq: String,
-        @Query("anime_id") animeIdEq: String
+        @Query("anime_id") animeIdEq: String,
+        @Query("episode_id") episodeIdEq: String
     ): Response<Void>
 
     /**

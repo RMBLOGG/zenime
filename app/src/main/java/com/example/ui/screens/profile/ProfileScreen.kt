@@ -32,10 +32,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Edit
@@ -97,7 +93,6 @@ import com.example.R
 import com.example.data.local.FavoriteEntity
 import com.example.data.local.WatchHistoryEntity
 import com.example.data.model.EpisodeComment
-import com.example.data.model.FriendRelation
 import com.example.ui.components.ClanRainbowBadge
 import com.example.ui.components.GeneratedAvatar
 import com.example.ui.components.LevelBadge
@@ -132,20 +127,10 @@ fun ProfileScreen(
     onUpgradeClick: () -> Unit,
     onClanClick: () -> Unit,
     onXpLeaderboardClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    onFriendsClick: () -> Unit = {}
+    modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showClearHistoryDialog by remember { mutableStateOf(false) }
-    var showRemoveFriendDialog by remember { mutableStateOf(false) }
-
-    val friendContext = LocalContext.current
-    LaunchedEffect(uiState.friendError) {
-        uiState.friendError?.let {
-            android.widget.Toast.makeText(friendContext, it, android.widget.Toast.LENGTH_LONG).show()
-            viewModel.clearFriendError()
-        }
-    }
     var selectedTab by remember { mutableIntStateOf(0) }
 
     // Profil sendiri -> data lokal (Room, real-time). Profil orang lain ->
@@ -254,16 +239,7 @@ fun ProfileScreen(
                 onClanClick = onClanClick,
                 onLeaderboardClick = onXpLeaderboardClick,
                 onEditClick = { viewModel.openEditDialog() },
-                isOwnProfile = uiState.isOwnProfile,
-                friendRelation = uiState.friendRelation,
-                isFriendBusy = uiState.isFriendActionInFlight,
-                onFriendsClick = onFriendsClick,
-                onAddFriendClick = { viewModel.sendFriendRequest() },
-                onAcceptFriendClick = { viewModel.acceptFriendRequest() },
-                onRemoveFriendClick = {
-                    if (uiState.friendRelation is FriendRelation.Friends) showRemoveFriendDialog = true
-                    else viewModel.removeFriendship()
-                }
+                isOwnProfile = uiState.isOwnProfile
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -315,23 +291,6 @@ fun ProfileScreen(
                 )
             }
         }
-    }
-
-    if (showRemoveFriendDialog) {
-        AlertDialog(
-            onDismissRequest = { showRemoveFriendDialog = false },
-            title = { Text("Hapus dari teman?") },
-            text = { Text("${uiState.username.ifBlank { "Pengguna ini" }} bakal dihapus dari daftar temanmu.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    showRemoveFriendDialog = false
-                    viewModel.removeFriendship()
-                }) { Text("Hapus", color = Color(0xFFE53935)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showRemoveFriendDialog = false }) { Text("Batal") }
-            }
-        )
     }
 
     // Edit Profil (termasuk toggle privasi) cuma masuk akal di profil sendiri
@@ -411,13 +370,7 @@ private fun ProfileHeroSection(
     onClanClick: () -> Unit,
     onLeaderboardClick: () -> Unit,
     onEditClick: () -> Unit,
-    isOwnProfile: Boolean = true,
-    friendRelation: FriendRelation? = null,
-    isFriendBusy: Boolean = false,
-    onFriendsClick: () -> Unit = {},
-    onAddFriendClick: () -> Unit = {},
-    onAcceptFriendClick: () -> Unit = {},
-    onRemoveFriendClick: () -> Unit = {}
+    isOwnProfile: Boolean = true
 ) {
     Box(modifier = Modifier.fillMaxWidth()) {
         // Background banner, ukurannya nempel persis ke Column konten di bawah.
@@ -593,29 +546,6 @@ private fun ProfileHeroSection(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Edit Profil", color = Color.White, fontWeight = FontWeight.Bold)
                 }
-                Spacer(modifier = Modifier.height(10.dp))
-                OutlinedButton(
-                    onClick = onFriendsClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp)
-                        .height(48.dp),
-                    shape = RoundedCornerShape(50),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
-                ) {
-                    Icon(Icons.Filled.People, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Teman", fontWeight = FontWeight.Bold)
-                }
-            } else {
-                FriendActionButtons(
-                    relation = friendRelation,
-                    isBusy = isFriendBusy,
-                    onAdd = onAddFriendClick,
-                    onAccept = onAcceptFriendClick,
-                    onRemove = onRemoveFriendClick
-                )
             }
         }
 
@@ -632,85 +562,6 @@ private fun ProfileHeroSection(
                 contentDescription = "Kembali",
                 tint = Color.White
             )
-        }
-    }
-}
-
-/** Tombol Add Friend di profil orang lain -- berubah sesuai status hubungan. */
-@Composable
-private fun FriendActionButtons(
-    relation: FriendRelation?,
-    isBusy: Boolean,
-    onAdd: () -> Unit,
-    onAccept: () -> Unit,
-    onRemove: () -> Unit
-) {
-    val rowModifier = Modifier
-        .fillMaxWidth()
-        .padding(horizontal = 16.dp)
-        .height(52.dp)
-    when (relation) {
-        null -> Unit
-        FriendRelation.None -> Button(
-            onClick = onAdd,
-            enabled = !isBusy,
-            modifier = rowModifier,
-            shape = RoundedCornerShape(50),
-            colors = ButtonDefaults.buttonColors(containerColor = ZenimePrimary)
-        ) {
-            Icon(Icons.Filled.PersonAdd, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Tambah Teman", color = Color.White, fontWeight = FontWeight.Bold)
-        }
-        is FriendRelation.OutgoingPending -> OutlinedButton(
-            onClick = onRemove,
-            enabled = !isBusy,
-            modifier = rowModifier,
-            shape = RoundedCornerShape(50),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
-        ) {
-            Text("Permintaan Terkirim · Batalkan", fontWeight = FontWeight.Bold)
-        }
-        is FriendRelation.IncomingPending -> Row(
-            modifier = rowModifier,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Button(
-                onClick = onAccept,
-                enabled = !isBusy,
-                modifier = Modifier.weight(1f).height(52.dp),
-                shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(containerColor = ZenimePrimary)
-            ) {
-                Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Terima", color = Color.White, fontWeight = FontWeight.Bold)
-            }
-            OutlinedButton(
-                onClick = onRemove,
-                enabled = !isBusy,
-                modifier = Modifier.weight(1f).height(52.dp),
-                shape = RoundedCornerShape(50),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.35f)),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
-            ) {
-                Icon(Icons.Filled.Close, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Tolak", fontWeight = FontWeight.Bold)
-            }
-        }
-        is FriendRelation.Friends -> OutlinedButton(
-            onClick = onRemove,
-            enabled = !isBusy,
-            modifier = rowModifier,
-            shape = RoundedCornerShape(50),
-            border = BorderStroke(1.dp, ZenimePrimary.copy(alpha = 0.6f)),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = ZenimePrimary)
-        ) {
-            Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Berteman", fontWeight = FontWeight.Bold)
         }
     }
 }

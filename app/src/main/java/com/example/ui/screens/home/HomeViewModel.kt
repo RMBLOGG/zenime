@@ -19,7 +19,6 @@ import com.example.data.repository.AnimeRepository
 import com.example.data.repository.ChatRepository
 import com.example.data.repository.ClanRepository
 import com.example.data.repository.CoinRepository
-import com.example.data.repository.FriendRepository
 import com.example.data.repository.ComicRepository
 import com.example.data.repository.PremiumRepository
 import com.example.data.repository.SupportRepository
@@ -29,6 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
@@ -60,7 +60,6 @@ class HomeViewModel(
     private val xpRepository: XpRepository = XpRepository(),
     private val clanRepository: ClanRepository = ClanRepository(),
     private val supportRepository: SupportRepository = SupportRepository(),
-    private val friendRepository: FriendRepository = FriendRepository(),
     private val anichinRepository: AnichinRepository = AnichinRepository(),
     private val firebaseUid: String? = null
 ) : ViewModel() {
@@ -100,7 +99,10 @@ class HomeViewModel(
 
     // "Terakhir Ditonton" -- riwayat tonton lokal, dipakai buat row continue
     // watching di paling atas Beranda (persis posisinya di referensi AniBiPlay).
+    // Riwayat sekarang per-episode, tapi row ini tetap 1 kartu per anime
+    // (episode terakhir) -- list sudah urut lastUpdated DESC.
     val continueWatching: StateFlow<List<WatchHistoryEntity>> = repository.watchHistory
+        .map { list -> list.distinctBy { it.animeId } }
         .stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
 
     // Strip "Cuplix" di Beranda (di bawah "Dukung Kami"). Diambil terpisah dan
@@ -125,19 +127,6 @@ class HomeViewModel(
     private val _heroLeaderboard = MutableStateFlow(HeroLeaderboardUiState())
     val heroLeaderboard: StateFlow<HeroLeaderboardUiState> = _heroLeaderboard.asStateFlow()
 
-    // Jumlah permintaan pertemanan masuk -> badge di ikon notifikasi Beranda.
-    private val _friendRequestCount = MutableStateFlow(0)
-    val friendRequestCount: StateFlow<Int> = _friendRequestCount.asStateFlow()
-
-    /** Diam-diam gagal: kalau error, badge tetap di angka terakhir. */
-    fun loadFriendRequestCount() {
-        val uid = firebaseUid ?: return
-        viewModelScope.launch {
-            friendRepository.countIncomingRequests(uid)
-                .onSuccess { _friendRequestCount.value = it }
-        }
-    }
-
     init {
         loadHome()
         loadComicLatest()
@@ -147,7 +136,6 @@ class HomeViewModel(
         loadProfileHeader()
         loadHeroLeaderboard()
         prefetchChat()
-        loadFriendRequestCount()
     }
 
     /**
