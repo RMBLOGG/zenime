@@ -104,6 +104,8 @@ import com.example.ui.screens.clan.ManageClanScreen
 import com.example.ui.screens.clan.ManageClanViewModel
 import com.example.ui.screens.xp.XpLeaderboardScreen
 import com.example.ui.screens.xp.XpLeaderboardViewModel
+import com.example.ui.screens.friends.FriendsScreen
+import com.example.ui.screens.friends.FriendsViewModel
 import com.example.ui.screens.profile.ProfileScreen
 import com.example.ui.screens.profile.ProfileViewModel
 import com.example.ui.screens.comic.ComicDetailScreen
@@ -199,6 +201,8 @@ sealed class Screen(
     data object PublicProfile : Screen("profile/{targetUid}") {
         fun createRoute(targetUid: String) = "profile/$targetUid"
     }
+
+    data object Friends : Screen("friends")
 
     data object ViewClan : Screen("clan/{clanId}") {
         fun createRoute(clanId: String) = "clan/$clanId"
@@ -949,7 +953,28 @@ fun ZenimeAppNavHost(
                         },
                         onUpgradeClick = { navController.navigate(Screen.Premium.route) },
                         onClanClick = { navController.navigate(Screen.BrowseClans.route) },
-                        onXpLeaderboardClick = { navController.navigate(Screen.XpLeaderboard.route) }
+                        onXpLeaderboardClick = { navController.navigate(Screen.XpLeaderboard.route) },
+                        onFriendsClick = { navController.navigate(Screen.Friends.route) }
+                    )
+                }
+            }
+
+            // Layar Teman -- daftar teman + permintaan masuk/terkirim.
+            composable(Screen.Friends.route) {
+                val uid = currentUser?.uid
+                if (uid != null) {
+                    val friendsViewModel: FriendsViewModel = viewModel(
+                        key = "friends_$uid",
+                        factory = viewModelFactory {
+                            initializer { FriendsViewModel(myUid = uid) }
+                        }
+                    )
+                    FriendsScreen(
+                        viewModel = friendsViewModel,
+                        onBackClick = { navController.popBackStack() },
+                        onProfileClick = { otherUid ->
+                            navController.navigate(Screen.PublicProfile.createRoute(otherUid))
+                        }
                     )
                 }
             }
