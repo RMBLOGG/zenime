@@ -320,20 +320,8 @@ private fun ClanHeader(
     onLeaveClick: () -> Unit
 ) {
     val clan = uiState.clan ?: return
-    val cardShape = RoundedCornerShape(24.dp)
 
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(cardShape)
-            .background(
-                Brush.linearGradient(
-                    listOf(Color(0xFF3B2C7A), Color(0xFF231B4D), Color(0xFF16122E))
-                )
-            )
-            .border(1.dp, Color.White.copy(alpha = 0.10f), cardShape)
-            .padding(18.dp)
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -686,12 +674,8 @@ private fun MemberRow(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(ClanSurface)
-            .border(1.dp, ClanBorder, RoundedCornerShape(18.dp))
             .combinedClickable(onClick = onClick, onLongClick = onActionClick)
-            .padding(horizontal = 12.dp, vertical = 12.dp)
+            .padding(vertical = 10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.width(50.dp).height(58.dp)) {
@@ -792,11 +776,7 @@ private fun DonationRow(rank: Int, entry: ClanDonationEntry, member: ClanMemberD
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .clip(RoundedCornerShape(18.dp))
-            .background(ClanSurface)
-            .border(1.dp, ClanBorder, RoundedCornerShape(18.dp))
-            .padding(horizontal = 12.dp, vertical = 12.dp),
+            .padding(vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
