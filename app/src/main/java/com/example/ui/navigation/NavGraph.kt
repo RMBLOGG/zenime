@@ -19,7 +19,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import android.annotation.SuppressLint
 import android.content.pm.ActivityInfo
+import android.provider.Settings
+import android.widget.Toast
 import android.view.WindowManager
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoStories
@@ -312,6 +315,30 @@ fun ZenimeAppNavHost(
     val premiumRepositoryForPromo = remember { PremiumRepository() }
     val promoCoroutineScope = rememberCoroutineScope()
 
+    // Cek ban akun/device TIAP app dibuka (ON_START), bukan cuma pas login.
+    // Tanpa ini, user yang sesi Firebase-nya masih kesimpen gak pernah
+    // ke-cek lagi dan tetap bisa masuk Home walau udah diban. Kalau banned
+    // -> signOut, LaunchedEffect(currentUser) di bawah yang lempar ke Login.
+    val banCheckContext = LocalContext.current
+    val banCheckRepository = remember { AdminRepository() }
+
+    suspend fun checkBanAndSignOut() {
+        @SuppressLint("HardwareIds")
+        val deviceId = Settings.Secure.getString(
+            banCheckContext.contentResolver, Settings.Secure.ANDROID_ID
+        ) ?: ""
+        val banResult = banCheckRepository.checkBan(deviceId).getOrNull()
+        if (banResult?.banned == true) {
+            authRepository.signOut()
+            showPremiumPromo = false
+            Toast.makeText(
+                banCheckContext,
+                banResult.reason ?: "Akun/perangkat ini diblokir.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
     suspend fun checkAndShowPremiumPromo(uid: String) {
         promoLoading = true
         showPremiumPromo = true
@@ -344,7 +371,13 @@ fun ZenimeAppNavHost(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_START) {
                 authRepository.currentUser.value?.uid?.let { uid ->
-                    promoCoroutineScope.launch { checkAndShowPremiumPromo(uid) }
+                    promoCoroutineScope.launch {
+                        checkBanAndSignOut()
+                        // Kalau barusan diban & di-signOut, skip promo.
+                        if (authRepository.currentUser.value != null) {
+                            checkAndShowPremiumPromo(uid)
+                        }
+                    }
                 }
             }
         }
