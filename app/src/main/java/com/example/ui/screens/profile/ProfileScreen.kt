@@ -156,7 +156,8 @@ fun ProfileScreen(
                 episodeTitle = row.episodeTitle,
                 episodeIndex = row.episodeIndex,
                 progressMs = row.progressMs,
-                durationMs = row.durationMs
+                durationMs = row.durationMs,
+                lastUpdated = row.lastUpdated?.let { parseCommentTimeMs(it) } ?: 0L
             )
         }
     }

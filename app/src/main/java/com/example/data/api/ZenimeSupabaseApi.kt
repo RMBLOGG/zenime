@@ -166,7 +166,7 @@ interface ZenimeSupabaseApi {
     @GET("rest/v1/user_watch_history")
     suspend fun getPublicWatchHistory(
         @Query("firebase_uid") firebaseUidEq: String,
-        @Query("select") select: String = "anime_id,anime_title,poster_url,episode_id,episode_title,episode_index,progress_ms,duration_ms",
+        @Query("select") select: String = "anime_id,anime_title,poster_url,episode_id,episode_title,episode_index,progress_ms,duration_ms,last_updated",
         @Query("order") order: String = "last_updated.desc"
     ): List<com.example.data.model.PublicWatchHistoryRow>
 

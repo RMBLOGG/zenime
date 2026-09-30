@@ -48,7 +48,8 @@ data class PublicWatchHistoryRow(
     @Json(name = "episode_title") val episodeTitle: String? = null,
     @Json(name = "episode_index") val episodeIndex: String? = null,
     @Json(name = "progress_ms") val progressMs: Long = 0L,
-    @Json(name = "duration_ms") val durationMs: Long = 0L
+    @Json(name = "duration_ms") val durationMs: Long = 0L,
+    @Json(name = "last_updated") val lastUpdated: String? = null
 )
 
 /**
