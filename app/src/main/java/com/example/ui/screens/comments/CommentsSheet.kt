@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -246,6 +247,181 @@ fun EpisodeCommentsSheet(
             onDismiss = viewModel::closeThread
         )
     }
+}
+
+/**
+ * Jumlah item LazyColumn yang ditambahkan [episodeCommentsSection] untuk
+ * state tertentu -- dipakai halaman episode buat scroll ke awal bagian komentar.
+ */
+fun commentsSectionItemCount(state: CommentsUiState): Int {
+    val body = if (state.isLoading || state.sortedTopLevel.isEmpty()) 1 else state.sortedTopLevel.size
+    return 3 + (if (state.errorMessage != null) 1 else 0) + body
+}
+
+/**
+ * Komentar episode versi INLINE (di bawah Episode List), ditambahkan langsung
+ * ke LazyColumn halaman episode. Isinya sama dengan [EpisodeCommentsSheet]:
+ * header jumlah komentar, tab sort, input komentar, lalu daftar komentar.
+ * Tap "Reply" tetap membuka sheet "Threads" lewat [EpisodeCommentThreads].
+ */
+fun LazyListScope.episodeCommentsSection(
+    state: CommentsUiState,
+    viewModel: CommentsViewModel,
+    onUpgradeClick: () -> Unit
+) {
+    item(key = "comments-header") {
+        val context = LocalContext.current
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 8.dp, top = 28.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "${state.totalCount} Komentar",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                color = Color.White,
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(onClick = {
+                Toast.makeText(context, "Pengaturan komentar segera hadir", Toast.LENGTH_SHORT).show()
+            }) {
+                Icon(Icons.Default.Settings, contentDescription = "Atur", tint = Color.White.copy(alpha = 0.7f))
+            }
+        }
+    }
+
+    item(key = "comments-sort") {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SortTabChip(
+                label = "Top Comment",
+                selected = state.sortMode == CommentSortMode.TOP_COMMENT,
+                onClick = { viewModel.setSortMode(CommentSortMode.TOP_COMMENT) }
+            )
+            SortTabChip(
+                label = "Terbaru",
+                selected = state.sortMode == CommentSortMode.TERBARU,
+                onClick = { viewModel.setSortMode(CommentSortMode.TERBARU) }
+            )
+        }
+    }
+
+    item(key = "comments-input") {
+        var inputText by rememberSaveable { mutableStateOf("") }
+        var pinnedToggle by rememberSaveable { mutableStateOf(false) }
+        Column {
+            Spacer(modifier = Modifier.height(6.dp))
+            CommentInputRow(
+                avatarUrl = state.myAvatarUrl,
+                avatarSeed = state.myFirebaseUid,
+                avatarLabel = state.myUsername,
+                text = inputText,
+                onTextChange = { inputText = it },
+                placeholder = "Tulis komentar..",
+                isSending = state.isSending,
+                showPremiumToggle = true,
+                premiumToggleActive = pinnedToggle,
+                onPremiumToggleClick = {
+                    if (state.isPremium) {
+                        pinnedToggle = !pinnedToggle
+                    } else {
+                        onUpgradeClick()
+                    }
+                },
+                onSend = {
+                    if (inputText.isNotBlank()) {
+                        viewModel.postTopLevelComment(inputText, pinnedToggle)
+                        inputText = ""
+                        pinnedToggle = false
+                    }
+                }
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+    }
+
+    state.errorMessage?.let { msg ->
+        item(key = "comments-error") {
+            Text(
+                text = msg,
+                color = Color(0xFFFF6B6B),
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+            )
+        }
+    }
+
+    when {
+        state.isLoading -> item(key = "comments-loading") {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = ZenimePrimary, modifier = Modifier.size(28.dp))
+            }
+        }
+        state.sortedTopLevel.isEmpty() -> item(key = "comments-empty") {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Belum ada komentar. Jadi yang pertama!",
+                    color = Color.White.copy(alpha = 0.6f),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+        else -> items(state.sortedTopLevel, key = { "comment-${it.id}" }) { comment ->
+            CommentItem(
+                comment = comment,
+                isOwn = comment.firebaseUid == state.myFirebaseUid,
+                isPremiumSender = comment.firebaseUid in state.premiumUids,
+                level = state.levelsByUid[comment.firebaseUid],
+                userNumber = state.userNumbersByUid[comment.firebaseUid],
+                avatarUrlOverride = state.avatarUrlsByUid[comment.firebaseUid],
+                replyCount = state.repliesByParent[comment.id]?.size ?: 0,
+                isDeleting = state.deletingCommentId == comment.id,
+                onReplyClick = { viewModel.openThread(comment.id) },
+                onDeleteClick = { viewModel.deleteComment(comment) }
+            )
+        }
+    }
+}
+
+/**
+ * Sheet "Threads" (lihat balasan + balas komentar) untuk komentar inline.
+ * Dipanggil sekali di halaman episode; muncul sendiri saat user tap "Reply".
+ */
+@Composable
+fun EpisodeCommentThreads(viewModel: CommentsViewModel) {
+    val state by viewModel.uiState.collectAsState()
+    val threadId = state.openThreadParentId ?: return
+    CommentThreadSheet(
+        parent = state.topLevel.find { it.id == threadId },
+        replies = state.repliesByParent[threadId] ?: emptyList(),
+        myFirebaseUid = state.myFirebaseUid,
+        myAvatarUrl = state.myAvatarUrl,
+        myUsername = state.myUsername,
+        isSending = state.isSending,
+        replyTarget = state.replyTarget,
+        premiumUids = state.premiumUids,
+        levelsByUid = state.levelsByUid,
+        userNumbersByUid = state.userNumbersByUid,
+        avatarUrlsByUid = state.avatarUrlsByUid,
+        deletingCommentId = state.deletingCommentId,
+        onSetReplyTarget = viewModel::setReplyTarget,
+        onSend = viewModel::postReply,
+        onDeleteClick = viewModel::deleteComment,
+        onDismiss = viewModel::closeThread
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

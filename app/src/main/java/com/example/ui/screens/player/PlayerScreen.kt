@@ -1,5 +1,12 @@
 package com.example.ui.screens.player
 
+import com.example.ui.screens.comments.EpisodeCommentThreads
+import com.example.ui.screens.comments.episodeCommentsSection
+import com.example.ui.screens.comments.commentsSectionItemCount
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.lazy.rememberLazyListState
 import com.example.util.MiniPlayerManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -164,7 +171,6 @@ import com.example.data.model.EpisodeItem
 import com.example.ui.components.DownloadQualityPickerDialog
 import com.example.ui.components.ErrorStateView
 import com.example.ui.screens.comments.CommentsViewModel
-import com.example.ui.screens.comments.EpisodeCommentsSheet
 import com.example.ui.theme.ZenimePrimary
 import androidx.lifecycle.viewmodel.compose.viewModel as composeViewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -293,7 +299,6 @@ fun PlayerScreen(
     // pas tombol "Komentar" di-tap), bukan langsung pas PlayerScreen dibuka,
     // biar gak nembak network call komentar tiap kali orang buka episode
     // padahal belum tentu mau baca komentarnya.
-    var showCommentsSheet by remember { mutableStateOf(false) }
 
     // Nge-track apakah seek "lanjutin dari terakhir nonton" udah pernah
     // dijalanin. Cuma sekali di awal -- ganti server/kualitas belakangan
@@ -1311,6 +1316,29 @@ fun PlayerScreen(
                     // tombol donasi Trakteer, tombol aksi, dan daftar
                     // episode (horizontal, pakai thumbnail).
                     if (!isFullscreen && !isInPip) {
+                        // Komentar inline di bawah Episode List -- ViewModel di-key per
+                        // episodeId biar pindah episode dapat thread komentar baru.
+                        // Alias `composeViewModel` dipakai karena parameter PlayerScreen
+                        // sudah punya `viewModel` (PlayerViewModel). Dibuat setelah info
+                        // anime & detail episode kebaca supaya metadata komentar terisi.
+                        val commentsViewModel: CommentsViewModel? =
+                            if (animeInfo != null && currentEpisodeDetail != null) {
+                                composeViewModel<CommentsViewModel>(
+                                    key = "comments_${viewModel.episodeId}",
+                                    factory = viewModelFactory {
+                                        initializer {
+                                            CommentsViewModel(
+                                                episodeId = viewModel.episodeId,
+                                                animeId = viewModel.animeId,
+                                                animeTitle = animeInfo?.title,
+                                                animePosterUrl = animeInfo?.image_poster ?: animeInfo?.image_cover,
+                                                episodeIndex = currentEpisodeDetail?.index
+                                            )
+                                        }
+                                    }
+                                )
+                            } else null
+
                         PlayerDetailsSection(
                             animeInfo = animeInfo,
                             epDetail = epDetail,
@@ -1325,7 +1353,8 @@ fun PlayerScreen(
                                 }
                             },
                             onEpisodeClick = { ep -> onNextEpisodeClick(ep.id) },
-                            onCommentsClick = { showCommentsSheet = true },
+                            commentsViewModel = commentsViewModel,
+                            onUpgradeClick = onUpgradeClick,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -1380,34 +1409,6 @@ fun PlayerScreen(
                 }
             }
         }
-    }
-
-    // Sheet komentar episode -- ViewModel-nya di-key per episodeId biar
-    // pindah episode (Episode Selanjutnya) dapet thread komentar yang baru,
-    // bukan nyangkut nampilin komentar episode sebelumnya.
-    // Dipanggil pake alias `composeViewModel` (bukan `viewModel` polos)
-    // karena parameter PlayerScreen ini sendiri udah ada yang namanya
-    // `viewModel` (instance PlayerViewModel) -- biar gak ambigu/ketuker.
-    if (showCommentsSheet) {
-        val commentsViewModel: CommentsViewModel = composeViewModel(
-            key = "comments_${viewModel.episodeId}",
-            factory = viewModelFactory {
-                initializer {
-                    CommentsViewModel(
-                        episodeId = viewModel.episodeId,
-                        animeId = viewModel.animeId,
-                        animeTitle = animeInfo?.title,
-                        animePosterUrl = animeInfo?.image_poster ?: animeInfo?.image_cover,
-                        episodeIndex = currentEpisodeDetail?.index
-                    )
-                }
-            }
-        )
-        EpisodeCommentsSheet(
-            viewModel = commentsViewModel,
-            onDismiss = { showCommentsSheet = false },
-            onUpgradeClick = onUpgradeClick
-        )
     }
 
     // Dialog pilih kualitas sebelum download mulai.
@@ -2371,14 +2372,30 @@ private fun PlayerDetailsSection(
     onQualityClick: () -> Unit,
     onDownloadClick: () -> Unit,
     onEpisodeClick: (EpisodeItem) -> Unit,
-    onCommentsClick: () -> Unit,
+    commentsViewModel: CommentsViewModel?,
+    onUpgradeClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var isSynopsisExpanded by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val commentsState = commentsViewModel?.uiState?.collectAsState()?.value
+
+    // Tombol "Komentar" di baris aksi -> scroll ke awal bagian komentar.
+    val scrollToComments: () -> Unit = {
+        val st = commentsState
+        if (st != null) {
+            scope.launch {
+                val idx = listState.layoutInfo.totalItemsCount - commentsSectionItemCount(st)
+                listState.animateScrollToItem(idx.coerceAtLeast(0))
+            }
+        }
+    }
 
     LazyColumn(
-        modifier = modifier.fillMaxWidth(),
+        state = listState,
+        modifier = modifier.fillMaxWidth().imePadding(),
         contentPadding = PaddingValues(top = 14.dp, bottom = 28.dp)
     ) {
         // 1. Poster kecil + judul anime + info episode (index, views, tanggal)
@@ -2534,7 +2551,7 @@ private fun PlayerDetailsSection(
                 PlayerActionChip(
                     icon = Icons.AutoMirrored.Filled.Chat,
                     label = "Komentar",
-                    onClick = onCommentsClick
+                    onClick = scrollToComments
                 )
                 PlayerActionChip(
                     icon = Icons.Default.Flag,
@@ -2629,6 +2646,20 @@ private fun PlayerDetailsSection(
                 }
             }
         }
+
+        // 7. Komentar episode (inline, di bawah Episode List)
+        if (commentsViewModel != null && commentsState != null) {
+            episodeCommentsSection(
+                state = commentsState,
+                viewModel = commentsViewModel,
+                onUpgradeClick = onUpgradeClick
+            )
+        }
+    }
+
+    // Sheet "Threads" (balasan) -- muncul saat tap Reply di salah satu komentar.
+    if (commentsViewModel != null) {
+        EpisodeCommentThreads(viewModel = commentsViewModel)
     }
 }
 

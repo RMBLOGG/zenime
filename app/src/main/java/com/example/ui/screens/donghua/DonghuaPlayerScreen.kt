@@ -1,5 +1,12 @@
 package com.example.ui.screens.donghua
 
+import com.example.ui.screens.comments.EpisodeCommentThreads
+import com.example.ui.screens.comments.episodeCommentsSection
+import com.example.ui.screens.comments.commentsSectionItemCount
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.lazy.rememberLazyListState
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -129,7 +136,6 @@ import com.example.data.repository.AnichinRepository
 import com.example.data.repository.PremiumRepository
 import com.example.ui.components.ErrorStateView
 import com.example.ui.screens.comments.CommentsViewModel
-import com.example.ui.screens.comments.EpisodeCommentsSheet
 import com.example.ui.screens.player.GestureLevelIndicator
 import com.example.ui.screens.player.PlayerAccent
 import com.example.ui.screens.player.PlayerActionChip
@@ -237,7 +243,6 @@ fun DonghuaPlayerScreen(
     var showSettingsMenu by remember { mutableStateOf(false) }
     var showQualitySheet by remember { mutableStateOf(false) }
     var showEpisodeList by remember { mutableStateOf(false) }
-    var showCommentsSheet by remember { mutableStateOf(false) }
 
     // ---- State gestur ----
     val audioManager = remember {
@@ -935,6 +940,26 @@ fun DonghuaPlayerScreen(
 
         // ---- Info + daftar episode (cuma di portrait, bukan fullscreen / PiP) ----
         if (!isFullscreen && !isInPip) {
+            // Komentar inline di bawah Episode List -- id diberi prefix "dh:" supaya
+            // gak bentrok dengan id episode anime. Dibuat setelah detail episode
+            // kebaca, biar judul/poster yang ditempel ke komentar sudah terisi.
+            val commentsViewModel: CommentsViewModel? = if (episodeDetail != null) {
+                composeViewModel<CommentsViewModel>(
+                    key = "comments_dh_${viewModel.slug}",
+                    factory = viewModelFactory {
+                        initializer {
+                            CommentsViewModel(
+                                episodeId = "dh:${viewModel.slug}",
+                                animeId = "dh:${episodeDetail?.root ?: viewModel.slug}",
+                                animeTitle = animeTitle,
+                                animePosterUrl = AnichinNetwork.imageUrl(episodeDetail?.thumbnail),
+                                episodeIndex = epNumber
+                            )
+                        }
+                    }
+                )
+            } else null
+
             DonghuaDetailsSection(
                 animeTitle = animeTitle,
                 posterPath = episodeDetail?.thumbnail,
@@ -948,8 +973,9 @@ fun DonghuaPlayerScreen(
                 playbackError = playbackError,
                 onQualityClick = { showQualitySheet = true },
                 onDownloadClick = downloadSoon,
-                onCommentsClick = { showCommentsSheet = true },
                 onEpisodeClick = { slug -> if (slug != viewModel.slug) onEpisodeChange(slug) },
+                commentsViewModel = commentsViewModel,
+                onUpgradeClick = onUpgradeClick,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -975,29 +1001,6 @@ fun DonghuaPlayerScreen(
             }
         )
     }
-
-    // Sheet komentar -- id diberi prefix "dh:" supaya gak bentrok dengan id episode anime.
-    if (showCommentsSheet) {
-        val commentsViewModel: CommentsViewModel = composeViewModel(
-            key = "comments_dh_${viewModel.slug}",
-            factory = viewModelFactory {
-                initializer {
-                    CommentsViewModel(
-                        episodeId = "dh:${viewModel.slug}",
-                        animeId = "dh:${episodeDetail?.root ?: viewModel.slug}",
-                        animeTitle = animeTitle,
-                        animePosterUrl = AnichinNetwork.imageUrl(episodeDetail?.thumbnail),
-                        episodeIndex = epNumber
-                    )
-                }
-            }
-        )
-        EpisodeCommentsSheet(
-            viewModel = commentsViewModel,
-            onDismiss = { showCommentsSheet = false },
-            onUpgradeClick = onUpgradeClick
-        )
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1018,15 +1021,31 @@ private fun DonghuaDetailsSection(
     playbackError: String?,
     onQualityClick: () -> Unit,
     onDownloadClick: () -> Unit,
-    onCommentsClick: () -> Unit,
     onEpisodeClick: (String) -> Unit,
+    commentsViewModel: CommentsViewModel?,
+    onUpgradeClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var isSynopsisExpanded by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    val commentsState = commentsViewModel?.uiState?.collectAsState()?.value
+
+    // Tombol "Komentar" di baris aksi -> scroll ke awal bagian komentar.
+    val scrollToComments: () -> Unit = {
+        val st = commentsState
+        if (st != null) {
+            scope.launch {
+                val idx = listState.layoutInfo.totalItemsCount - commentsSectionItemCount(st)
+                listState.animateScrollToItem(idx.coerceAtLeast(0))
+            }
+        }
+    }
 
     LazyColumn(
-        modifier = modifier.fillMaxWidth(),
+        state = listState,
+        modifier = modifier.fillMaxWidth().imePadding(),
         contentPadding = PaddingValues(top = 14.dp, bottom = 28.dp)
     ) {
         // 1. Poster kecil + judul + info episode
@@ -1157,7 +1176,7 @@ private fun DonghuaDetailsSection(
                 PlayerActionChip(
                     icon = Icons.AutoMirrored.Filled.Chat,
                     label = "Komentar",
-                    onClick = onCommentsClick
+                    onClick = scrollToComments
                 )
                 PlayerActionChip(
                     icon = Icons.Default.Flag,
@@ -1239,6 +1258,20 @@ private fun DonghuaDetailsSection(
                 }
             }
         }
+
+        // 7. Komentar episode (inline, di bawah Episode List)
+        if (commentsViewModel != null && commentsState != null) {
+            episodeCommentsSection(
+                state = commentsState,
+                viewModel = commentsViewModel,
+                onUpgradeClick = onUpgradeClick
+            )
+        }
+    }
+
+    // Sheet "Threads" (balasan) -- muncul saat tap Reply di salah satu komentar.
+    if (commentsViewModel != null) {
+        EpisodeCommentThreads(viewModel = commentsViewModel)
     }
 }
 
