@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -57,25 +58,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Outline
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.ClanDonationEntry
 import com.example.data.model.ClanMemberDisplay
 import com.example.data.model.ClanRoles
+import com.example.ui.components.ClanRainbowBadge
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.GeneratedAvatar
@@ -100,22 +97,6 @@ private val RoleAdmiralColor = Color(0xFFE0912F)     // oranye
 private val RoleOfficerColor = Color(0xFF26A69A)     // teal
 private val RoleMemberColor = Color(0xFF607D8B)      // abu kebiruan
 
-/** Bentuk badge tag clan: kotak dengan ujung kanan lancip (panah), kayak referensi. */
-private class ArrowTagShape : Shape {
-    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
-        val notch = size.height * 0.4f
-        val path = Path().apply {
-            moveTo(0f, 0f)
-            lineTo(size.width - notch, 0f)
-            lineTo(size.width, size.height / 2f)
-            lineTo(size.width - notch, size.height)
-            lineTo(0f, size.height)
-            close()
-        }
-        return Outline.Generic(path)
-    }
-}
-
 @Composable
 fun ClanScreen(
     viewModel: ClanViewModel,
@@ -130,7 +111,20 @@ fun ClanScreen(
         if (uiState.leftClan) onBackClick()
     }
 
-    Scaffold(containerColor = ClanBg) { padding ->
+    val gradientEnd = with(LocalDensity.current) { 430.dp.toPx() }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(ClanBg)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(Color(0xFF212C4D), Color(0xFF151C30), ClanBg),
+                    startY = 0f,
+                    endY = gradientEnd
+                )
+            )
+    ) {
+    Scaffold(containerColor = Color.Transparent) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
             Column(modifier = Modifier.fillMaxSize()) {
                 ClanTopBar(
@@ -203,6 +197,7 @@ fun ClanScreen(
                 )
             }
         }
+    }
     }
 }
 
@@ -359,7 +354,7 @@ private fun ClanHeader(
                 )
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    ClanTagBadge(text = clan.tag, height = 34.dp, textSize = 14.sp)
+                    ClanRainbowBadge(text = clan.tag)
                     Spacer(Modifier.width(14.dp))
                     LevelPill(level = clan.level, onInfoClick = onLevelInfoClick)
                 }
@@ -400,33 +395,6 @@ private fun ClanHeader(
             Spacer(Modifier.height(8.dp))
             Text(feedback, color = ClanMuted, fontSize = 12.sp)
         }
-    }
-}
-
-@Composable
-private fun ClanTagBadge(
-    text: String,
-    modifier: Modifier = Modifier,
-    height: Dp = 26.dp,
-    textSize: androidx.compose.ui.unit.TextUnit = 12.sp
-) {
-    Row(
-        modifier = modifier
-            .height(height)
-            .clip(ArrowTagShape())
-            .background(Brush.horizontalGradient(listOf(Color(0xFFFFCA28), Color(0xFFF59E0B))))
-            .padding(start = 10.dp, end = height * 0.6f),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(Modifier.size(height * 0.5f).clip(CircleShape).background(Color(0xFFE53935)))
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = text,
-            color = Color.White,
-            fontSize = textSize,
-            fontWeight = FontWeight.ExtraBold,
-            maxLines = 1
-        )
     }
 }
 
@@ -769,9 +737,16 @@ private fun MemberRow(
             .padding(vertical = 10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                MemberAvatar(member = member, size = 50.dp)
-                RoleBadge(role = member.role, modifier = Modifier.offset(y = (-9).dp))
+            Box(modifier = Modifier.width(50.dp).height(58.dp)) {
+                Box(modifier = Modifier.align(Alignment.TopCenter)) {
+                    MemberAvatar(member = member, size = 50.dp)
+                }
+                RoleBadge(
+                    role = member.role,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .wrapContentWidth(unbounded = true)
+                )
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -805,7 +780,7 @@ private fun MemberRow(
                 }
                 Spacer(Modifier.height(7.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    ClanTagBadge(text = clanTag, height = 24.dp, textSize = 11.sp)
+                    ClanRainbowBadge(text = clanTag)
                     if (level != null) {
                         Spacer(Modifier.width(8.dp))
                         LevelChip(level = level)
@@ -927,13 +902,14 @@ private fun RoleBadge(role: String, modifier: Modifier = Modifier) {
         modifier = modifier
             .clip(RoundedCornerShape(50))
             .background(bg)
-            .padding(horizontal = 9.dp, vertical = 3.dp)
+            .padding(horizontal = 7.dp, vertical = 2.dp)
     ) {
         Text(
             text = ClanRoles.label(role),
             color = fg,
-            fontSize = 9.sp,
-            fontWeight = FontWeight.ExtraBold,
+            fontSize = 7.5.sp,
+            lineHeight = 9.sp,
+            fontWeight = FontWeight.Bold,
             maxLines = 1
         )
     }
