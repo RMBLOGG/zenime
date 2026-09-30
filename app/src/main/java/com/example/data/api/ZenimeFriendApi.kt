@@ -35,6 +35,15 @@ interface ZenimeFriendApi {
         @Query("limit") limit: Int = 1
     ): List<Friendship>
 
+    /** Permintaan masuk yang masih pending buat user ini (dipakai badge notifikasi di Beranda). */
+    @GET("rest/v1/friendships")
+    suspend fun getIncomingPending(
+        @Query("addressee_uid") addresseeEq: String,
+        @Query("status") statusEq: String = "eq.pending",
+        @Query("select") select: String = "id,requester_uid,addressee_uid,status,created_at",
+        @Query("limit") limit: Int = 100
+    ): List<Friendship>
+
     @Headers("Prefer: return=minimal")
     @POST("rest/v1/friendships")
     suspend fun sendRequest(@Body body: FriendshipInsert): Response<Void>

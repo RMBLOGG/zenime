@@ -19,6 +19,7 @@ import com.example.data.repository.AnimeRepository
 import com.example.data.repository.ChatRepository
 import com.example.data.repository.ClanRepository
 import com.example.data.repository.CoinRepository
+import com.example.data.repository.FriendRepository
 import com.example.data.repository.ComicRepository
 import com.example.data.repository.PremiumRepository
 import com.example.data.repository.SupportRepository
@@ -59,6 +60,7 @@ class HomeViewModel(
     private val xpRepository: XpRepository = XpRepository(),
     private val clanRepository: ClanRepository = ClanRepository(),
     private val supportRepository: SupportRepository = SupportRepository(),
+    private val friendRepository: FriendRepository = FriendRepository(),
     private val anichinRepository: AnichinRepository = AnichinRepository(),
     private val firebaseUid: String? = null
 ) : ViewModel() {
@@ -123,6 +125,19 @@ class HomeViewModel(
     private val _heroLeaderboard = MutableStateFlow(HeroLeaderboardUiState())
     val heroLeaderboard: StateFlow<HeroLeaderboardUiState> = _heroLeaderboard.asStateFlow()
 
+    // Jumlah permintaan pertemanan masuk -> badge di ikon notifikasi Beranda.
+    private val _friendRequestCount = MutableStateFlow(0)
+    val friendRequestCount: StateFlow<Int> = _friendRequestCount.asStateFlow()
+
+    /** Diam-diam gagal: kalau error, badge tetap di angka terakhir. */
+    fun loadFriendRequestCount() {
+        val uid = firebaseUid ?: return
+        viewModelScope.launch {
+            friendRepository.countIncomingRequests(uid)
+                .onSuccess { _friendRequestCount.value = it }
+        }
+    }
+
     init {
         loadHome()
         loadComicLatest()
@@ -132,6 +147,7 @@ class HomeViewModel(
         loadProfileHeader()
         loadHeroLeaderboard()
         prefetchChat()
+        loadFriendRequestCount()
     }
 
     /**

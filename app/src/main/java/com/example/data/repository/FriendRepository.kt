@@ -43,6 +43,11 @@ class FriendRepository(
         else -> FriendRelation.IncomingPending(id)
     }
 
+    /** Jumlah permintaan pertemanan masuk yang belum direspon. */
+    suspend fun countIncomingRequests(myUid: String): Result<Int> = runCatching {
+        api.getIncomingPending(addresseeEq = "eq.$myUid").size
+    }
+
     suspend fun sendRequest(myUid: String, otherUid: String): Result<Unit> = runCatching {
         api.sendRequest(FriendshipInsert(requesterUid = myUid, addresseeUid = otherUid))
             .requireSuccess("Kirim permintaan")

@@ -520,6 +520,7 @@ fun ZenimeAppNavHost(
                             restoreState = true
                         }
                     },
+                    onFriendsClick = { navController.navigate(Screen.Friends.route) },
                     onChatClick = {
                         navController.navigate(Screen.Chat.route)
                     },

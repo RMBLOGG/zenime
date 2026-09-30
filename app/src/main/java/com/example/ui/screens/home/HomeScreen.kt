@@ -54,6 +54,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Movie
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Schedule
@@ -62,6 +63,8 @@ import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.WorkspacePremium
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -144,6 +147,7 @@ fun HomeScreen(
     viewModel: HomeViewModel,
     onAnimeClick: (String) -> Unit,
     onSearchClick: () -> Unit,
+    onFriendsClick: () -> Unit = {},
     onSeeAllOngoingClick: () -> Unit,
     onChatClick: () -> Unit,
     onPlayEpisodeClick: (episodeId: String, animeId: String) -> Unit,
@@ -167,6 +171,7 @@ fun HomeScreen(
     val donghuaHot by viewModel.donghuaHot.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val profileState by viewModel.profileState.collectAsStateWithLifecycle()
+    val friendRequestCount by viewModel.friendRequestCount.collectAsStateWithLifecycle()
     val cuplixClips by viewModel.cuplixClips.collectAsStateWithLifecycle()
     val manraItems by viewModel.manraItems.collectAsStateWithLifecycle()
     val heroStyle by viewModel.heroStyle.collectAsStateWithLifecycle()
@@ -187,6 +192,7 @@ fun HomeScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 viewModel.loadHeroLeaderboard()
+                viewModel.loadFriendRequestCount()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -202,6 +208,7 @@ fun HomeScreen(
             onRefresh = {
                 viewModel.loadHome()
                 viewModel.loadHeroLeaderboard()
+                viewModel.loadFriendRequestCount()
             },
             modifier = Modifier
                 .fillMaxSize()
@@ -225,6 +232,8 @@ fun HomeScreen(
                         onPremiumClick = onPremiumClick,
                         onCoinClick = onCoinClick,
                         onSearchClick = onSearchClick,
+                        friendRequestCount = friendRequestCount,
+                        onNotificationClick = onFriendsClick,
                         modifier = Modifier.padding(top = 16.dp)
                     )
                     Spacer(modifier = Modifier.height(12.dp))
@@ -687,6 +696,8 @@ private fun HomeProfileHeader(
     onPremiumClick: () -> Unit,
     onCoinClick: () -> Unit,
     onSearchClick: () -> Unit,
+    friendRequestCount: Int = 0,
+    onNotificationClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val cardShape = RoundedCornerShape(22.dp)
@@ -791,6 +802,36 @@ private fun HomeProfileHeader(
                         )
                     }
                 }
+
+                // Notifikasi permintaan pertemanan masuk -> buka layar Teman.
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    IconButton(onClick = onNotificationClick, modifier = Modifier.size(38.dp)) {
+                        BadgedBox(
+                            badge = {
+                                if (friendRequestCount > 0) {
+                                    Badge {
+                                        Text(if (friendRequestCount > 9) "9+" else friendRequestCount.toString())
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = "Permintaan Pertemanan",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Box(
                     modifier = Modifier
