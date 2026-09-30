@@ -5,8 +5,13 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,19 +19,29 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 /**
  * Deteksi app proxy/MITM (Reqable, HTTP Toolkit, dll) yang terpasang di
@@ -85,42 +100,119 @@ fun BlockedToolScreen(toolName: String, onExit: () -> Unit) {
     // Tombol back juga cuma keluar -- gak ada jalan balik ke app.
     BackHandler(enabled = true) { onExit() }
 
+    val accent = MaterialTheme.colorScheme.error
+
+    // Satu-satunya animasi: emoji "mental" masuk dengan pantulan kecil.
+    val emojiScale = remember { Animatable(0.5f) }
+    LaunchedEffect(Unit) {
+        emojiScale.animateTo(
+            targetValue = 1f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessLow
+            )
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(32.dp),
+            // Cahaya lembut dari atas, warnanya ngikut warna error tema.
+            .drawBehind {
+                drawRect(
+                    brush = Brush.radialGradient(
+                        colors = listOf(accent.copy(alpha = 0.16f), Color.Transparent),
+                        center = Offset(size.width / 2f, size.height * 0.30f),
+                        radius = size.width * 0.95f
+                    )
+                )
+            }
+            .systemBarsPadding()
+            .padding(horizontal = 28.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(
-            imageVector = Icons.Filled.Warning,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.error,
-            modifier = Modifier.size(64.dp)
-        )
-        Spacer(Modifier.height(16.dp))
+        Box(
+            modifier = Modifier
+                .size(112.dp)
+                .graphicsLayer {
+                    scaleX = emojiScale.value
+                    scaleY = emojiScale.value
+                }
+                .clip(CircleShape)
+                .background(accent.copy(alpha = 0.12f))
+                .border(1.dp, accent.copy(alpha = 0.35f), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(text = "\uD83D\uDDFF", fontSize = 52.sp) // moai
+        }
+
+        Spacer(Modifier.height(28.dp))
+
         Text(
-            text = "Aplikasi Terdeteksi",
-            style = MaterialTheme.typography.headlineSmall,
+            text = "Woy, ngapain itu?",
+            style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
+            color = MaterialTheme.colorScheme.onBackground,
+            textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(12.dp))
+
+        Spacer(Modifier.height(14.dp))
+
         Text(
-            text = "Aplikasi \"$toolName\" terdeteksi di perangkat Anda. " +
-                "Aplikasi ini tidak diizinkan karena dapat mengganggu keamanan dan fungsi aplikasi.\n\n" +
-                "Harap uninstall aplikasi tersebut untuk melanjutkan.",
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            text = "Mau ngapain sih kocak pakai apk \"$toolName\"? " +
+                "Nonton tinggal nonton aja... hapus dulu tuh apk-nya.",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(24.dp))
+
+        Spacer(Modifier.height(20.dp))
+
+        Surface(
+            shape = RoundedCornerShape(50),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+            )
+        ) {
+            Text(
+                text = "Terdeteksi: $toolName",
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Spacer(Modifier.height(36.dp))
+
         Button(
             onClick = onExit,
-            modifier = Modifier.fillMaxWidth(),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(54.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = accent,
+                contentColor = MaterialTheme.colorScheme.onError
+            )
         ) {
-            Text("Keluar Aplikasi")
+            Text(
+                text = "Oke, gue keluar dulu",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
         }
+
+        Spacer(Modifier.height(14.dp))
+
+        Text(
+            text = "Udah dihapus? Buka Zenime lagi, langsung jalan.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            textAlign = TextAlign.Center
+        )
     }
 }
