@@ -2,7 +2,6 @@ package com.example.data.api
 
 import com.example.data.comic.BacakomikSource
 import com.example.data.comic.ComicSource
-import com.example.data.comic.MangakitaSource
 import com.example.data.comic.WestmangaSource
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -180,15 +179,12 @@ object NetworkModule {
 
     val comicApi: ComicApi by lazy { comicRetrofit.create(ComicApi::class.java) }
 
-    val mangakitaApi: MangakitaApi by lazy { comicRetrofit.create(MangakitaApi::class.java) }
-
     val westmangaApi: WestmangaApi by lazy { comicRetrofit.create(WestmangaApi::class.java) }
 
     // Urutan di sini = urutan di pemilih sumber (layar Komik).
     val comicSources: List<ComicSource> by lazy {
         listOf(
             BacakomikSource(comicApi),
-            MangakitaSource(mangakitaApi),
             WestmangaSource(westmangaApi)
         )
     }

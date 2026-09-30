@@ -1,24 +1,30 @@
 package com.example.ui.screens.comic
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -27,6 +33,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
@@ -49,18 +56,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.comic.ComicTab
+import com.example.ui.components.ComicHeroCarousel
 import com.example.ui.components.ComicPosterCard
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.ShimmerPosterItem
 import com.example.ui.components.ZenimeHeader
 import com.example.ui.components.ZenimeScreenTitle
-import com.example.ui.screens.search.GenrePillChip
 import com.example.ui.theme.CardOutlineBorder
 import com.example.ui.theme.ZenimePrimary
 
@@ -103,8 +114,8 @@ fun ComicScreen(
                 title = { ZenimeScreenTitle(title = "Komik") }
             )
 
-            // Pemilih sumber (BacaKomik / Mangakita / Westmanga)
-            ComicTabRow(
+            // Pemilih sumber (Dayynime-v1 / Dayynime-v2)
+            ComicSourceSwitcher(
                 labels = viewModel.sources.map { it.label },
                 selectedIndex = viewModel.sources.indexOf(sourceId),
                 onTabSelected = { viewModel.selectSource(viewModel.sources[it]) }
@@ -133,12 +144,12 @@ fun ComicScreen(
                             }
                         }
                     },
-                    shape = RoundedCornerShape(20.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedContainerColor = MaterialTheme.colorScheme.surface,
                         unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                        focusedBorderColor = ZenimePrimary,
-                        unfocusedBorderColor = CardOutlineBorder
+                        focusedBorderColor = ZenimePrimary.copy(alpha = 0.7f),
+                        unfocusedBorderColor = Color.Transparent
                     ),
                     singleLine = true,
                     modifier = Modifier
@@ -151,12 +162,12 @@ fun ComicScreen(
             val genreList = (genresState as? com.example.data.common.Result.Success)?.data.orEmpty()
             if (genreList.isNotEmpty()) {
                 LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     item {
-                        GenrePillChip(
+                        ComicGenreChip(
                             title = "Semua",
                             isSelected = selectedGenre == null,
                             onClick = { viewModel.selectGenre(null) }
@@ -164,7 +175,7 @@ fun ComicScreen(
                     }
                     items(genreList) { genre ->
                         val isSelected = selectedGenre?.slug == genre.slug
-                        GenrePillChip(
+                        ComicGenreChip(
                             title = genre.title,
                             isSelected = isSelected,
                             onClick = { viewModel.selectGenre(if (isSelected) null else genre) }
@@ -175,19 +186,11 @@ fun ComicScreen(
 
             // Tab daftar (beda tiap sumber) -- cuma ditampilin kalau lagi gak nyari/filter genre
             AnimatedVisibility(visible = !isFiltering) {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    items(tabs, key = { it.id }) { tab ->
-                        GenrePillChip(
-                            title = tab.label,
-                            isSelected = tab.id == selectedTab,
-                            onClick = { viewModel.selectTab(tab.id) }
-                        )
-                    }
-                }
+                ComicSectionTabs(
+                    tabs = tabs,
+                    selectedId = selectedTab,
+                    onSelect = { viewModel.selectTab(it) }
+                )
             }
 
             Box(modifier = Modifier.fillMaxSize()) {
@@ -195,6 +198,8 @@ fun ComicScreen(
                     ComicResultGrid(
                         state = filterState,
                         gridState = gridState,
+                        sectionTitle = if (query.isNotBlank()) "Hasil untuk \"$query\"" else selectedGenre?.title,
+                        showHero = false,
                         emptyTitle = "Komik Tidak Ditemukan",
                         emptyDescription = "Coba kata kunci atau genre lain.",
                         onComicClick = onComicClick,
@@ -216,6 +221,8 @@ fun ComicScreen(
                         ComicResultGrid(
                             state = listState,
                             gridState = gridState,
+                            sectionTitle = tabs.firstOrNull { it.id == selectedTab }?.label,
+                            showHero = selectedTab == tabs.firstOrNull()?.id,
                             emptyTitle = "Belum Ada Komik",
                             emptyDescription = "Konten belum tersedia saat ini.",
                             onComicClick = onComicClick,
@@ -229,8 +236,9 @@ fun ComicScreen(
     }
 }
 
+/** Pemilih sumber ala segmented control: satu kapsul, segmen aktif berwarna. */
 @Composable
-private fun ComicTabRow(
+private fun ComicSourceSwitcher(
     labels: List<String>,
     selectedIndex: Int,
     onTabSelected: (Int) -> Unit,
@@ -239,32 +247,148 @@ private fun ComicTabRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, CardOutlineBorder, RoundedCornerShape(14.dp))
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         labels.forEachIndexed { index, label ->
             val selected = selectedIndex == index
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = if (selected) ZenimePrimary else MaterialTheme.colorScheme.surface,
+            val bg by animateColorAsState(
+                targetValue = if (selected) ZenimePrimary else Color.Transparent,
+                animationSpec = tween(200),
+                label = "sourceBg"
+            )
+            val fg by animateColorAsState(
+                targetValue = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                animationSpec = tween(200),
+                label = "sourceFg"
+            )
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .weight(1f)
-                    .then(if (!selected) Modifier.border(1.dp, CardOutlineBorder, RoundedCornerShape(12.dp)) else Modifier)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(bg)
                     .clickable { onTabSelected(index) }
+                    .padding(vertical = 9.dp)
             ) {
                 Text(
                     text = label,
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                     ),
-                    color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 10.dp)
+                    color = fg,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1
                 )
             }
         }
+    }
+}
+
+/** Tab daftar (Terbaru / Populer / ...) gaya teks + garis bawah aktif. */
+@Composable
+private fun ComicSectionTabs(
+    tabs: List<ComicTab>,
+    selectedId: String,
+    onSelect: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LazyRow(
+        modifier = modifier,
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        items(tabs, key = { it.id }) { tab ->
+            val selected = tab.id == selectedId
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { onSelect(tab.id) }
+                    .padding(vertical = 6.dp)
+            ) {
+                Text(
+                    text = tab.label,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontSize = 14.sp,
+                        fontWeight = if (selected) FontWeight.ExtraBold else FontWeight.Medium
+                    ),
+                    color = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Box(
+                    modifier = Modifier
+                        .width(18.dp)
+                        .height(3.dp)
+                        .clip(CircleShape)
+                        .background(if (selected) ZenimePrimary else Color.Transparent)
+                )
+            }
+        }
+    }
+}
+
+/** Chip genre: outline tipis, aktif = tint merah. */
+@Composable
+private fun ComicGenreChip(
+    title: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = if (isSelected) ZenimePrimary.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            1.dp,
+            if (isSelected) ZenimePrimary.copy(alpha = 0.7f) else CardOutlineBorder
+        ),
+        modifier = modifier.clickable { onClick() }
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelMedium.copy(
+                fontSize = 12.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+            ),
+            color = if (isSelected) ZenimePrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp)
+        )
+    }
+}
+
+@Composable
+private fun ComicSectionTitle(title: String, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .width(4.dp)
+                .height(16.dp)
+                .clip(CircleShape)
+                .background(ZenimePrimary)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontSize = 16.sp,
+                fontWeight = FontWeight.ExtraBold
+            ),
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1
+        )
     }
 }
 
@@ -272,6 +396,8 @@ private fun ComicTabRow(
 private fun ComicResultGrid(
     state: ComicListState,
     gridState: LazyGridState,
+    sectionTitle: String?,
+    showHero: Boolean,
     emptyTitle: String,
     emptyDescription: String,
     onComicClick: (String) -> Unit,
@@ -306,6 +432,22 @@ private fun ComicResultGrid(
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 modifier = modifier.fillMaxSize()
             ) {
+                // Carousel unggulan -- cuma di tab pertama & kalau datanya cukup.
+                if (showHero && state.items.size >= 5) {
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "__hero") {
+                        ComicHeroCarousel(
+                            items = state.items.take(5),
+                            onComicClick = onComicClick
+                        )
+                    }
+                }
+
+                if (!sectionTitle.isNullOrBlank()) {
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "__section") {
+                        ComicSectionTitle(title = sectionTitle)
+                    }
+                }
+
                 items(state.items, key = { it.slug }) { comic ->
                     AnimatedVisibility(
                         visible = true,

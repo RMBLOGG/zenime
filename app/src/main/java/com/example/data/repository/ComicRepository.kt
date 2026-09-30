@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.flow
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Repository komik multi-sumber (BacaKomik, Mangakita, Westmanga).
+ * Repository komik multi-sumber (Dayynime-v1, Dayynime-v2).
  *
  * Slug komik yang keluar dari repository ini SUDAH berupa "kunci" (lihat
  * ComicKey): BacaKomik polos, sumber lain diberi awalan "sumber~". Kunci itu

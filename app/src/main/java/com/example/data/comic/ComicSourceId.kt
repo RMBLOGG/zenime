@@ -5,9 +5,9 @@ package com.example.data.comic
  * (https://www.sankavollerei.web.id/comic/{source}/...).
  */
 enum class ComicSourceId(val id: String, val label: String) {
-    BACAKOMIK("bacakomik", "BacaKomik"),
-    MANGAKITA("mangakita", "Mangakita"),
-    WESTMANGA("westmanga", "Westmanga")
+    // id tetap (dipakai di API, Room & route); cuma label tampilan yang diganti.
+    BACAKOMIK("bacakomik", "Dayynime-v1"),
+    WESTMANGA("westmanga", "Dayynime-v2")
 }
 
 /**
@@ -18,7 +18,6 @@ enum class ComicSourceId(val id: String, val label: String) {
  * BacaKomik sengaja TIDAK diberi awalan, jadi data favorit & progress yang
  * sudah tersimpan sebelum fitur multi-sumber tetap valid tanpa migrasi DB.
  *   "nano-machine"            -> BacaKomik
- *   "mangakita~one-piece"     -> Mangakita
  *   "westmanga~solo-leveling" -> Westmanga
  */
 object ComicKey {
