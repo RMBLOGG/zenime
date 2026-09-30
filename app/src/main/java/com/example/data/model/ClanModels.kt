@@ -22,10 +22,70 @@ data class Clan(
 data class ClanMember(
     @Json(name = "clan_id") val clanId: String,
     @Json(name = "firebase_uid") val firebaseUid: String,
-    @Json(name = "role") val role: String, // "leader" | "co_leader" | "member"
+    @Json(name = "role") val role: String, // "leader" | "vice_leader" | "admiral" | "co_leader" (Officer) | "member"
     @Json(name = "total_contribution") val totalContribution: Long = 0,
     @Json(name = "joined_at") val joinedAt: String
 )
+
+/**
+ * Hierarki role clan (tinggi -> rendah):
+ * Leader > Vice Leader > Admiral > Officer > Member.
+ *
+ * Officer disimpen di DB sebagai "co_leader" (nilai lama, tetap dipakai biar
+ * data yang udah ada gak rusak).
+ *
+ * Semua aturan izin dikumpulin di sini biar gampang diubah dari satu tempat.
+ * Ini CUMA buat nampilin/nyembunyiin tombol di UI -- validasi aslinya WAJIB
+ * tetep dicek ulang di Edge Function (jangan percaya client).
+ */
+object ClanRoles {
+    const val LEADER = "leader"
+    const val VICE_LEADER = "vice_leader"
+    const val ADMIRAL = "admiral"
+    const val OFFICER = "co_leader"
+    const val MEMBER = "member"
+
+    fun rank(role: String?): Int = when (role) {
+        LEADER -> 4
+        VICE_LEADER -> 3
+        ADMIRAL -> 2
+        OFFICER -> 1
+        else -> 0
+    }
+
+    fun label(role: String?): String = when (role) {
+        LEADER -> "LEADER"
+        VICE_LEADER -> "VICE LEADER"
+        ADMIRAL -> "ADMIRAL"
+        OFFICER -> "OFFICER"
+        else -> "MEMBER"
+    }
+
+    /** Officer ke atas boleh buka Kelola Clan (terima/tolak request join). */
+    fun canManageClan(role: String?): Boolean = rank(role) >= 1
+
+    /** Vice Leader & Admiral (dan Leader) boleh kick target yang pangkatnya lebih rendah. */
+    fun canKick(actorRole: String?, targetRole: String?): Boolean =
+        rank(actorRole) >= 2 && rank(targetRole) < rank(actorRole)
+
+    /**
+     * Role yang boleh dikasih [actorRole] ke target dengan role [targetRole].
+     * Aturannya: cuma boleh ngubah target yang pangkatnya di bawah actor, dan
+     * cuma boleh ngasih role yang pangkatnya di bawah actor juga.
+     *  - Leader      -> Vice Leader / Admiral / Officer / Member
+     *  - Vice Leader -> Admiral / Officer / Member
+     *  - Admiral     -> Officer / Member
+     */
+    fun assignableRoles(actorRole: String?, targetRole: String?): List<String> {
+        val actorRank = rank(actorRole)
+        if (actorRank < 2 || rank(targetRole) >= actorRank) return emptyList()
+        return listOf(VICE_LEADER, ADMIRAL, OFFICER, MEMBER)
+            .filter { rank(it) < actorRank && it != targetRole }
+    }
+
+    fun canActOn(actorRole: String?, targetRole: String?): Boolean =
+        canKick(actorRole, targetRole) || assignableRoles(actorRole, targetRole).isNotEmpty()
+}
 
 @JsonClass(generateAdapter = true)
 data class ClanDonationLogRow(
@@ -96,7 +156,7 @@ data class KickMemberRequest(
     @Json(name = "target_uid") val targetUid: String
 )
 
-/** Leader ngangkat/nurunin role Officer buat 1 member. role: "co_leader" (Officer) atau "member". */
+/** Ubah role 1 member. role: salah satu dari [ClanRoles] (vice_leader / admiral / co_leader / member). */
 @JsonClass(generateAdapter = true)
 data class SetMemberRoleRequest(
     @Json(name = "clan_id") val clanId: String,

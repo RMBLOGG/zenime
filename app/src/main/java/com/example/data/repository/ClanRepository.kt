@@ -7,6 +7,7 @@ import com.example.data.model.ClanDonationEntry
 import com.example.data.model.ClanIdRequest
 import com.example.data.model.ClanMember
 import com.example.data.model.ClanMemberDisplay
+import com.example.data.model.ClanRoles
 import com.example.data.model.ChatProfile
 import com.example.data.model.CreateClanRequest
 import com.example.data.model.DonateToClanRequest
@@ -63,10 +64,10 @@ class ClanRepository(
         clanApi.getMyJoinRequestStatus(authorization = authHeader(), clanId = clanId).pending
     }
 
-    /** Daftar member digabung sama username/avatar dari chat_profiles. Leader selalu di posisi paling atas. */
+    /** Daftar member digabung sama username/avatar dari chat_profiles. Urut dari role tertinggi (Leader) ke terendah. */
     suspend fun getMembers(clanId: String): Result<List<ClanMemberDisplay>> = runCatching {
         val members = clanApi.getClanMembers(clanIdEq = "eq.$clanId")
-        mergeWithProfiles(members).sortedByDescending { it.role == "leader" }
+        mergeWithProfiles(members).sortedByDescending { ClanRoles.rank(it.role) }
     }
 
     /**
@@ -247,6 +248,16 @@ class ClanRepository(
     suspend fun setMemberRole(clanId: String, targetUid: String, makeOfficer: Boolean): Result<Unit> = runCatching {
         try {
             val role = if (makeOfficer) "co_leader" else "member"
+            clanApi.setMemberRole(authHeader(), SetMemberRoleRequest(clanId, targetUid, role))
+            Unit
+        } catch (e: HttpException) {
+            throw IllegalStateException(extractErrorMessage(e, "Gagal ubah role member"))
+        }
+    }
+
+    /** @param role salah satu dari [ClanRoles]: vice_leader / admiral / co_leader (Officer) / member. */
+    suspend fun setMemberRoleTo(clanId: String, targetUid: String, role: String): Result<Unit> = runCatching {
+        try {
             clanApi.setMemberRole(authHeader(), SetMemberRoleRequest(clanId, targetUid, role))
             Unit
         } catch (e: HttpException) {

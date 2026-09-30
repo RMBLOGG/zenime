@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.model.Clan
 import com.example.data.model.ClanDonationEntry
 import com.example.data.model.ClanMemberDisplay
+import com.example.data.model.ClanRoles
 import com.example.data.repository.AdminRepository
 import com.example.data.repository.ClanRepository
 import com.example.data.repository.PremiumRepository
@@ -24,12 +25,15 @@ enum class ClanMembershipCta {
     BLOCKED_OTHER_CLAN, // udah gabung clan LAIN, gabisa request ke sini
     IS_MEMBER,          // member biasa clan ini
     IS_OFFICER,         // officer (role "co_leader") clan ini -- munculin tombol "Kelola Clan" (versi terbatas)
+    IS_ADMIRAL,         // admiral clan ini -- Kelola Clan + kick + ubah role Officer/Member
+    IS_VICE_LEADER,     // vice leader clan ini -- Kelola Clan + kick + ubah role Admiral/Officer/Member
     IS_LEADER           // leader clan ini -- munculin tombol "Kelola Clan" (penuh)
 }
 
 data class ClanUiState(
     val isLoading: Boolean = true,
     val error: String? = null,
+    val myUid: String = "",
     val clan: Clan? = null,
     val members: List<ClanMemberDisplay> = emptyList(),
     val memberLevels: Map<String, Int> = emptyMap(),
@@ -50,17 +54,32 @@ data class ClanUiState(
     val showLeaveDialog: Boolean = false,
     val isLeaving: Boolean = false,
     val leaveFeedback: String? = null,
-    val leftClan: Boolean = false
+    val leftClan: Boolean = false,
+    // Aksi role/kick lewat menu titik tiga di list member.
+    val actionTarget: ClanMemberDisplay? = null,
+    val isActionLoading: Boolean = false,
+    val actionFeedback: String? = null
 ) {
+    /** Role user sekarang di clan INI (null kalau bukan member). */
+    val myRole: String?
+        get() = when (cta) {
+            ClanMembershipCta.IS_LEADER -> ClanRoles.LEADER
+            ClanMembershipCta.IS_VICE_LEADER -> ClanRoles.VICE_LEADER
+            ClanMembershipCta.IS_ADMIRAL -> ClanRoles.ADMIRAL
+            ClanMembershipCta.IS_OFFICER -> ClanRoles.OFFICER
+            ClanMembershipCta.IS_MEMBER -> ClanRoles.MEMBER
+            else -> null
+        }
+
     val canDonate: Boolean
-        get() = cta == ClanMembershipCta.IS_MEMBER || cta == ClanMembershipCta.IS_OFFICER || cta == ClanMembershipCta.IS_LEADER
+        get() = myRole != null
 
     /** Leader gabisa "Keluar Clan" biasa -- harus transfer kepemimpinan/bubarkan clan dulu (di luar cakupan tombol ini). */
     val canLeave: Boolean
-        get() = cta == ClanMembershipCta.IS_MEMBER || cta == ClanMembershipCta.IS_OFFICER
+        get() = myRole != null && myRole != ClanRoles.LEADER
 
     val leader: ClanMemberDisplay?
-        get() = members.find { it.role == "leader" }
+        get() = members.find { it.role == ClanRoles.LEADER }
 
     val filteredMembers: List<ClanMemberDisplay>
         get() = if (searchQuery.isBlank()) {
@@ -85,7 +104,7 @@ class ClanViewModel(
     private val adminRepository: AdminRepository = AdminRepository()
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(ClanUiState())
+    private val _uiState = MutableStateFlow(ClanUiState(myUid = firebaseUid))
     val uiState: StateFlow<ClanUiState> = _uiState.asStateFlow()
 
     init {
@@ -159,7 +178,7 @@ class ClanViewModel(
             // sisanya ikut urutan asli. sortedWith stabil, jadi urutan
             // relatif di tiap grup gak berubah.
             val sortedMembers = members.sortedWith(
-                compareByDescending<ClanMemberDisplay> { it.role == "leader" }
+                compareByDescending<ClanMemberDisplay> { ClanRoles.rank(it.role) }
                     .thenByDescending { roles.containsKey(it.firebaseUid) }
             )
 
@@ -188,6 +207,8 @@ class ClanViewModel(
             }
             myMembership.clanId != clanId -> ClanMembershipCta.BLOCKED_OTHER_CLAN
             myMembership.role == "leader" -> ClanMembershipCta.IS_LEADER
+            myMembership.role == "vice_leader" -> ClanMembershipCta.IS_VICE_LEADER
+            myMembership.role == "admiral" -> ClanMembershipCta.IS_ADMIRAL
             myMembership.role == "co_leader" -> ClanMembershipCta.IS_OFFICER
             else -> ClanMembershipCta.IS_MEMBER
         }
@@ -286,6 +307,61 @@ class ClanViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLeaving = false,
                         leaveFeedback = e.message ?: "Gagal keluar clan"
+                    )
+                }
+        }
+    }
+
+    // --- Aksi role / kick (dari menu titik tiga di list member) ---
+
+    fun onMemberActionClick(member: ClanMemberDisplay) {
+        val myRole = _uiState.value.myRole
+        if (!ClanRoles.canActOn(myRole, member.role) || member.firebaseUid == firebaseUid) return
+        _uiState.value = _uiState.value.copy(actionTarget = member, actionFeedback = null)
+    }
+
+    fun dismissMemberAction() {
+        if (_uiState.value.isActionLoading) return
+        _uiState.value = _uiState.value.copy(actionTarget = null, actionFeedback = null)
+    }
+
+    fun changeMemberRole(newRole: String) {
+        val state = _uiState.value
+        val target = state.actionTarget ?: return
+        if (newRole !in ClanRoles.assignableRoles(state.myRole, target.role)) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isActionLoading = true, actionFeedback = null)
+            repository.setMemberRoleTo(clanId, target.firebaseUid, newRole)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(isActionLoading = false, actionTarget = null)
+                    loadAll()
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        isActionLoading = false,
+                        actionFeedback = e.message ?: "Gagal ubah role member"
+                    )
+                }
+        }
+    }
+
+    fun kickMember() {
+        val state = _uiState.value
+        val target = state.actionTarget ?: return
+        if (!ClanRoles.canKick(state.myRole, target.role)) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isActionLoading = true, actionFeedback = null)
+            repository.kickMember(clanId, target.firebaseUid)
+                .onSuccess {
+                    _uiState.value = _uiState.value.copy(isActionLoading = false, actionTarget = null)
+                    loadAll()
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        isActionLoading = false,
+                        actionFeedback = e.message ?: "Gagal kick member"
                     )
                 }
         }

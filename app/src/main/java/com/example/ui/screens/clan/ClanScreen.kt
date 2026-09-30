@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Diamond
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Button
@@ -38,6 +39,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,6 +53,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.ClanDonationEntry
 import com.example.data.model.ClanMemberDisplay
+import com.example.data.model.ClanRoles
 import com.example.ui.components.ClanRainbowBadge
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
@@ -63,7 +66,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private val LeaderBadgeColor = Color(0xFFFFC107)      // kuning, sama kayak referensi
-private val CoLeaderBadgeColor = Color(0xFF9C6BE0)     // ungu
+private val ViceLeaderBadgeColor = Color(0xFFFF7043)   // oranye
+private val AdmiralBadgeColor = Color(0xFF1E88E5)      // biru
+private val CoLeaderBadgeColor = Color(0xFF9C6BE0)     // ungu (Officer)
 private val MemberBadgeColor = Color(0xFF3A404C)       // abu gelap
 private val ClanHeaderGradientTop = Color(0xFF3B2E73)   // ungu -- nyontek referensi
 private val ClanHeaderGradientBottom = Color(0xFF1C1533)
@@ -118,7 +123,8 @@ fun ClanScreen(
                         onManageClanClick = { onManageClanClick(uiState.clan!!.id) },
                         onDonateClick = { viewModel.onDonateDialogToggle(true) },
                         onLeaveClick = { viewModel.onLeaveDialogToggle(true) },
-                        onMemberClick = onMemberClick
+                        onMemberClick = onMemberClick,
+                        onMemberActionClick = viewModel::onMemberActionClick
                     )
                 }
             }
@@ -131,6 +137,18 @@ fun ClanScreen(
                     onAmountChange = viewModel::onDonateAmountChange,
                     onDismiss = { viewModel.onDonateDialogToggle(false) },
                     onSubmit = viewModel::submitDonation
+                )
+            }
+
+            uiState.actionTarget?.let { target ->
+                MemberActionDialog(
+                    target = target,
+                    actorRole = uiState.myRole,
+                    isBusy = uiState.isActionLoading,
+                    feedback = uiState.actionFeedback,
+                    onDismiss = viewModel::dismissMemberAction,
+                    onSetRole = viewModel::changeMemberRole,
+                    onKick = viewModel::kickMember
                 )
             }
 
@@ -155,7 +173,8 @@ private fun ClanContent(
     onManageClanClick: () -> Unit,
     onDonateClick: () -> Unit,
     onLeaveClick: () -> Unit,
-    onMemberClick: (uid: String) -> Unit = {}
+    onMemberClick: (uid: String) -> Unit = {},
+    onMemberActionClick: (ClanMemberDisplay) -> Unit = {}
 ) {
     val clan = uiState.clan ?: return
 
@@ -217,7 +236,13 @@ private fun ClanContent(
                                 isPremium = uiState.premiumUids.contains(member.firebaseUid),
                                 globalRole = uiState.rolesByUid[member.firebaseUid],
                                 globalRoleBadgeColor = uiState.roleBadgeColorsByUid[member.firebaseUid],
-                                onClick = { onMemberClick(member.firebaseUid) }
+                                onClick = { onMemberClick(member.firebaseUid) },
+                                onActionClick = if (
+                                    member.firebaseUid != uiState.myUid &&
+                                    ClanRoles.canActOn(uiState.myRole, member.role)
+                                ) {
+                                    { onMemberActionClick(member) }
+                                } else null
                             )
                         }
                         item { Spacer(Modifier.height(16.dp)) }
@@ -428,6 +453,23 @@ private fun ClanCtaButton(
                 Text("Kelola Clan (Officer)", fontWeight = FontWeight.Bold, color = Color.White)
             }
         }
+        ClanMembershipCta.IS_ADMIRAL, ClanMembershipCta.IS_VICE_LEADER -> {
+            val isVice = cta == ClanMembershipCta.IS_VICE_LEADER
+            Button(
+                onClick = onManageClanClick,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(50),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (isVice) ViceLeaderBadgeColor else AdmiralBadgeColor
+                )
+            ) {
+                Text(
+                    if (isVice) "Kelola Clan (Vice Leader)" else "Kelola Clan (Admiral)",
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+        }
         ClanMembershipCta.IS_LEADER -> {
             Button(
                 onClick = onManageClanClick,
@@ -570,7 +612,8 @@ private fun MemberListItem(
     isPremium: Boolean = false,
     globalRole: String? = null,
     globalRoleBadgeColor: String? = null,
-    onClick: () -> Unit = {}
+    onClick: () -> Unit = {},
+    onActionClick: (() -> Unit)? = null
 ) {
     // Sama kayak Chat Global: role (developer/admin/moderator) menang atas
     // Premium -- satu centang aja, biar gak dobel.
@@ -646,6 +689,15 @@ private fun MemberListItem(
         }
         Spacer(Modifier.width(8.dp))
         ContributionChip(amount = member.totalContribution)
+        if (onActionClick != null) {
+            IconButton(onClick = onActionClick, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    Icons.Filled.MoreVert,
+                    contentDescription = "Kelola member",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 
@@ -689,10 +741,13 @@ private fun DonationListItem(rank: Int, entry: ClanDonationEntry) {
 
 @Composable
 private fun RoleBadge(role: String) {
-    val (label, color) = when (role) {
-        "leader" -> "LEADER" to LeaderBadgeColor
-        "co_leader" -> "OFFICER" to CoLeaderBadgeColor
-        else -> "MEMBER" to MemberBadgeColor
+    val label = ClanRoles.label(role)
+    val color = when (role) {
+        ClanRoles.LEADER -> LeaderBadgeColor
+        ClanRoles.VICE_LEADER -> ViceLeaderBadgeColor
+        ClanRoles.ADMIRAL -> AdmiralBadgeColor
+        ClanRoles.OFFICER -> CoLeaderBadgeColor
+        else -> MemberBadgeColor
     }
     Box(
         modifier = Modifier
@@ -882,6 +937,92 @@ private fun DonateDialog(
             androidx.compose.material3.TextButton(onClick = onDismiss, enabled = !isDonating) {
                 Text("Batal")
             }
+        }
+    )
+}
+
+
+@Composable
+private fun MemberActionDialog(
+    target: ClanMemberDisplay,
+    actorRole: String?,
+    isBusy: Boolean,
+    feedback: String?,
+    onDismiss: () -> Unit,
+    onSetRole: (String) -> Unit,
+    onKick: () -> Unit
+) {
+    val assignable = ClanRoles.assignableRoles(actorRole, target.role)
+    val canKick = ClanRoles.canKick(actorRole, target.role)
+    var confirmKick by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(target.username, fontWeight = FontWeight.Bold) },
+        text = {
+            Column {
+                if (confirmKick) {
+                    Text(
+                        "Yakin mau kick ${target.username} dari clan?",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Role sekarang:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        RoleBadge(role = target.role)
+                    }
+                    if (assignable.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "Ubah jadi:",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        assignable.forEach { role ->
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = { onSetRole(role) },
+                                enabled = !isBusy,
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)
+                            ) {
+                                Text(ClanRoles.label(role), fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+                feedback?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
+                if (isBusy) {
+                    Spacer(Modifier.height(10.dp))
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                }
+            }
+        },
+        confirmButton = {
+            if (confirmKick) {
+                Button(
+                    onClick = onKick,
+                    enabled = !isBusy,
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Kick") }
+            } else if (canKick) {
+                androidx.compose.material3.TextButton(onClick = { confirmKick = true }, enabled = !isBusy) {
+                    Text("Kick Member", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(
+                onClick = { if (confirmKick) confirmKick = false else onDismiss() },
+                enabled = !isBusy
+            ) { Text(if (confirmKick) "Batal" else "Tutup") }
         }
     )
 }
