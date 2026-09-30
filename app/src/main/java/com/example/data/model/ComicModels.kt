@@ -110,10 +110,20 @@ data class BacakomikGenreListResponse(
  * "one-piece-chapter-1052-5" -> "Chapter 1052.5" (chapter selingan/desimal).
  */
 fun extractChapterLabel(slug: String): String {
-    val match = Regex("chapter-([0-9]+(?:-[0-9]+)?)$").find(slug)
+    // Juga menangani slug sumber lain, mis. Westmanga
+    // "judul-chapter-179-5-bahasa-indonesia" dan Mangakita "chapter-1193.412350"
+    // (bagian ".412350" itu ID, bukan desimal).
+    val match = Regex("chapter-([0-9]+(?:-[0-9]+)?)(?:-bahasa-indonesia)?(?:\\.[0-9]+)*$").find(slug)
         ?: return slug.replace('-', ' ').replaceFirstChar { it.uppercase() }
     val raw = match.groupValues[1]
     val parts = raw.split("-")
     val numberLabel = if (parts.size == 2) "${parts[0]}.${parts[1]}" else parts[0]
     return "Chapter $numberLabel"
 }
+
+/**
+ * Label chapter buat ditampilkan: pakai "title" kalau sumbernya ngisi
+ * (Mangakita/Westmanga), kalau kosong (BacaKomik) diekstrak dari slug.
+ */
+fun BacakomikChapterRef.displayLabel(): String =
+    title.takeIf { it.isNotBlank() } ?: extractChapterLabel(slug)

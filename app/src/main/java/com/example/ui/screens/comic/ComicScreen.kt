@@ -42,9 +42,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -70,20 +70,24 @@ fun ComicScreen(
     onComicClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val latestState by viewModel.latestState.collectAsStateWithLifecycle()
-    val popularState by viewModel.popularState.collectAsStateWithLifecycle()
+    val listState by viewModel.listState.collectAsStateWithLifecycle()
+    val sourceId by viewModel.selectedSource.collectAsStateWithLifecycle()
+    val tabs by viewModel.tabs.collectAsStateWithLifecycle()
+    val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val query by viewModel.searchQuery.collectAsStateWithLifecycle()
     val filterState by viewModel.filterState.collectAsStateWithLifecycle()
     val genresState by viewModel.genres.collectAsStateWithLifecycle()
     val selectedGenre by viewModel.selectedGenre.collectAsStateWithLifecycle()
 
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Terbaru, 1 = Populer
     val isFiltering = query.isNotBlank() || selectedGenre != null
 
     val gridState = rememberLazyGridState()
     val isScrolled by remember {
         derivedStateOf { gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 20 }
     }
+
+    // Ganti sumber / tab -> balik ke paling atas daftar.
+    LaunchedEffect(sourceId, selectedTab) { gridState.scrollToItem(0) }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -97,6 +101,13 @@ fun ComicScreen(
             ZenimeHeader(
                 isScrolled = isScrolled,
                 title = { ZenimeScreenTitle(title = "Komik") }
+            )
+
+            // Pemilih sumber (BacaKomik / Mangakita / Westmanga)
+            ComicTabRow(
+                labels = viewModel.sources.map { it.label },
+                selectedIndex = viewModel.sources.indexOf(sourceId),
+                onTabSelected = { viewModel.selectSource(viewModel.sources[it]) }
             )
 
             // Search Bar
@@ -162,12 +173,21 @@ fun ComicScreen(
                 }
             }
 
-            // Tab Terbaru / Populer -- cuma ditampilin kalau lagi gak nyari/filter genre
+            // Tab daftar (beda tiap sumber) -- cuma ditampilin kalau lagi gak nyari/filter genre
             AnimatedVisibility(visible = !isFiltering) {
-                ComicTabRow(
-                    selectedTab = selectedTab,
-                    onTabSelected = { selectedTab = it }
-                )
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    items(tabs, key = { it.id }) { tab ->
+                        GenrePillChip(
+                            title = tab.label,
+                            isSelected = tab.id == selectedTab,
+                            onClick = { viewModel.selectTab(tab.id) }
+                        )
+                    }
+                }
             }
 
             Box(modifier = Modifier.fillMaxSize()) {
@@ -192,21 +212,15 @@ fun ComicScreen(
                                 .togetherWith(fadeOut(tween(120)))
                         },
                         label = "comicTabContent"
-                    ) { tab ->
-                        val state = if (tab == 0) latestState else popularState
+                    ) { _ ->
                         ComicResultGrid(
-                            state = state,
+                            state = listState,
                             gridState = gridState,
                             emptyTitle = "Belum Ada Komik",
                             emptyDescription = "Konten belum tersedia saat ini.",
                             onComicClick = onComicClick,
-                            onRetry = {
-                                if (tab == 0) viewModel.loadLatest(forceRefresh = true)
-                                else viewModel.loadPopular(forceRefresh = true)
-                            },
-                            onLoadMore = {
-                                if (tab == 0) viewModel.loadMoreLatest() else viewModel.loadMorePopular()
-                            }
+                            onRetry = { viewModel.loadTab(forceRefresh = true) },
+                            onLoadMore = { viewModel.loadMoreTab() }
                         )
                     }
                 }
@@ -217,19 +231,19 @@ fun ComicScreen(
 
 @Composable
 private fun ComicTabRow(
-    selectedTab: Int,
+    labels: List<String>,
+    selectedIndex: Int,
     onTabSelected: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val tabs = listOf("Terbaru", "Populer")
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        tabs.forEachIndexed { index, label ->
-            val selected = selectedTab == index
+        labels.forEachIndexed { index, label ->
+            val selected = selectedIndex == index
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = if (selected) ZenimePrimary else MaterialTheme.colorScheme.surface,

@@ -64,6 +64,7 @@ import com.example.data.common.Result
 import com.example.data.local.ComicReadingProgressEntity
 import com.example.data.model.BacakomikChapterRef
 import com.example.data.model.BacakomikDetail
+import com.example.data.model.displayLabel
 import com.example.data.model.extractChapterLabel
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.ShimmerBanner
@@ -357,7 +358,7 @@ private fun ComicDetailContent(
                             Icon(Icons.Filled.MenuBook, contentDescription = null, tint = Color.White)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Mulai Baca dari ${extractChapterLabel(firstChapter.slug)}",
+                                text = "Mulai Baca dari ${firstChapter.displayLabel()}",
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                                 color = Color.White
                             )
@@ -441,7 +442,7 @@ private fun ChapterRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = extractChapterLabel(chapter.slug),
+                text = chapter.displayLabel(),
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface
             )

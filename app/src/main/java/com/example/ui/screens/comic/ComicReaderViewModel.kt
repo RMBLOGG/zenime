@@ -51,7 +51,7 @@ class ComicReaderViewModel(
         _currentSlug.value = chapterSlug
         if (resetScroll) _initialScrollPosition.value = 0 to 0
         viewModelScope.launch {
-            repository.getChapter(chapterSlug).collect { result ->
+            repository.getChapter(comicSlug, chapterSlug).collect { result ->
                 _chapterState.value = result
                 if (result is Result.Success) {
                     val label = result.data.title?.takeIf { it.isNotBlank() } ?: extractChapterLabel(chapterSlug)

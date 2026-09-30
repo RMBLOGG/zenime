@@ -1,5 +1,9 @@
 package com.example.data.api
 
+import com.example.data.comic.BacakomikSource
+import com.example.data.comic.ComicSource
+import com.example.data.comic.MangakitaSource
+import com.example.data.comic.WestmangaSource
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -165,12 +169,27 @@ object NetworkModule {
             .build()
     }
 
-    val comicApi: ComicApi by lazy {
+    // Satu Retrofit buat semua sumber komik (base URL sama: .../comic/).
+    private val comicRetrofit: Retrofit by lazy {
         Retrofit.Builder()
             .baseUrl(ComicApi.BASE_URL)
             .client(comicOkHttpClient)
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
-            .create(ComicApi::class.java)
+    }
+
+    val comicApi: ComicApi by lazy { comicRetrofit.create(ComicApi::class.java) }
+
+    val mangakitaApi: MangakitaApi by lazy { comicRetrofit.create(MangakitaApi::class.java) }
+
+    val westmangaApi: WestmangaApi by lazy { comicRetrofit.create(WestmangaApi::class.java) }
+
+    // Urutan di sini = urutan di pemilih sumber (layar Komik).
+    val comicSources: List<ComicSource> by lazy {
+        listOf(
+            BacakomikSource(comicApi),
+            MangakitaSource(mangakitaApi),
+            WestmangaSource(westmangaApi)
+        )
     }
 }
