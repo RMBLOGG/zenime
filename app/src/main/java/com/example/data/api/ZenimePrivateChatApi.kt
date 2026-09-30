@@ -11,6 +11,10 @@ import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Query
 
+private const val PRIVATE_MESSAGE_COLUMNS =
+    "id,sender_uid,recipient_uid,message,created_at,read_at," +
+        "reply_to_id,reply_to_sender_uid,reply_to_message"
+
 /** Chat teman (DM) langsung ke PostgREST, tabel `private_messages`. */
 interface ZenimePrivateChatApi {
 
@@ -18,7 +22,7 @@ interface ZenimePrivateChatApi {
     @GET("rest/v1/private_messages")
     suspend fun getConversation(
         @Query("or") orFilter: String,
-        @Query("select") select: String = "id,sender_uid,recipient_uid,message,created_at,read_at",
+        @Query("select") select: String = PRIVATE_MESSAGE_COLUMNS,
         @Query("order") order: String = "created_at.desc",
         @Query("limit") limit: Int = 100
     ): List<PrivateMessage>
@@ -27,7 +31,7 @@ interface ZenimePrivateChatApi {
     @GET("rest/v1/private_messages")
     suspend fun getRecent(
         @Query("or") orFilter: String,
-        @Query("select") select: String = "id,sender_uid,recipient_uid,message,created_at,read_at",
+        @Query("select") select: String = PRIVATE_MESSAGE_COLUMNS,
         @Query("order") order: String = "created_at.desc",
         @Query("limit") limit: Int = 300
     ): List<PrivateMessage>

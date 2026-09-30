@@ -1,6 +1,22 @@
 package com.example.ui.screens.chat
 
 import android.widget.Toast
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material.icons.automirrored.filled.Reply
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.IntOffset
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -102,7 +118,8 @@ fun ColumnScope.PrivateChatPane(
                 isLoading = state.isLoadingMessages,
                 myUid = myUid,
                 onBack = { viewModel.closeChat() },
-                onProfileClick = { onFriendProfileClick(selected.firebaseUid) }
+                onProfileClick = { onFriendProfileClick(selected.firebaseUid) },
+                onReply = { viewModel.setReplyTarget(it) }
             )
             state.isLoading -> CircularProgressIndicator(
                 color = ZenimePrimary,
@@ -128,18 +145,32 @@ fun ColumnScope.PrivateChatPane(
         }
     }
 
-    DmInputBar(
-        value = input,
-        onValueChange = { input = it },
-        enabled = state.selected != null,
-        isSending = state.isSending,
-        onSend = {
-            viewModel.sendMessage(input)
-            input = ""
-        },
-        modifier = Modifier.navigationBarsPadding().imePadding()
-    )
+    Column(modifier = Modifier.navigationBarsPadding().imePadding()) {
+        val replyTarget = state.replyTarget
+        val selectedFriend = state.selected
+        if (replyTarget != null && selectedFriend != null) {
+            DmReplyPreviewBar(
+                username = dmAuthorName(replyTarget.senderUid, myUid, selectedFriend),
+                message = replyTarget.message,
+                onCancel = { viewModel.clearReplyTarget() }
+            )
+        }
+        DmInputBar(
+            value = input,
+            onValueChange = { input = it },
+            enabled = state.selected != null,
+            isSending = state.isSending,
+            onSend = {
+                viewModel.sendMessage(input)
+                input = ""
+            }
+        )
+    }
 }
+
+/** Nama yang ditampilkan di kutipan reply: "Kamu" buat pesan sendiri. */
+private fun dmAuthorName(senderUid: String?, myUid: String, friend: FriendDisplay): String =
+    if (senderUid == myUid) "Kamu" else friend.username
 
 @Composable
 private fun EmptyConversations(modifier: Modifier = Modifier) {
@@ -231,7 +262,8 @@ private fun ConversationView(
     isLoading: Boolean,
     myUid: String,
     onBack: () -> Unit,
-    onProfileClick: () -> Unit
+    onProfileClick: () -> Unit,
+    onReply: (PrivateMessage) -> Unit
 ) {
     val listState = rememberLazyListState()
     LaunchedEffect(messages.size) {
@@ -284,7 +316,14 @@ private fun ConversationView(
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     items(messages, key = { it.id }) { msg ->
-                        DmBubble(message = msg, isOwn = msg.senderUid == myUid)
+                        DmBubble(
+                            message = msg,
+                            isOwn = msg.senderUid == myUid,
+                            replyAuthor = msg.replyToMessage?.let {
+                                dmAuthorName(msg.replyToSenderUid, myUid, friend)
+                            },
+                            onReply = { onReply(msg) }
+                        )
                     }
                 }
             }
@@ -293,31 +332,180 @@ private fun ConversationView(
 }
 
 @Composable
-private fun DmBubble(message: PrivateMessage, isOwn: Boolean) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isOwn) Arrangement.End else Arrangement.Start
-    ) {
-        Column(
-            modifier = Modifier
-                .widthIn(max = 280.dp)
-                .clip(
-                    RoundedCornerShape(
-                        topStart = 16.dp,
-                        topEnd = 16.dp,
-                        bottomStart = if (isOwn) 16.dp else 4.dp,
-                        bottomEnd = if (isOwn) 4.dp else 16.dp
-                    )
+private fun DmBubble(
+    message: PrivateMessage,
+    isOwn: Boolean,
+    replyAuthor: String?,
+    onReply: () -> Unit
+) {
+    // Swipe kanan buat reply (sama kayak chat global): bubble ikut geser,
+    // ikon + tulisan "Reply" muncul di kiri, lepas lewat batas = reply kepicu.
+    val swipeOffset = remember { Animatable(0f) }
+    val swipeScope = rememberCoroutineScope()
+    val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
+    val swipeTriggerPx = with(density) { 64.dp.toPx() }
+    val swipeMaxPx = with(density) { 96.dp.toPx() }
+    var swipeTriggered by remember { mutableStateOf(false) }
+    val swipeProgress = (swipeOffset.value / swipeTriggerPx).coerceIn(0f, 1f)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .pointerInput(message.id) {
+                detectHorizontalDragGestures(
+                    onDragStart = { swipeTriggered = false },
+                    onDragEnd = {
+                        if (swipeOffset.value >= swipeTriggerPx) onReply()
+                        swipeScope.launch { swipeOffset.animateTo(0f) }
+                    },
+                    onDragCancel = {
+                        swipeScope.launch { swipeOffset.animateTo(0f) }
+                    },
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        val next = (swipeOffset.value + dragAmount).coerceIn(0f, swipeMaxPx)
+                        swipeScope.launch { swipeOffset.snapTo(next) }
+                        if (!swipeTriggered && next >= swipeTriggerPx) {
+                            swipeTriggered = true
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
+                    }
                 )
-                .background(if (isOwn) ZenimePrimary else ZenimeSurfaceDark)
-                .padding(horizontal = 12.dp, vertical = 8.dp)
+            }
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .align(Alignment.CenterStart)
+                .padding(start = 12.dp)
+                .alpha(swipeProgress)
         ) {
-            Text(message.message, color = Color.White, style = MaterialTheme.typography.bodyMedium)
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.Reply,
+                contentDescription = null,
+                tint = ZenimePrimary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.width(6.dp))
             Text(
-                formatDmTime(message.createdAt),
+                "Reply",
+                color = ZenimePrimary,
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+            )
+        }
+
+        Row(
+            modifier = Modifier
+                .offset { IntOffset(swipeOffset.value.roundToInt(), 0) }
+                .fillMaxWidth(),
+            horizontalArrangement = if (isOwn) Arrangement.End else Arrangement.Start
+        ) {
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 280.dp)
+                    .clip(
+                        RoundedCornerShape(
+                            topStart = 16.dp,
+                            topEnd = 16.dp,
+                            bottomStart = if (isOwn) 16.dp else 4.dp,
+                            bottomEnd = if (isOwn) 4.dp else 16.dp
+                        )
+                    )
+                    .background(if (isOwn) ZenimePrimary else ZenimeSurfaceDark)
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                if (replyAuthor != null) {
+                    // Kutipan reply: bar aksen di kiri + background gelap.
+                    val replyAccent = Color(0xFFFF7A90)
+                    val quoteAccent = if (isOwn) Color.White else replyAccent
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(IntrinsicSize.Min)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFF0B0B12).copy(alpha = 0.55f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .width(3.dp)
+                                .fillMaxHeight()
+                                .background(quoteAccent)
+                        )
+                        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                            Text(
+                                replyAuthor,
+                                color = quoteAccent,
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                message.replyToMessage.orEmpty(),
+                                color = Color.White.copy(alpha = 0.85f),
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
+                Text(message.message, color = Color.White, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    formatDmTime(message.createdAt),
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 10.sp,
+                    modifier = Modifier.align(Alignment.End)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DmReplyPreviewBar(
+    username: String,
+    message: String,
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(ZenimeSurfaceDark)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .height(30.dp)
+                .background(ZenimePrimary)
+        )
+        Spacer(Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "Membalas $username",
+                color = ZenimePrimary,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                message,
                 color = Color.White.copy(alpha = 0.6f),
-                fontSize = 10.sp,
-                modifier = Modifier.align(Alignment.End)
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        IconButton(onClick = onCancel, modifier = Modifier.size(28.dp)) {
+            Icon(
+                Icons.Filled.Close,
+                contentDescription = "Batal balas",
+                tint = Color.White.copy(alpha = 0.6f),
+                modifier = Modifier.size(16.dp)
             )
         }
     }

@@ -23,8 +23,24 @@ class PrivateChatRepository(
         api.getRecent(orFilter = "(sender_uid.eq.$myUid,recipient_uid.eq.$myUid)")
     }
 
-    suspend fun send(myUid: String, otherUid: String, text: String): Result<PrivateMessage> = runCatching {
-        api.send(PrivateMessageInsert(senderUid = myUid, recipientUid = otherUid, message = text)).first()
+    suspend fun send(
+        myUid: String,
+        otherUid: String,
+        text: String,
+        replyToId: Long? = null,
+        replyToSenderUid: String? = null,
+        replyToMessage: String? = null
+    ): Result<PrivateMessage> = runCatching {
+        api.send(
+            PrivateMessageInsert(
+                senderUid = myUid,
+                recipientUid = otherUid,
+                message = text,
+                replyToId = replyToId,
+                replyToSenderUid = replyToSenderUid,
+                replyToMessage = replyToMessage
+            )
+        ).first()
     }
 
     suspend fun markRead(myUid: String, otherUid: String): Result<Unit> = runCatching {

@@ -19,6 +19,7 @@ import retrofit2.HttpException
 import java.time.Instant
 
 private const val MAX_DM_LENGTH = 1000
+private const val MAX_REPLY_SNAPSHOT_LENGTH = 200
 
 data class ConversationItem(
     val friend: FriendDisplay,
@@ -35,7 +36,9 @@ data class PrivateChatUiState(
     val messages: List<PrivateMessage> = emptyList(),
     val isLoadingMessages: Boolean = false,
     val isSending: Boolean = false,
-    val sendError: String? = null
+    val sendError: String? = null,
+    /** Pesan yang lagi mau dibalas (null = gak lagi reply apa-apa). */
+    val replyTarget: PrivateMessage? = null
 )
 
 /**
@@ -110,7 +113,8 @@ class PrivateChatViewModel(
             selected = friend,
             messages = emptyList(),
             isLoadingMessages = true,
-            sendError = null
+            sendError = null,
+            replyTarget = null
         )
         viewModelScope.launch {
             repository.getConversation(myUid, friend.firebaseUid)
@@ -134,7 +138,20 @@ class PrivateChatViewModel(
     }
 
     fun closeChat() {
-        _uiState.value = _uiState.value.copy(selected = null, messages = emptyList(), sendError = null)
+        _uiState.value = _uiState.value.copy(
+            selected = null,
+            messages = emptyList(),
+            sendError = null,
+            replyTarget = null
+        )
+    }
+
+    fun setReplyTarget(message: PrivateMessage) {
+        _uiState.value = _uiState.value.copy(replyTarget = message)
+    }
+
+    fun clearReplyTarget() {
+        _uiState.value = _uiState.value.copy(replyTarget = null)
     }
 
     fun sendMessage(text: String) {
@@ -145,15 +162,24 @@ class PrivateChatViewModel(
             _uiState.value = _uiState.value.copy(sendError = "Pesan maksimal $MAX_DM_LENGTH karakter")
             return
         }
+        val target = _uiState.value.replyTarget
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSending = true, sendError = null)
-            repository.send(myUid, friend.firebaseUid, trimmed)
+            repository.send(
+                myUid = myUid,
+                otherUid = friend.firebaseUid,
+                text = trimmed,
+                replyToId = target?.id,
+                replyToSenderUid = target?.senderUid,
+                replyToMessage = target?.message?.take(MAX_REPLY_SNAPSHOT_LENGTH)
+            )
                 .onSuccess { msg ->
                     recentMessages = recentMessages + msg
                     val current = _uiState.value
                     val stillOpen = current.selected?.firebaseUid == friend.firebaseUid
                     _uiState.value = current.copy(
                         isSending = false,
+                        replyTarget = if (stillOpen) null else current.replyTarget,
                         messages = if (stillOpen && current.messages.none { it.id == msg.id }) current.messages + msg else current.messages
                     )
                     rebuildConversations()
