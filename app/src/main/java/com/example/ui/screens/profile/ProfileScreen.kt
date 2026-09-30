@@ -127,6 +127,7 @@ fun ProfileScreen(
     onUpgradeClick: () -> Unit,
     onClanClick: () -> Unit,
     onXpLeaderboardClick: () -> Unit,
+    onFriendsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
