@@ -59,13 +59,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -96,6 +102,22 @@ private val RoleViceColor = Color(0xFF9F7AEA)        // ungu
 private val RoleAdmiralColor = Color(0xFFE0912F)     // oranye
 private val RoleOfficerColor = Color(0xFF26A69A)     // teal
 private val RoleMemberColor = Color(0xFF607D8B)      // abu kebiruan
+
+/** Bentuk badge tag clan di header: kotak dengan ujung kanan lancip (panah). */
+private class ArrowTagShape : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val notch = size.height * 0.4f
+        val path = Path().apply {
+            moveTo(0f, 0f)
+            lineTo(size.width - notch, 0f)
+            lineTo(size.width, size.height / 2f)
+            lineTo(size.width - notch, size.height)
+            lineTo(0f, size.height)
+            close()
+        }
+        return Outline.Generic(path)
+    }
+}
 
 @Composable
 fun ClanScreen(
@@ -354,7 +376,7 @@ private fun ClanHeader(
                 )
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    ClanRainbowBadge(text = clan.tag)
+                    ClanTagBadge(text = clan.tag, height = 34.dp, textSize = 14.sp)
                     Spacer(Modifier.width(14.dp))
                     LevelPill(level = clan.level, onInfoClick = onLevelInfoClick)
                 }
@@ -363,12 +385,12 @@ private fun ClanHeader(
             Column(
                 modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
-                    .background(ClanSurface)
-                    .border(1.dp, ClanBorder, RoundedCornerShape(16.dp))
+                    .background(Color(0xFF2E323C))
+                    .border(1.dp, Color(0xFF3F4450), RoundedCornerShape(16.dp))
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("Members", color = ClanMuted, fontSize = 13.sp)
+                Text("Members", color = Color(0xFFA3AAB8), fontSize = 13.sp)
                 Spacer(Modifier.height(2.dp))
                 Text(
                     "${clan.memberCount}/${clan.memberLimit}",
@@ -399,12 +421,39 @@ private fun ClanHeader(
 }
 
 @Composable
+private fun ClanTagBadge(
+    text: String,
+    modifier: Modifier = Modifier,
+    height: Dp = 26.dp,
+    textSize: androidx.compose.ui.unit.TextUnit = 12.sp
+) {
+    Row(
+        modifier = modifier
+            .height(height)
+            .clip(ArrowTagShape())
+            .background(Brush.horizontalGradient(listOf(Color(0xFFFFCA28), Color(0xFFF59E0B))))
+            .padding(start = 10.dp, end = height * 0.6f),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(height * 0.5f).clip(CircleShape).background(Color(0xFFE53935)))
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = text,
+            color = Color.White,
+            fontSize = textSize,
+            fontWeight = FontWeight.ExtraBold,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
 private fun LevelPill(level: Int, onInfoClick: () -> Unit) {
     Box(modifier = Modifier.padding(top = 8.dp, end = 8.dp)) {
         Box(
             modifier = Modifier
                 .clip(RoundedCornerShape(50))
-                .background(Color(0xFF2A2F3A))
+                .background(Color(0xFF3A3E48))
                 .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
             Text("LEVEL $level", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
@@ -415,11 +464,12 @@ private fun LevelPill(level: Int, onInfoClick: () -> Unit) {
                 .offset(x = 8.dp, y = (-8).dp)
                 .size(20.dp)
                 .clip(CircleShape)
-                .background(Color.White)
+                .background(Color(0xFF1B1F27))
+                .border(1.5.dp, Color.White, CircleShape)
                 .clickable(onClick = onInfoClick),
             contentAlignment = Alignment.Center
         ) {
-            Text("?", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
+            Text("?", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
         }
     }
 }
