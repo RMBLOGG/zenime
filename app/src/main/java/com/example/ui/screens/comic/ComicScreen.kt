@@ -12,6 +12,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,6 +38,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
@@ -52,12 +54,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -71,6 +78,7 @@ import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.ShimmerPosterItem
 import com.example.ui.components.ZenimeHeader
+import com.example.ui.components.ZenimeHeaderActionButton
 import com.example.ui.components.ZenimeScreenTitle
 import com.example.ui.theme.CardOutlineBorder
 import com.example.ui.theme.ZenimePrimary
@@ -91,6 +99,8 @@ fun ComicScreen(
     val selectedGenre by viewModel.selectedGenre.collectAsStateWithLifecycle()
 
     val isFiltering = query.isNotBlank() || selectedGenre != null
+    var searchOpen by remember { mutableStateOf(false) }
+    val showSearch = searchOpen || query.isNotBlank()
 
     val gridState = rememberLazyGridState()
     val isScrolled by remember {
@@ -109,52 +119,34 @@ fun ComicScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            ZenimeHeader(
-                isScrolled = isScrolled,
-                title = { ZenimeScreenTitle(title = "Komik") }
-            )
-
-            // Pemilih sumber (Dayynime-v1 / Dayynime-v2)
-            ComicSourceSwitcher(
-                labels = viewModel.sources.map { it.label },
-                selectedIndex = viewModel.sources.indexOf(sourceId),
-                onTabSelected = { viewModel.selectSource(viewModel.sources[it]) }
-            )
-
-            // Search Bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { viewModel.onSearchQueryChange(it) },
-                    placeholder = {
-                        Text("Cari judul komik...", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    },
-                    leadingIcon = {
-                        Icon(imageVector = Icons.Default.Search, contentDescription = "Cari", tint = ZenimePrimary)
-                    },
-                    trailingIcon = {
-                        if (query.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.clearSearch() }) {
-                                Icon(imageVector = Icons.Default.Clear, contentDescription = "Hapus")
-                            }
-                        }
-                    },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                        focusedBorderColor = ZenimePrimary.copy(alpha = 0.7f),
-                        unfocusedBorderColor = Color.Transparent
-                    ),
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("comic_search_input")
+            // Header ringkas: judul + pemilih sumber + tombol cari dalam satu baris.
+            // Tombol cari membuka kolom cari yang menggantikan header.
+            if (showSearch) {
+                ComicSearchBar(
+                    query = query,
+                    onQueryChange = { viewModel.onSearchQueryChange(it) },
+                    onClose = {
+                        viewModel.clearSearch()
+                        searchOpen = false
+                    }
+                )
+            } else {
+                ZenimeHeader(
+                    isScrolled = isScrolled,
+                    title = { ZenimeScreenTitle(title = "Komik") },
+                    actions = {
+                        ComicSourceSwitcher(
+                            labels = viewModel.sources.map { it.label },
+                            selectedIndex = viewModel.sources.indexOf(sourceId),
+                            onTabSelected = { viewModel.selectSource(viewModel.sources[it]) }
+                        )
+                        ZenimeHeaderActionButton(
+                            icon = Icons.Default.Search,
+                            contentDescription = "Cari",
+                            onClick = { searchOpen = true },
+                            testTag = "comic_search_button"
+                        )
+                    }
                 )
             }
 
@@ -236,7 +228,7 @@ fun ComicScreen(
     }
 }
 
-/** Pemilih sumber ala segmented control: satu kapsul, segmen aktif berwarna. */
+/** Pemilih sumber ala segmented control versi ringkas (muat di header). */
 @Composable
 private fun ComicSourceSwitcher(
     labels: List<String>,
@@ -246,13 +238,11 @@ private fun ComicSourceSwitcher(
 ) {
     Row(
         modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, CardOutlineBorder, RoundedCornerShape(14.dp))
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
+            .border(1.dp, CardOutlineBorder, RoundedCornerShape(12.dp))
+            .padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         labels.forEachIndexed { index, label ->
             val selected = selectedIndex == index
@@ -269,15 +259,15 @@ private fun ComicSourceSwitcher(
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(9.dp))
                     .background(bg)
                     .clickable { onTabSelected(index) }
-                    .padding(vertical = 9.dp)
+                    .padding(horizontal = 10.dp, vertical = 7.dp)
             ) {
                 Text(
                     text = label,
-                    style = MaterialTheme.typography.labelLarge.copy(
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontSize = 11.sp,
                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium
                     ),
                     color = fg,
@@ -285,6 +275,73 @@ private fun ComicSourceSwitcher(
                     maxLines = 1
                 )
             }
+        }
+    }
+}
+
+/** Kolom cari yang menggantikan header saat tombol cari ditekan. */
+@Composable
+private fun ComicSearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(54.dp)
+            .padding(horizontal = 16.dp, vertical = 5.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, ZenimePrimary.copy(alpha = 0.6f), RoundedCornerShape(14.dp)),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.Search,
+            contentDescription = null,
+            tint = ZenimePrimary,
+            modifier = Modifier
+                .padding(start = 12.dp)
+                .size(20.dp)
+        )
+        BasicTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            ),
+            cursorBrush = SolidColor(ZenimePrimary),
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 10.dp)
+                .focusRequester(focusRequester)
+                .testTag("comic_search_input"),
+            decorationBox = { inner ->
+                Box(contentAlignment = Alignment.CenterStart) {
+                    if (query.isEmpty()) {
+                        Text(
+                            text = "Cari judul komik...",
+                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    inner()
+                }
+            }
+        )
+        IconButton(onClick = onClose, modifier = Modifier.size(40.dp)) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Tutup pencarian",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp)
+            )
         }
     }
 }
@@ -312,7 +369,7 @@ private fun ComicSectionTabs(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
                     ) { onSelect(tab.id) }
-                    .padding(vertical = 6.dp)
+                    .padding(top = 2.dp, bottom = 4.dp)
             ) {
                 Text(
                     text = tab.label,
@@ -424,6 +481,26 @@ private fun ComicResultGrid(
             EmptyStateView(title = emptyTitle, description = emptyDescription)
         }
         else -> {
+            // Auto load more: muat halaman berikutnya begitu scroll mendekati
+            // ujung daftar. requestedFor nyatet halaman yang sudah diminta, jadi
+            // kalau gagal gak diulang terus-terusan -- user dapat tombol coba lagi.
+            val requestedFor = remember(sectionTitle, state.items.firstOrNull()?.slug) {
+                mutableIntStateOf(-1)
+            }
+            val nearEnd by remember(state.hasNextPage, state.isLoadingMore) {
+                derivedStateOf {
+                    val info = gridState.layoutInfo
+                    val last = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+                    state.hasNextPage && !state.isLoadingMore && last >= info.totalItemsCount - 8
+                }
+            }
+            LaunchedEffect(nearEnd, state.currentPage, state.items.size) {
+                if (nearEnd && requestedFor.intValue != state.currentPage) {
+                    requestedFor.intValue = state.currentPage
+                    onLoadMore()
+                }
+            }
+
             LazyVerticalGrid(
                 state = gridState,
                 columns = GridCells.Fixed(3),
@@ -460,14 +537,42 @@ private fun ComicResultGrid(
                     }
                 }
 
-                // Tombol "Load More" -- span 3 kolom penuh di baris terakhir.
+                // Footer: spinner saat memuat, tombol coba lagi kalau auto-load gagal.
                 if (state.hasNextPage) {
-                    item(span = { GridItemSpan(maxLineSpan) }) {
-                        LoadMoreButton(isLoading = state.isLoadingMore, onClick = onLoadMore)
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "__footer") {
+                        LoadMoreFooter(
+                            isLoading = state.isLoadingMore,
+                            showRetry = !state.isLoadingMore && requestedFor.intValue == state.currentPage,
+                            onRetry = onLoadMore
+                        )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun LoadMoreFooter(
+    isLoading: Boolean,
+    showRetry: Boolean,
+    onRetry: () -> Unit
+) {
+    when {
+        isLoading -> Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator(
+                color = ZenimePrimary,
+                strokeWidth = 2.dp,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+        showRetry -> LoadMoreButton(isLoading = false, onClick = onRetry)
+        else -> Spacer(modifier = Modifier.height(48.dp))
     }
 }
 
