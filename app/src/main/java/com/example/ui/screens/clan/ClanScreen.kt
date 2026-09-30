@@ -1,33 +1,45 @@
 package com.example.ui.screens.clan
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Diamond
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Verified
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,45 +47,75 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.ClanDonationEntry
 import com.example.data.model.ClanMemberDisplay
 import com.example.data.model.ClanRoles
-import com.example.ui.components.ClanRainbowBadge
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
 import com.example.ui.components.GeneratedAvatar
-import com.example.ui.components.LevelBadge
-import com.example.ui.theme.ZenimePrimary
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val LeaderBadgeColor = Color(0xFFFFC107)      // kuning, sama kayak referensi
-private val ViceLeaderBadgeColor = Color(0xFFFF7043)   // oranye
-private val AdmiralBadgeColor = Color(0xFF1E88E5)      // biru
-private val CoLeaderBadgeColor = Color(0xFF9C6BE0)     // ungu (Officer)
-private val MemberBadgeColor = Color(0xFF3A404C)       // abu gelap
-private val ClanHeaderGradientTop = Color(0xFF3B2E73)   // ungu -- nyontek referensi
-private val ClanHeaderGradientBottom = Color(0xFF1C1533)
+// --- Palet layar Clan (dibikin mirip referensi: gelap pekat + aksen emas) ---
+private val ClanBg = Color(0xFF0B0E14)
+private val ClanSurface = Color(0xFF151A24)
+private val ClanBorder = Color(0xFF2A3140)
+private val ClanMuted = Color(0xFF8B95A7)
+private val ClanGold = Color(0xFFFFC107)
+private val ClanGreen = Color(0xFF2F7D62)
+private val GemBlue = Color(0xFF4FC3F7)
+private val VerifiedBlue = Color(0xFF3897F0)
 
-@OptIn(ExperimentalMaterial3Api::class)
+private val RoleLeaderColor = Color(0xFFFFC107)      // kuning
+private val RoleViceColor = Color(0xFF9F7AEA)        // ungu
+private val RoleAdmiralColor = Color(0xFFE0912F)     // oranye
+private val RoleOfficerColor = Color(0xFF26A69A)     // teal
+private val RoleMemberColor = Color(0xFF607D8B)      // abu kebiruan
+
+/** Bentuk badge tag clan: kotak dengan ujung kanan lancip (panah), kayak referensi. */
+private class ArrowTagShape : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val notch = size.height * 0.4f
+        val path = Path().apply {
+            moveTo(0f, 0f)
+            lineTo(size.width - notch, 0f)
+            lineTo(size.width, size.height / 2f)
+            lineTo(size.width - notch, size.height)
+            lineTo(0f, size.height)
+            close()
+        }
+        return Outline.Generic(path)
+    }
+}
+
 @Composable
 fun ClanScreen(
     viewModel: ClanViewModel,
@@ -84,49 +126,49 @@ fun ClanScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     // Setelah berhasil keluar clan, gak ada lagi yang bisa ditampilin di screen ini -- balik ke layar sebelumnya.
-    androidx.compose.runtime.LaunchedEffect(uiState.leftClan) {
+    LaunchedEffect(uiState.leftClan) {
         if (uiState.leftClan) onBackClick()
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = { Text("Lihat Clan", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali")
-                    }
-                },
-                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
-            )
-        }
-    ) { padding ->
+    Scaffold(containerColor = ClanBg) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            when {
-                uiState.isLoading -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            Column(modifier = Modifier.fillMaxSize()) {
+                ClanTopBar(
+                    onBackClick = onBackClick,
+                    onTutorialClick = { viewModel.onTutorialToggle(true) }
+                )
+                Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    when {
+                        uiState.isLoading -> {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                CircularProgressIndicator(color = ClanGold)
+                            }
+                        }
+                        uiState.error != null -> {
+                            ErrorStateView(message = uiState.error!!, onRetry = viewModel::retry)
+                        }
+                        uiState.clan != null -> {
+                            ClanContent(
+                                uiState = uiState,
+                                onTabSelected = viewModel::onTabSelected,
+                                onSearchQueryChange = viewModel::onSearchQueryChange,
+                                onRoleFilterChange = viewModel::onRoleFilterChange,
+                                onToggleSort = viewModel::onToggleSort,
+                                onRequestJoinClick = viewModel::requestJoin,
+                                onManageClanClick = { onManageClanClick(uiState.clan!!.id) },
+                                onDonateClick = { viewModel.onDonateDialogToggle(true) },
+                                onLeaveClick = { viewModel.onLeaveDialogToggle(true) },
+                                onLevelInfoClick = { viewModel.onTutorialToggle(true) },
+                                onMemberClick = onMemberClick,
+                                onMemberActionClick = viewModel::onMemberActionClick
+                            )
+                        }
                     }
                 }
-                uiState.error != null -> {
-                    ErrorStateView(message = uiState.error!!, onRetry = viewModel::retry)
-                }
-                uiState.clan != null -> {
-                    ClanContent(
-                        uiState = uiState,
-                        onTabSelected = viewModel::onTabSelected,
-                        onSearchQueryChange = viewModel::onSearchQueryChange,
-                        onRequestJoinClick = viewModel::requestJoin,
-                        onManageClanClick = { onManageClanClick(uiState.clan!!.id) },
-                        onDonateClick = { viewModel.onDonateDialogToggle(true) },
-                        onLeaveClick = { viewModel.onLeaveDialogToggle(true) },
-                        onMemberClick = onMemberClick,
-                        onMemberActionClick = viewModel::onMemberActionClick
-                    )
-                }
+            }
+
+            if (uiState.showTutorial) {
+                ClanTutorialDialog(onDismiss = { viewModel.onTutorialToggle(false) })
             }
 
             if (uiState.showDonateDialog) {
@@ -165,458 +207,550 @@ fun ClanScreen(
 }
 
 @Composable
+private fun ClanTopBar(onBackClick: () -> Unit, onTutorialClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onBackClick) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Kembali", tint = Color.White)
+        }
+        Spacer(Modifier.weight(1f))
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(ClanSurface)
+                .border(1.dp, Color(0xFF4A4330), RoundedCornerShape(50))
+                .clickable(onClick = onTutorialClick)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Filled.HelpOutline, contentDescription = null, tint = ClanGold, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Tutorial", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+        }
+    }
+}
+
+@Composable
 private fun ClanContent(
     uiState: ClanUiState,
     onTabSelected: (ClanTab) -> Unit,
     onSearchQueryChange: (String) -> Unit,
+    onRoleFilterChange: (String?) -> Unit,
+    onToggleSort: () -> Unit,
     onRequestJoinClick: () -> Unit,
     onManageClanClick: () -> Unit,
     onDonateClick: () -> Unit,
     onLeaveClick: () -> Unit,
-    onMemberClick: (uid: String) -> Unit = {},
-    onMemberActionClick: (ClanMemberDisplay) -> Unit = {}
+    onLevelInfoClick: () -> Unit,
+    onMemberClick: (uid: String) -> Unit,
+    onMemberActionClick: (ClanMemberDisplay) -> Unit
 ) {
     val clan = uiState.clan ?: return
+    val isMembersTab = uiState.selectedTab == ClanTab.MEMBERS
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-            Spacer(Modifier.height(8.dp))
-            ClanHeaderCard(
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp)
+    ) {
+        item {
+            Spacer(Modifier.height(4.dp))
+            ClanHeader(
                 uiState = uiState,
                 onRequestJoinClick = onRequestJoinClick,
                 onManageClanClick = onManageClanClick,
                 onDonateClick = onDonateClick,
-                onLeaveClick = onLeaveClick
+                onLeaveClick = onLeaveClick,
+                onLevelInfoClick = onLevelInfoClick
             )
-
-            Spacer(Modifier.height(16.dp))
-
-            ClanTabRow(
-                selectedTab = uiState.selectedTab,
-                memberCount = clan.memberCount,
-                donorCountToday = uiState.donorCountToday,
-                onTabSelected = onTabSelected
-            )
-
-            Spacer(Modifier.height(12.dp))
-
-            if (uiState.selectedTab == ClanTab.MEMBERS) {
-                MemberSearchField(
-                    query = uiState.searchQuery,
-                    onQueryChange = onSearchQueryChange
-                )
-                Spacer(Modifier.height(12.dp))
-            } else {
-                TodayDonationSummary(uiState)
+            Spacer(Modifier.height(20.dp))
+            ClanTabs(selected = uiState.selectedTab, onSelected = onTabSelected)
+            Spacer(Modifier.height(14.dp))
+            if (!isMembersTab) {
+                DonationSummaryPill(uiState)
                 Spacer(Modifier.height(12.dp))
             }
+            SearchAndFilterRow(
+                query = uiState.searchQuery,
+                onQueryChange = onSearchQueryChange,
+                showRoleFilter = isMembersTab,
+                roleFilter = uiState.roleFilter,
+                onRoleFilterChange = onRoleFilterChange,
+                sortAscending = uiState.sortAscending,
+                onToggleSort = onToggleSort
+            )
+            Spacer(Modifier.height(8.dp))
         }
 
-        when (uiState.selectedTab) {
-            ClanTab.MEMBERS -> {
-                if (uiState.filteredMembers.isEmpty()) {
+        if (isMembersTab) {
+            val list = uiState.filteredMembers
+            if (list.isEmpty()) {
+                item {
                     EmptyStateView(
-                        title = "Belum Ada Member",
-                        description = "Member clan bakal muncul di sini."
+                        title = "Member Tidak Ditemukan",
+                        description = "Coba ganti kata kunci atau filter role."
                     )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                            horizontal = 16.dp,
-                            vertical = 4.dp
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        items(uiState.filteredMembers, key = { it.firebaseUid }) { member ->
-                            MemberListItem(
-                                member = member,
-                                clanTag = clan.tag,
-                                level = uiState.memberLevels[member.firebaseUid],
-                                isPremium = uiState.premiumUids.contains(member.firebaseUid),
-                                globalRole = uiState.rolesByUid[member.firebaseUid],
-                                globalRoleBadgeColor = uiState.roleBadgeColorsByUid[member.firebaseUid],
-                                onClick = { onMemberClick(member.firebaseUid) },
-                                onActionClick = if (
-                                    member.firebaseUid != uiState.myUid &&
-                                    ClanRoles.canActOn(uiState.myRole, member.role)
-                                ) {
-                                    { onMemberActionClick(member) }
-                                } else null
-                            )
-                        }
-                        item { Spacer(Modifier.height(16.dp)) }
-                    }
+                }
+            } else {
+                items(list, key = { it.firebaseUid }) { member ->
+                    MemberRow(
+                        member = member,
+                        clanTag = clan.tag,
+                        level = uiState.memberLevels[member.firebaseUid],
+                        isPremium = uiState.premiumUids.contains(member.firebaseUid),
+                        globalRole = uiState.rolesByUid[member.firebaseUid],
+                        globalRoleBadgeColor = uiState.roleBadgeColorsByUid[member.firebaseUid],
+                        onClick = { onMemberClick(member.firebaseUid) },
+                        onActionClick = if (
+                            member.firebaseUid != uiState.myUid &&
+                            ClanRoles.canActOn(uiState.myRole, member.role)
+                        ) {
+                            { onMemberActionClick(member) }
+                        } else null
+                    )
                 }
             }
-            ClanTab.DONATION_TODAY -> {
-                if (uiState.donationsToday.isEmpty()) {
+        } else {
+            val list = uiState.filteredDonations
+            if (list.isEmpty()) {
+                item {
                     EmptyStateView(
                         title = "Belum Ada Donasi Hari Ini",
                         description = "Member yang donasi ZCoin hari ini bakal muncul di sini."
                     )
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                            horizontal = 16.dp,
-                            vertical = 4.dp
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        itemsIndexed(uiState.donationsToday) { index, entry ->
-                            DonationListItem(rank = index + 1, entry = entry)
-                        }
-                        item { Spacer(Modifier.height(16.dp)) }
-                    }
+                }
+            } else {
+                items(list, key = { it.firebaseUid }) { entry ->
+                    val rank = uiState.donationsToday.indexOfFirst { it.firebaseUid == entry.firebaseUid } + 1
+                    val member = uiState.members.firstOrNull { it.firebaseUid == entry.firebaseUid }
+                    DonationRow(rank = rank, entry = entry, member = member)
                 }
             }
         }
     }
 }
 
+// ---------------------------------------------------------------------------
+// Header
+// ---------------------------------------------------------------------------
+
 @Composable
-private fun ClanHeaderCard(
+private fun ClanHeader(
+    uiState: ClanUiState,
+    onRequestJoinClick: () -> Unit,
+    onManageClanClick: () -> Unit,
+    onDonateClick: () -> Unit,
+    onLeaveClick: () -> Unit,
+    onLevelInfoClick: () -> Unit
+) {
+    val clan = uiState.clan ?: return
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = clan.name.uppercase(),
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ClanTagBadge(text = clan.tag, height = 34.dp, textSize = 14.sp)
+                    Spacer(Modifier.width(14.dp))
+                    LevelPill(level = clan.level, onInfoClick = onLevelInfoClick)
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(ClanSurface)
+                    .border(1.dp, ClanBorder, RoundedCornerShape(16.dp))
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Members", color = ClanMuted, fontSize = 13.sp)
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    "${clan.memberCount}/${clan.memberLimit}",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        Spacer(Modifier.height(18.dp))
+        XpProgress(level = clan.level, totalXp = clan.totalXp)
+        Spacer(Modifier.height(22.dp))
+
+        ClanActions(
+            uiState = uiState,
+            onRequestJoinClick = onRequestJoinClick,
+            onManageClanClick = onManageClanClick,
+            onDonateClick = onDonateClick,
+            onLeaveClick = onLeaveClick
+        )
+
+        uiState.joinFeedback?.let { feedback ->
+            Spacer(Modifier.height(8.dp))
+            Text(feedback, color = ClanMuted, fontSize = 12.sp)
+        }
+    }
+}
+
+@Composable
+private fun ClanTagBadge(
+    text: String,
+    modifier: Modifier = Modifier,
+    height: Dp = 26.dp,
+    textSize: androidx.compose.ui.unit.TextUnit = 12.sp
+) {
+    Row(
+        modifier = modifier
+            .height(height)
+            .clip(ArrowTagShape())
+            .background(Brush.horizontalGradient(listOf(Color(0xFFFFCA28), Color(0xFFF59E0B))))
+            .padding(start = 10.dp, end = height * 0.6f),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(height * 0.5f).clip(CircleShape).background(Color(0xFFE53935)))
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = text,
+            color = Color.White,
+            fontSize = textSize,
+            fontWeight = FontWeight.ExtraBold,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun LevelPill(level: Int, onInfoClick: () -> Unit) {
+    Box(modifier = Modifier.padding(top = 8.dp, end = 8.dp)) {
+        Box(
+            modifier = Modifier
+                .clip(RoundedCornerShape(50))
+                .background(Color(0xFF2A2F3A))
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            Text("LEVEL $level", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        }
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .offset(x = 8.dp, y = (-8).dp)
+                .size(20.dp)
+                .clip(CircleShape)
+                .background(Color.White)
+                .clickable(onClick = onInfoClick),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("?", color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
+        }
+    }
+}
+
+/**
+ * Batas XP per level clan.
+ *
+ * PERKIRAAN -- rumus asli level clan ada di server (fungsi donate_to_clan),
+ * gak ada di project Android. Rumus di bawah cuma nyocokin data yang ada
+ * (level 19 ~ 176K total XP). Kalau rumus server beda, ganti isi fungsi ini aja.
+ */
+private fun clanXpFloor(level: Int): Long = 500L * level * (level - 1)
+
+@Composable
+private fun XpProgress(level: Int, totalXp: Long) {
+    val floor = clanXpFloor(level)
+    val ceil = clanXpFloor(level + 1)
+    val current = (totalXp - floor).coerceAtLeast(0)
+    val needed = (ceil - floor).coerceAtLeast(1)
+    val progress = (current.toFloat() / needed.toFloat()).coerceIn(0f, 1f)
+
+    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(5.dp)
+                .clip(RoundedCornerShape(50))
+                .background(Color(0xFF2A303C))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(progress)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0xFFEDEDED))
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            "${formatCompactId(current)} / ${formatCompactId(needed)} XP",
+            color = Color(0xFFD5DAE3),
+            fontSize = 13.sp
+        )
+    }
+}
+
+@Composable
+private fun ClanActions(
     uiState: ClanUiState,
     onRequestJoinClick: () -> Unit,
     onManageClanClick: () -> Unit,
     onDonateClick: () -> Unit,
     onLeaveClick: () -> Unit
 ) {
-    val clan = uiState.clan ?: return
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(
-                Brush.verticalGradient(
-                    listOf(ClanHeaderGradientTop, ClanHeaderGradientBottom)
-                )
-            )
-            .padding(20.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            ClanRainbowBadge(text = clan.tag)
-            Spacer(Modifier.width(8.dp))
-            Text(
-                text = clan.name,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.ExtraBold),
-                color = Color.White,
-                modifier = Modifier.weight(1f, fill = false)
-            )
-        }
-
-        uiState.leader?.let { leader ->
-            Spacer(Modifier.height(10.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                MemberAvatar(member = leader, size = 22.dp)
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = leader.username,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = Color.White.copy(alpha = 0.75f)
-                )
-            }
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            ClanStatBox(value = clan.level.toString(), label = "Level", modifier = Modifier.weight(1f))
-            ClanStatBox(value = formatCompact(clan.totalXp), label = "Total XP", modifier = Modifier.weight(1f))
-            ClanStatBox(value = clan.memberCount.toString(), label = "Members", modifier = Modifier.weight(1f))
-        }
-
-        Spacer(Modifier.height(16.dp))
-
-        ClanCtaButton(
-            cta = uiState.cta,
-            isSubmitting = uiState.isSubmittingJoin,
-            onRequestJoinClick = onRequestJoinClick,
-            onManageClanClick = onManageClanClick
-        )
-
-        if (uiState.canDonate) {
-            Spacer(Modifier.height(8.dp))
-            androidx.compose.material3.OutlinedButton(
-                onClick = onDonateClick,
-                modifier = Modifier.fillMaxWidth().height(46.dp),
-                shape = RoundedCornerShape(50),
-                border = androidx.compose.foundation.BorderStroke(1.5.dp, Color.White.copy(alpha = 0.35f))
-            ) {
-                Icon(Icons.Filled.Diamond, contentDescription = null, tint = ZenimePrimary, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(6.dp))
-                Text("Donasi ZCoin", fontWeight = FontWeight.Bold, color = Color.White)
-            }
-        }
-
-        if (uiState.canLeave) {
-            Spacer(Modifier.height(8.dp))
-            androidx.compose.material3.TextButton(
-                onClick = onLeaveClick,
-                modifier = Modifier.fillMaxWidth().height(40.dp)
-            ) {
-                Text("Keluar Clan", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
-            }
-        }
-
-        uiState.joinFeedback?.let { feedback ->
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = feedback,
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.75f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun ClanCtaButton(
-    cta: ClanMembershipCta,
-    isSubmitting: Boolean,
-    onRequestJoinClick: () -> Unit,
-    onManageClanClick: () -> Unit
-) {
-    when (cta) {
+    val buttonShape = RoundedCornerShape(16.dp)
+    when (uiState.cta) {
         ClanMembershipCta.REQUEST_JOIN -> {
             Button(
                 onClick = onRequestJoinClick,
-                enabled = !isSubmitting,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = LeaderBadgeColor,
-                    contentColor = Color.Black
-                )
+                enabled = !uiState.isSubmittingJoin,
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = buttonShape,
+                colors = ButtonDefaults.buttonColors(containerColor = ClanGreen, contentColor = Color.White)
             ) {
-                if (isSubmitting) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.Black, strokeWidth = 2.dp)
+                if (uiState.isSubmittingJoin) {
+                    CircularProgressIndicator(Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
                 } else {
-                    Text("Request Join", fontWeight = FontWeight.Bold)
+                    Icon(Icons.Filled.PersonAdd, contentDescription = null, modifier = Modifier.size(22.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text("Join Clan", fontWeight = FontWeight.Bold, fontSize = 17.sp)
                 }
             }
         }
-        ClanMembershipCta.PENDING -> {
-            Button(
-                onClick = {},
-                enabled = false,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(
-                    disabledContainerColor = Color.White.copy(alpha = 0.1f),
-                    disabledContentColor = Color.White.copy(alpha = 0.7f)
-                )
-            ) {
-                Text("Menunggu Persetujuan", fontWeight = FontWeight.Bold)
+        ClanMembershipCta.PENDING -> DisabledActionButton("Menunggu Persetujuan")
+        ClanMembershipCta.BLOCKED_OTHER_CLAN -> DisabledActionButton("Kamu Sudah Gabung Clan Lain")
+        else -> {
+            // Sudah jadi member (role apa pun): Donasi + (kalau punya izin) Kelola Clan.
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = onDonateClick,
+                    modifier = Modifier.weight(1f).height(56.dp),
+                    shape = buttonShape,
+                    colors = ButtonDefaults.buttonColors(containerColor = ClanGreen, contentColor = Color.White)
+                ) {
+                    Icon(Icons.Filled.Diamond, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Donasi ZCoin", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                }
+                if (ClanRoles.canManageClan(uiState.myRole)) {
+                    Button(
+                        onClick = onManageClanClick,
+                        modifier = Modifier.weight(1f).height(56.dp),
+                        shape = buttonShape,
+                        colors = ButtonDefaults.buttonColors(containerColor = ClanGold, contentColor = Color.Black)
+                    ) {
+                        Text("Kelola Clan", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    }
+                }
             }
-        }
-        ClanMembershipCta.BLOCKED_OTHER_CLAN -> {
-            Button(
-                onClick = {},
-                enabled = false,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(
-                    disabledContainerColor = Color.White.copy(alpha = 0.1f),
-                    disabledContentColor = Color.White.copy(alpha = 0.7f)
-                )
-            ) {
-                Text("Kamu Sudah Gabung Clan Lain", fontWeight = FontWeight.Bold)
-            }
-        }
-        ClanMembershipCta.IS_MEMBER -> {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = "Kamu member clan ini",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = Color.White.copy(alpha = 0.75f)
-                )
-            }
-        }
-        ClanMembershipCta.IS_OFFICER -> {
-            // Officer: tombol "Kelola Clan" juga muncul, tapi ManageClanScreen
-            // nyembunyiin tab Settings & aksi kick/role buat non-leader.
-            Button(
-                onClick = onManageClanClick,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(containerColor = CoLeaderBadgeColor)
-            ) {
-                Text("Kelola Clan (Officer)", fontWeight = FontWeight.Bold, color = Color.White)
-            }
-        }
-        ClanMembershipCta.IS_ADMIRAL, ClanMembershipCta.IS_VICE_LEADER -> {
-            val isVice = cta == ClanMembershipCta.IS_VICE_LEADER
-            Button(
-                onClick = onManageClanClick,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isVice) ViceLeaderBadgeColor else AdmiralBadgeColor
-                )
-            ) {
-                Text(
-                    if (isVice) "Kelola Clan (Vice Leader)" else "Kelola Clan (Admiral)",
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-            }
-        }
-        ClanMembershipCta.IS_LEADER -> {
-            Button(
-                onClick = onManageClanClick,
-                modifier = Modifier.fillMaxWidth().height(48.dp),
-                shape = RoundedCornerShape(50),
-                colors = ButtonDefaults.buttonColors(containerColor = ZenimePrimary)
-            ) {
-                Text("Kelola Clan", fontWeight = FontWeight.Bold, color = Color.White)
+            if (uiState.canLeave) {
+                androidx.compose.material3.TextButton(
+                    onClick = onLeaveClick,
+                    modifier = Modifier.fillMaxWidth().height(44.dp)
+                ) {
+                    Text("Keluar Clan", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun ClanStatBox(value: String, label: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color.Black.copy(alpha = 0.28f))
-            .padding(vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+private fun DisabledActionButton(text: String) {
+    Button(
+        onClick = {},
+        enabled = false,
+        modifier = Modifier.fillMaxWidth().height(56.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = ButtonDefaults.buttonColors(
+            disabledContainerColor = ClanSurface,
+            disabledContentColor = ClanMuted
+        )
+    ) {
+        Text(text, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tab, search, filter
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun ClanTabs(selected: ClanTab, onSelected: (ClanTab) -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        listOf(ClanTab.MEMBERS to "MEMBERS", ClanTab.DONATION_TODAY to "DONASI").forEach { (tab, label) ->
+            val isSelected = tab == selected
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { onSelected(tab) }
+                    .padding(top = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = label,
+                    color = if (isSelected) Color.White else ClanMuted,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                )
+                Spacer(Modifier.height(10.dp))
+                Box(
+                    modifier = Modifier
+                        .width(42.dp)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp))
+                        .background(if (isSelected) ClanGold else Color.Transparent)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DonationSummaryPill(uiState: ClanUiState) {
+    val memberCount = uiState.clan?.memberCount ?: uiState.members.size
+    val total = "%,d".format(Locale("id", "ID"), uiState.totalDonatedToday)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(50))
+            .border(1.dp, ClanBorder, RoundedCornerShape(50))
+            .padding(horizontal = 18.dp, vertical = 12.dp)
     ) {
         Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = Color.White
-        )
-        Spacer(Modifier.height(2.dp))
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = Color.White.copy(alpha = 0.65f)
+            "Hari ini · ${uiState.donorCountToday} dari $memberCount member donasi · $total ZCoin",
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
 
+private val RoleFilterOptions = listOf(
+    ClanRoles.LEADER,
+    ClanRoles.VICE_LEADER,
+    ClanRoles.ADMIRAL,
+    ClanRoles.OFFICER,
+    ClanRoles.MEMBER
+)
+
 @Composable
-private fun ClanTabRow(
-    selectedTab: ClanTab,
-    memberCount: Int,
-    donorCountToday: Int,
-    onTabSelected: (ClanTab) -> Unit
+private fun SearchAndFilterRow(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    showRoleFilter: Boolean,
+    roleFilter: String?,
+    onRoleFilterChange: (String?) -> Unit,
+    sortAscending: Boolean,
+    onToggleSort: () -> Unit
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        ClanTabChip(
-            text = "Members ($memberCount)",
-            selected = selectedTab == ClanTab.MEMBERS,
-            modifier = Modifier.weight(1f)
-        ) { onTabSelected(ClanTab.MEMBERS) }
-
-        ClanTabChip(
-            text = "Donasi Hari Ini ($donorCountToday)",
-            selected = selectedTab == ClanTab.DONATION_TODAY,
-            modifier = Modifier.weight(1f)
-        ) { onTabSelected(ClanTab.DONATION_TODAY) }
-    }
-}
-
-@Composable
-private fun ClanTabChip(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(50))
-            .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(vertical = 10.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-            color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Composable
-private fun MemberSearchField(query: String, onQueryChange: (String) -> Unit) {
-    OutlinedTextField(
-        value = query,
-        onValueChange = onQueryChange,
         modifier = Modifier.fillMaxWidth(),
-        placeholder = { Text("Cari member (nama atau ID)") },
-        leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-        singleLine = true,
-        shape = RoundedCornerShape(50),
-        colors = OutlinedTextFieldDefaults.colors(
-            unfocusedBorderColor = MaterialTheme.colorScheme.outline,
-            focusedBorderColor = MaterialTheme.colorScheme.primary
-        )
-    )
-}
-
-@Composable
-private fun TodayDonationSummary(uiState: ClanUiState) {
-    val today = remember(uiState.donationsToday) {
-        DateTimeFormatter.ofPattern("yyyy-MM-dd").format(java.time.LocalDate.now())
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(14.dp)
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text(
-            text = "HARI INI · $today",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            modifier = Modifier.weight(1f),
+            singleLine = true,
+            shape = RoundedCornerShape(50),
+            placeholder = { Text("Cari member (nama atau ID)", color = ClanMuted, fontSize = 14.sp, maxLines = 1) },
+            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = ClanMuted) },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                cursorColor = ClanGold,
+                focusedBorderColor = ClanGold,
+                unfocusedBorderColor = ClanBorder,
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent
+            )
         )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = buildString {
-                append(uiState.donorCountToday)
-                append(" dari ")
-                append(uiState.clan?.memberCount ?: 0)
-                append(" member donasi = ")
-                append(formatCompact(uiState.totalDonatedToday))
-                append(" ZCoin terkumpul")
-            },
-            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+
+        if (showRoleFilter) {
+            var expanded by remember { mutableStateOf(false) }
+            Box {
+                Row(
+                    modifier = Modifier
+                        .height(56.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(ClanSurface)
+                        .border(1.dp, ClanBorder, RoundedCornerShape(16.dp))
+                        .clickable { expanded = true }
+                        .padding(start = 14.dp, end = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = roleFilter?.let { ClanRoles.label(it).lowercase().replaceFirstChar { c -> c.uppercase() } } ?: "Role",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp,
+                        maxLines = 1
+                    )
+                    Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = Color.White)
+                }
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Semua role") },
+                        onClick = { onRoleFilterChange(null); expanded = false }
+                    )
+                    RoleFilterOptions.forEach { role ->
+                        DropdownMenuItem(
+                            text = { Text(ClanRoles.label(role)) },
+                            onClick = { onRoleFilterChange(role); expanded = false }
+                        )
+                    }
+                }
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(ClanSurface)
+                .border(1.dp, ClanBorder, RoundedCornerShape(16.dp))
+                .clickable(onClick = onToggleSort),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = if (sortAscending) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                contentDescription = "Urutkan",
+                tint = Color.White
+            )
+        }
     }
 }
 
+// ---------------------------------------------------------------------------
+// Baris member & donasi
+// ---------------------------------------------------------------------------
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun MemberListItem(
+private fun MemberRow(
     member: ClanMemberDisplay,
     clanTag: String,
     level: Int?,
-    isPremium: Boolean = false,
-    globalRole: String? = null,
-    globalRoleBadgeColor: String? = null,
-    onClick: () -> Unit = {},
-    onActionClick: (() -> Unit)? = null
+    isPremium: Boolean,
+    globalRole: String?,
+    globalRoleBadgeColor: String?,
+    onClick: () -> Unit,
+    onActionClick: (() -> Unit)?
 ) {
-    // Sama kayak Chat Global: role (developer/admin/moderator) menang atas
-    // Premium -- satu centang aja, biar gak dobel.
+    // Sama kayak Chat Global: role global (developer/admin/moderator) menang atas Premium -- satu centang aja.
     val roleCheckColor: Color? = globalRole?.let { role ->
         val hex = globalRoleBadgeColor ?: when (role) {
             "developer" -> "#E53935"
@@ -626,173 +760,192 @@ private fun MemberListItem(
         }
         hex?.let { runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull() }
     }
-    val checkColor: Color? = roleCheckColor ?: if (isPremium) Color(0xFF3897F0) else null
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(onClick = onClick)
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            MemberAvatar(member = member, size = 44.dp)
-            Spacer(Modifier.height(6.dp))
-            RoleBadge(role = member.role)
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            // Urutan: username -> #id -> centang
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = member.username,
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                if (member.userNumber != null) {
-                    Text(
-                        text = "#${member.userNumber}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                        maxLines = 1,
-                        modifier = Modifier.padding(start = 4.dp)
-                    )
-                }
-                if (checkColor != null) {
-                    Icon(
-                        imageVector = Icons.Filled.Verified,
-                        contentDescription = globalRole ?: "Premium",
-                        tint = checkColor,
-                        modifier = Modifier
-                            .padding(start = 3.dp)
-                            .size(17.dp)
-                    )
-                }
-            }
-            Spacer(Modifier.height(5.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                ClanRainbowBadge(text = clanTag, modifier = Modifier.padding(end = 6.dp))
-                if (level != null) {
-                    LevelBadge(level = level)
-                }
-            }
-            Spacer(Modifier.height(5.dp))
-            Text(
-                text = "Gabung ${formatRelativeDate(member.joinedAt)}",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Spacer(Modifier.width(8.dp))
-        ContributionChip(amount = member.totalContribution)
-        if (onActionClick != null) {
-            IconButton(onClick = onActionClick, modifier = Modifier.size(36.dp)) {
-                Icon(
-                    Icons.Filled.MoreVert,
-                    contentDescription = "Kelola member",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
+    val checkColor: Color? = roleCheckColor ?: if (isPremium) VerifiedBlue else null
 
-@Composable
-private fun DonationListItem(rank: Int, entry: ClanDonationEntry) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = "#$rank",
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.width(36.dp)
-        )
-        DonationAvatar(entry = entry, size = 44.dp)
-        Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = entry.username,
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(Modifier.height(4.dp))
-            RoleBadge(role = entry.role)
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = "${entry.donationCountToday}x donasi hari ini",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Spacer(Modifier.width(8.dp))
-        ContributionChip(amount = entry.amountToday)
-    }
-}
-
-@Composable
-private fun RoleBadge(role: String) {
-    val label = ClanRoles.label(role)
-    val color = when (role) {
-        ClanRoles.LEADER -> LeaderBadgeColor
-        ClanRoles.VICE_LEADER -> ViceLeaderBadgeColor
-        ClanRoles.ADMIRAL -> AdmiralBadgeColor
-        ClanRoles.OFFICER -> CoLeaderBadgeColor
-        else -> MemberBadgeColor
-    }
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .background(color)
-            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .fillMaxWidth()
+            .combinedClickable(onClick = onClick, onLongClick = onActionClick)
+            .padding(vertical = 10.dp)
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 10.sp),
-            color = if (role == "leader") Color.Black else Color.White
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                MemberAvatar(member = member, size = 50.dp)
+                RoleBadge(role = member.role, modifier = Modifier.offset(y = (-9).dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = member.username,
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (member.userNumber != null) {
+                        Text(
+                            "#${member.userNumber}",
+                            color = ClanMuted,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            modifier = Modifier.padding(start = 5.dp)
+                        )
+                    }
+                    if (checkColor != null) {
+                        Icon(
+                            Icons.Filled.Verified,
+                            contentDescription = globalRole ?: "Premium",
+                            tint = checkColor,
+                            modifier = Modifier.padding(start = 4.dp).size(17.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.height(7.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ClanTagBadge(text = clanTag, height = 24.dp, textSize = 11.sp)
+                    if (level != null) {
+                        Spacer(Modifier.width(8.dp))
+                        LevelChip(level = level)
+                    }
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            GemPill(amount = member.totalContribution)
+        }
+
+        if (onActionClick != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .size(26.dp)
+                    .clip(CircleShape)
+                    .clickable(onClick = onActionClick),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Filled.MoreVert, contentDescription = "Kelola member", tint = ClanMuted, modifier = Modifier.size(18.dp))
+            }
+        }
     }
 }
 
 @Composable
-private fun ContributionChip(amount: Long) {
-    Column(
+private fun LevelChip(level: Int) {
+    Row(
         modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .clip(RoundedCornerShape(50))
+            .background(Color(0xFF1B2627))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(
-            imageVector = Icons.Default.Diamond,
-            contentDescription = null,
-            tint = ZenimePrimary,
-            modifier = Modifier.size(14.dp)
-        )
-        Spacer(Modifier.height(2.dp))
+        Box(Modifier.size(12.dp).clip(CircleShape).background(Color(0xFF3FB6A8)))
+        Spacer(Modifier.width(6.dp))
         Text(
-            text = formatCompact(amount),
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurface
+            "Lvl. ${"%,d".format(Locale("id", "ID"), level)}",
+            color = Color(0xFF9DB9B4),
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1
         )
     }
 }
 
 @Composable
-private fun MemberAvatar(member: ClanMemberDisplay, size: androidx.compose.ui.unit.Dp) {
+private fun GemPill(amount: Long) {
+    Row(
+        modifier = Modifier
+            .widthIn(min = 84.dp)
+            .clip(RoundedCornerShape(50))
+            .background(Color(0xFF171D29))
+            .border(1.dp, Color(0xFF2B3345), RoundedCornerShape(50))
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Icon(Icons.Filled.Diamond, contentDescription = null, tint = GemBlue, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(7.dp))
+        Text(formatCompactId(amount), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+    }
+}
+
+@Composable
+private fun DonationRow(rank: Int, entry: ClanDonationEntry, member: ClanMemberDisplay?) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            "$rank",
+            color = ClanMuted,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.ExtraBold,
+            modifier = Modifier.width(26.dp)
+        )
+        DonationAvatar(entry = entry, size = 48.dp)
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                entry.username,
+                color = Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(5.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RoleBadge(role = entry.role)
+                if (member != null) {
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Total ${formatCompactId(member.totalContribution)} · Gabung ${formatJoinShort(member.joinedAt)}",
+                        color = ClanMuted,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.width(8.dp))
+        GemPill(amount = entry.amountToday)
+    }
+}
+
+@Composable
+private fun RoleBadge(role: String, modifier: Modifier = Modifier) {
+    val (bg, fg) = when (role) {
+        ClanRoles.LEADER -> RoleLeaderColor to Color.Black
+        ClanRoles.VICE_LEADER -> RoleViceColor to Color.White
+        ClanRoles.ADMIRAL -> RoleAdmiralColor to Color(0xFF2B1600)
+        ClanRoles.OFFICER -> RoleOfficerColor to Color.White
+        else -> RoleMemberColor to Color.White
+    }
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(50))
+            .background(bg)
+            .padding(horizontal = 9.dp, vertical = 3.dp)
+    ) {
+        Text(
+            text = ClanRoles.label(role),
+            color = fg,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.ExtraBold,
+            maxLines = 1
+        )
+    }
+}
+
+@Composable
+private fun MemberAvatar(member: ClanMemberDisplay, size: Dp) {
     if (member.avatarUrl != null) {
         AsyncImage(
             model = member.avatarUrl,
             contentDescription = member.username,
+            contentScale = ContentScale.Crop,
             modifier = Modifier.size(size).clip(CircleShape)
         )
     } else {
@@ -801,15 +954,85 @@ private fun MemberAvatar(member: ClanMemberDisplay, size: androidx.compose.ui.un
 }
 
 @Composable
-private fun DonationAvatar(entry: ClanDonationEntry, size: androidx.compose.ui.unit.Dp) {
+private fun DonationAvatar(entry: ClanDonationEntry, size: Dp) {
     if (entry.avatarUrl != null) {
         AsyncImage(
             model = entry.avatarUrl,
             contentDescription = entry.username,
+            contentScale = ContentScale.Crop,
             modifier = Modifier.size(size).clip(CircleShape)
         )
     } else {
         GeneratedAvatar(seed = entry.firebaseUid, label = entry.username, size = size)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Dialog tutorial (tombol "Tutorial" & tanda "?" di level)
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun ClanTutorialDialog(onDismiss: () -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Role & Hak Akses Clan", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                TutorialLine(ClanRoles.LEADER, "Semua hak. Bisa ngangkat Vice Leader, Admiral, Officer.")
+                TutorialLine(ClanRoles.VICE_LEADER, "Terima/tolak request, kick, ubah role Admiral/Officer/Member.")
+                TutorialLine(ClanRoles.ADMIRAL, "Terima/tolak request, kick, ubah role Officer/Member.")
+                TutorialLine(ClanRoles.OFFICER, "Terima/tolak request join, kick member biasa.")
+                TutorialLine(ClanRoles.MEMBER, "Donasi ZCoin & ikut naikin level clan.")
+                Text(
+                    "Tap titik tiga (atau tahan lama) di member buat ngatur role/kick. Cuma bisa ke member yang pangkatnya lebih rendah.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) { Text("Ngerti") }
+        }
+    )
+}
+
+@Composable
+private fun TutorialLine(role: String, desc: String) {
+    Column {
+        RoleBadge(role = role)
+        Spacer(Modifier.height(4.dp))
+        Text(desc, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Format angka & tanggal
+// ---------------------------------------------------------------------------
+
+/** 84700 -> "84,7K" (koma desimal ala Indonesia, sama kayak referensi). */
+private fun formatCompactId(value: Long): String {
+    val abs = kotlin.math.abs(value)
+    val id = Locale("id", "ID")
+    return when {
+        abs >= 1_000_000 -> "%.1fM".format(id, value / 1_000_000.0)
+        abs >= 1_000 -> "%.1fK".format(id, value / 1000.0)
+        else -> value.toString()
+    }
+}
+
+/** "Gabung 13 hr" versi ringkas buat tab Donasi. */
+private fun formatJoinShort(isoTimestamp: String): String {
+    return try {
+        val minutes = java.time.Duration.between(Instant.parse(isoTimestamp), Instant.now()).toMinutes()
+        when {
+            minutes < 60 -> "${minutes.coerceAtLeast(1)} mnt"
+            minutes < 60 * 24 -> "${minutes / 60} jam"
+            minutes < 60 * 24 * 30 -> "${minutes / (60 * 24)} hr"
+            minutes < 60 * 24 * 365 -> "${minutes / (60 * 24 * 30)} bln"
+            else -> "${minutes / (60 * 24 * 365)} thn"
+        }
+    } catch (e: Exception) {
+        ""
     }
 }
 

@@ -58,7 +58,11 @@ data class ClanUiState(
     // Aksi role/kick lewat menu titik tiga di list member.
     val actionTarget: ClanMemberDisplay? = null,
     val isActionLoading: Boolean = false,
-    val actionFeedback: String? = null
+    val actionFeedback: String? = null,
+    // Filter role + urutan (tombol panah) + dialog tutorial, sesuai desain baru.
+    val roleFilter: String? = null,
+    val sortAscending: Boolean = false,
+    val showTutorial: Boolean = false
 ) {
     /** Role user sekarang di clan INI (null kalau bukan member). */
     val myRole: String?
@@ -82,13 +86,28 @@ data class ClanUiState(
         get() = members.find { it.role == ClanRoles.LEADER }
 
     val filteredMembers: List<ClanMemberDisplay>
-        get() = if (searchQuery.isBlank()) {
-            members
-        } else {
-            members.filter {
-                it.username.contains(searchQuery, ignoreCase = true) ||
-                    it.firebaseUid.contains(searchQuery, ignoreCase = true)
+        get() {
+            val q = searchQuery.trim()
+            val base = members.filter { m ->
+                (roleFilter == null || m.role == roleFilter) &&
+                    (q.isEmpty() ||
+                        m.username.contains(q, ignoreCase = true) ||
+                        m.firebaseUid.contains(q, ignoreCase = true) ||
+                        (m.userNumber?.toString()?.contains(q) == true))
             }
+            // sortedBy stabil, jadi urutan asli di dalam satu role tetap terjaga.
+            return if (sortAscending) base.sortedBy { ClanRoles.rank(it.role) } else base
+        }
+
+    val filteredDonations: List<ClanDonationEntry>
+        get() {
+            val q = searchQuery.trim()
+            val base = donationsToday.filter { d ->
+                q.isEmpty() ||
+                    d.username.contains(q, ignoreCase = true) ||
+                    d.firebaseUid.contains(q, ignoreCase = true)
+            }
+            return if (sortAscending) base.sortedBy { it.amountToday } else base.sortedByDescending { it.amountToday }
         }
 
     val totalDonatedToday: Long get() = donationsToday.sumOf { it.amountToday }
@@ -216,6 +235,18 @@ class ClanViewModel(
 
     fun onTabSelected(tab: ClanTab) {
         _uiState.value = _uiState.value.copy(selectedTab = tab)
+    }
+
+    fun onRoleFilterChange(role: String?) {
+        _uiState.value = _uiState.value.copy(roleFilter = role)
+    }
+
+    fun onToggleSort() {
+        _uiState.value = _uiState.value.copy(sortAscending = !_uiState.value.sortAscending)
+    }
+
+    fun onTutorialToggle(show: Boolean) {
+        _uiState.value = _uiState.value.copy(showTutorial = show)
     }
 
     fun onSearchQueryChange(query: String) {
