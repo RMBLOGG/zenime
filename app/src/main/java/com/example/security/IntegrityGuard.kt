@@ -1,9 +1,12 @@
 package com.example.security
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
+import android.view.accessibility.AccessibilityManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -44,8 +47,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
- * Deteksi app proxy/MITM (Reqable, HTTP Toolkit, dll) yang terpasang di
- * device lewat PackageManager -- dicek di MainActivity.onCreate DAN
+ * Deteksi app terlarang di device:
+ *  1. App proxy/MITM (Reqable, HTTP Toolkit, dll) -- lewat PackageManager.
+ *  2. Auto clicker -- kata kunci nama app (KEYWORDS) DAN Accessibility Service
+ *     aktif yang bisa kirim gesture tap/swipe (detectedGestureService).
+ *
+ * Deteksi proxy/MITM & kata kunci dicek lewat PackageManager -- dicek di MainActivity.onCreate DAN
  * onResume, SEBELUM checkAppState (jadi sebelum request API apa pun jalan
  * kalau kedeteksi). Lihat MainActivity.kt untuk pemasangannya.
  *
@@ -66,6 +73,23 @@ object IntegrityGuard {
         "charles",
         "fiddler",
         "wireshark",
+        // Auto clicker. JANGAN pakai kata umum kayak "clicker"/"tap"/"macro":
+        // game (Clicker Heroes, dll) dan app sah bakal ikut ke-block.
+        "autoclick",
+        "auto click",
+        "autotap",
+        "auto tap",
+        "klik otomatis",
+        "pengklik",
+    )
+
+    // Accessibility Service resmi yang boleh aktif walau bisa gesture.
+    // App bawaan sistem (FLAG_SYSTEM) sudah otomatis dilewati.
+    private val ACCESSIBILITY_WHITELIST = setOf(
+        "com.google.android.marvin.talkback",
+        "com.android.talkback",
+        "com.samsung.android.accessibility.talkback",
+        "com.google.android.apps.accessibility.voiceaccess",
     )
 
     /**
@@ -90,6 +114,42 @@ object IntegrityGuard {
             val label = info.loadLabel(pm).toString()
             val haystack = "$pkg $label".lowercase()
             if (keys.any { it in haystack }) return label
+        }
+        return detectedGestureService(context)
+    }
+
+    /**
+     * Auto clicker butuh Accessibility Service yang boleh dispatch gesture.
+     * Cek service aksesibilitas yang lagi AKTIF dan punya kemampuan itu, apa pun
+     * nama app-nya. Dilewati: app ini sendiri, app bawaan sistem, dan whitelist
+     * (TalkBack, Voice Access). Cuma jalan di Android 8+ (gesture dispatch
+     * baru ada di API 26).
+     */
+    private fun detectedGestureService(context: Context): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
+        val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
+            ?: return null
+        val pm = context.packageManager
+
+        val services = try {
+            am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+        } catch (e: Exception) {
+            return null
+        }
+
+        for (info in services) {
+            val serviceInfo = info.resolveInfo?.serviceInfo ?: continue
+            val pkg = serviceInfo.packageName
+            if (pkg == context.packageName || pkg in ACCESSIBILITY_WHITELIST) continue
+
+            val appFlags = serviceInfo.applicationInfo?.flags ?: 0
+            val isSystem = appFlags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+            if (isSystem) continue
+
+            val canGesture = info.capabilities and AccessibilityServiceInfo.CAPABILITY_CAN_PERFORM_GESTURES != 0
+            if (canGesture) {
+                return serviceInfo.applicationInfo?.loadLabel(pm)?.toString() ?: pkg
+            }
         }
         return null
     }
@@ -162,7 +222,7 @@ fun BlockedToolScreen(toolName: String, onExit: () -> Unit) {
 
         Text(
             text = "Mau ngapain sih kocak pakai apk \"$toolName\"? " +
-                "Nonton tinggal nonton aja... hapus dulu tuh apk-nya.",
+                "Nonton tinggal nonton aja... hapus atau matiin dulu tuh apk-nya.",
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -209,7 +269,7 @@ fun BlockedToolScreen(toolName: String, onExit: () -> Unit) {
         Spacer(Modifier.height(14.dp))
 
         Text(
-            text = "Udah dihapus? Buka Zenime lagi, langsung jalan.",
+            text = "Udah dihapus atau dimatiin? Buka Zenime lagi, langsung jalan.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             textAlign = TextAlign.Center
