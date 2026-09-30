@@ -52,6 +52,10 @@ object RemoteConfigManager {
 
     private const val KEY_BASE_URL = "api_base_url"
 
+    // Base URL API donghua (Anichin). Parameter TERPISAH dari api_base_url
+    // karena backend-nya beda (scraper Flask di VPS sendiri).
+    private const val KEY_ANICHIN_BASE_URL = "anichin_base_url"
+
     // Catatan: pengecekan force-update TIDAK lagi lewat Remote Config --
     // sekarang pakai GithubUpdateChecker (cek langsung ke GitHub Releases),
     // supaya gak kena cache/throttle minimumFetchIntervalInSeconds di bawah.
@@ -167,6 +171,14 @@ object RemoteConfigManager {
         val value = remoteConfig.getString(KEY_BASE_URL)
         return value.ifBlank { null }
     }
+
+    /**
+     * Base URL API Anichin (donghua), murni dari Remote Config parameter
+     * "anichin_base_url". Sama seperti currentBaseUrl(): null kalau kosong
+     * atau belum pernah fetch sukses, dan TIDAK ADA fallback hardcode.
+     */
+    fun currentAnichinBaseUrl(): String? =
+        remoteConfig.getString(KEY_ANICHIN_BASE_URL).trim().ifBlank { null }
 
     /** True kalau parameter "maintenance_mode" di Console lagi diaktifkan. */
     fun isMaintenanceMode(): Boolean = remoteConfig.getBoolean(KEY_MAINTENANCE_MODE)

@@ -5,6 +5,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
@@ -13,7 +14,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Klien HTTP khusus API Anichin. Terpisah dari NetworkModule (yang dynamic
- * base URL lewat Remote Config) karena ini backend sendiri dengan base URL fixed.
+ * base URL lewat Remote Config) karena ini backend sendiri dengan base URL dari parameter Remote Config "anichin_base_url".
  */
 object AnichinNetwork {
 
@@ -46,8 +47,32 @@ object AnichinNetwork {
         else -> "$sourceBase/$path"
     }
 
+    // Base URL dummy buat inisialisasi Retrofit. Host asli diganti tiap
+    // request oleh dynamicBaseUrlInterceptor dari RemoteConfigManager.
+    private const val PLACEHOLDER_BASE_URL = "https://placeholder.invalid/"
+
+    private val dynamicBaseUrlInterceptor = okhttp3.Interceptor { chain ->
+        val original = chain.request()
+        val base = RemoteConfigManager.currentAnichinBaseUrl()
+            ?: throw com.example.util.ApiUnavailableException(
+                "Server sedang tidak tersedia. Coba lagi nanti."
+            )
+        val newBase = base.toHttpUrlOrNull() ?: return@Interceptor chain.proceed(original)
+
+        val placeholderPath = PLACEHOLDER_BASE_URL.toHttpUrlOrNull()!!.encodedPath
+        val relativePath = original.url.encodedPath.removePrefix(placeholderPath)
+        val combinedPath = newBase.encodedPath.trimEnd('/') + "/" + relativePath.trimStart('/')
+
+        val newUrl = newBase.newBuilder()
+            .encodedPath(combinedPath)
+            .encodedQuery(original.url.encodedQuery)
+            .build()
+        chain.proceed(original.newBuilder().url(newUrl).build())
+    }
+
     private val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
+            .addInterceptor(dynamicBaseUrlInterceptor)
             // GET aman diulang sekali kalau koneksi putus (timeout sengaja gak diulang)
             .addInterceptor { chain ->
                 val request = chain.request()
@@ -78,7 +103,7 @@ object AnichinNetwork {
 
     val api: AnichinApi by lazy {
         Retrofit.Builder()
-            .baseUrl(AnichinApi.BASE_URL)
+            .baseUrl(PLACEHOLDER_BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()

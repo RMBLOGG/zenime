@@ -11,7 +11,7 @@ import retrofit2.http.Query
 import retrofit2.http.QueryMap
 
 /**
- * API Anichin (scraper Flask di VPS sendiri). Base URL fixed, pakai HTTPS
+ * API Anichin (scraper Flask di VPS sendiri). Base URL dari Remote Config (anichin_base_url), pakai HTTPS
  * (Caddy + SSL otomatis), jadi gak butuh setting cleartext.
  *
  * Endpoint scraping langsung ke situs sumber, jadi lumayan lambat
@@ -50,8 +50,4 @@ interface AnichinApi {
     // ("expires"), jadi WAJIB ambil fresh tiap mau nonton, jangan disimpan.
     @GET("video-source/{slug}")
     suspend fun getVideoSource(@Path("slug") slug: String): AnichinVideoSource
-
-    companion object {
-        const val BASE_URL = "https://api.zenime.biz.id/"
-    }
 }
