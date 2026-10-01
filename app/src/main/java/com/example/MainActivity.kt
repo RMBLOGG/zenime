@@ -321,6 +321,11 @@ class MainActivity : ComponentActivity() {
         // muncul/hilang tanpa user perlu restart app.
         configListener?.remove()
         configListener = RemoteConfigManager.listenRealtime {
+            // maintenance_mode ikut real-time: begitu di-Publish di Console,
+            // MaintenanceScreen langsung nutup app yang lagi kebuka (dan
+            // langsung kebuka lagi pas di-OFF-in), tanpa restart/relog.
+            // Aman dari thread background karena state-nya mutableStateOf.
+            isMaintenanceMode = RemoteConfigManager.isMaintenanceMode()
             announcementPopup = RemoteConfigManager.currentPopup()
         }
     }
