@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +27,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -53,6 +57,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.data.model.ClanMemberDisplay
+import com.example.data.model.ClanSlotShop
 import com.example.data.model.PendingJoinRequestDisplay
 import com.example.ui.components.EmptyStateView
 import com.example.ui.components.ErrorStateView
@@ -110,6 +115,8 @@ fun ManageClanScreen(
                                 onNameChange = viewModel::onNameInputChange,
                                 onTagChange = viewModel::onTagInputChange,
                                 onSaveClick = viewModel::saveSettings,
+                                onPacksChange = viewModel::onPacksChange,
+                                onBuySlots = viewModel::buySlots,
                                 onPhotoPicked = { uri ->
                                     scope.launch {
                                         val clanId = uiState.clan?.id ?: return@launch
@@ -191,13 +198,20 @@ private fun SettingsTab(
     onNameChange: (String) -> Unit,
     onTagChange: (String) -> Unit,
     onSaveClick: () -> Unit,
+    onPacksChange: (Int) -> Unit,
+    onBuySlots: () -> Unit,
     onPhotoPicked: (Uri) -> Unit
 ) {
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? -> if (uri != null) onPhotoPicked(uri) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp)
+    ) {
         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxWidth()) {
             Box(
                 modifier = Modifier
@@ -266,8 +280,118 @@ private fun SettingsTab(
                 Text("Simpan", fontWeight = FontWeight.Bold, color = Color.White)
             }
         }
+
+        Spacer(Modifier.height(24.dp))
+        MemberSlotsCard(
+            uiState = uiState,
+            onPacksChange = onPacksChange,
+            onBuySlots = onBuySlots
+        )
+        Spacer(Modifier.height(16.dp))
     }
 }
+
+/** Kartu "Kuota Member": leader beli kuota pakai saldo donasi (treasury) clan. */
+@Composable
+private fun MemberSlotsCard(
+    uiState: ManageClanUiState,
+    onPacksChange: (Int) -> Unit,
+    onBuySlots: () -> Unit
+) {
+    val clan = uiState.clan ?: return
+    val maxPacks = ClanSlotShop.maxPacksFor(clan.memberLimit)
+    val packs = uiState.packsToBuy
+    val cost = packs * ClanSlotShop.PRICE_PER_PACK
+    val slots = packs * ClanSlotShop.SLOTS_PER_PACK
+    val canAfford = clan.treasuryBalance >= cost
+    val isMaxed = maxPacks == 0
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(16.dp)
+    ) {
+        Text(
+            "Kuota Member",
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Kuota sekarang ${clan.memberCount}/${clan.memberLimit} (maks ${ClanSlotShop.MAX_MEMBER_LIMIT})",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            "Saldo donasi clan: ${formatZCoin(clan.treasuryBalance)} ZCoin",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            "${ClanSlotShop.SLOTS_PER_PACK} kuota = ${formatZCoin(ClanSlotShop.PRICE_PER_PACK)} ZCoin dari saldo donasi. Level clan tidak berkurang.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        if (isMaxed) {
+            Text(
+                "Kuota sudah mencapai batas maksimal.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { onPacksChange(-1) }, enabled = packs > 1 && !uiState.isBuyingSlots) {
+                    Icon(Icons.Filled.Remove, contentDescription = "Kurangi paket")
+                }
+                Text(
+                    "$packs paket (+$slots kuota)",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center
+                )
+                IconButton(onClick = { onPacksChange(1) }, enabled = packs < maxPacks && !uiState.isBuyingSlots) {
+                    Icon(Icons.Filled.Add, contentDescription = "Tambah paket")
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = onBuySlots,
+                enabled = canAfford && !uiState.isBuyingSlots,
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ZenimePrimary)
+            ) {
+                if (uiState.isBuyingSlots) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                } else {
+                    Text(
+                        if (canAfford) "Beli +$slots kuota (${formatZCoin(cost)} ZCoin)" else "Saldo donasi belum cukup",
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
+            }
+        }
+
+        uiState.slotsFeedback?.let { feedback ->
+            Spacer(Modifier.height(10.dp))
+            Text(
+                feedback,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (uiState.slotsFeedbackIsError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+private fun formatZCoin(value: Long): String =
+    java.text.NumberFormat.getIntegerInstance(java.util.Locale("id", "ID")).format(value)
 
 @Composable
 private fun RequestsTab(

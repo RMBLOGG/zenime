@@ -15,6 +15,9 @@ data class Clan(
     @Json(name = "total_xp") val totalXp: Long = 0,
     @Json(name = "member_count") val memberCount: Int = 1,
     @Json(name = "member_limit") val memberLimit: Int = 30,
+    // Saldo ZCoin hasil donasi yang bisa dibelanjakan (beli kuota member).
+    // Terpisah dari total_xp (total_xp cuma buat level, gak pernah berkurang).
+    @Json(name = "treasury_balance") val treasuryBalance: Long = 0,
     @Json(name = "created_at") val createdAt: String? = null
 )
 
@@ -163,6 +166,35 @@ data class SetMemberRoleRequest(
     @Json(name = "target_uid") val targetUid: String,
     @Json(name = "role") val role: String
 )
+
+/** Body request beli kuota member. 1 paket = [ClanSlotShop.SLOTS_PER_PACK] kuota. */
+@JsonClass(generateAdapter = true)
+data class BuyMemberSlotsRequest(
+    @Json(name = "clan_id") val clanId: String,
+    @Json(name = "packs") val packs: Int
+)
+
+@JsonClass(generateAdapter = true)
+data class BuyMemberSlotsResponse(
+    @Json(name = "member_limit") val memberLimit: Int? = null,
+    @Json(name = "treasury_balance") val treasuryBalance: Long? = null,
+    @Json(name = "error") val error: String? = null
+)
+
+/**
+ * Harga & batas beli kuota member. Angka ini CUMA buat tampilan UI --
+ * yang berlaku tetap konstanta di RPC buy_member_slots (SQL). Kalau mau
+ * ubah harga/batas, ubah DI DUA TEMPAT biar tampilan gak beda sama server.
+ */
+object ClanSlotShop {
+    const val SLOTS_PER_PACK = 5
+    const val PRICE_PER_PACK = 10_000L
+    const val MAX_MEMBER_LIMIT = 150
+
+    /** Berapa paket maksimal yang masih muat sampai batas [MAX_MEMBER_LIMIT]. */
+    fun maxPacksFor(memberLimit: Int): Int =
+        ((MAX_MEMBER_LIMIT - memberLimit) / SLOTS_PER_PACK).coerceAtLeast(0)
+}
 
 @JsonClass(generateAdapter = true)
 data class ClanActionResponse(

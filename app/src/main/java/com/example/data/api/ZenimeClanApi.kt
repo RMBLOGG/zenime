@@ -1,5 +1,7 @@
 package com.example.data.api
 
+import com.example.data.model.BuyMemberSlotsRequest
+import com.example.data.model.BuyMemberSlotsResponse
 import com.example.data.model.ClanActionResponse
 import com.example.data.model.ClanIdRequest
 import com.example.data.model.ClanMember
@@ -70,6 +72,13 @@ interface ZenimeClanApi {
         @Header("Authorization") authorization: String,
         @Body body: DonateToClanRequest
     ): ClanActionResponse
+
+    /** Leader beli kuota member pakai saldo treasury clan (hasil donasi). */
+    @POST("functions/v1/zenime-clan-buy-slots")
+    suspend fun buyMemberSlots(
+        @Header("Authorization") authorization: String,
+        @Body body: BuyMemberSlotsRequest
+    ): BuyMemberSlotsResponse
 
     @POST("functions/v1/zenime-clan-settings")
     suspend fun updateClanSettings(

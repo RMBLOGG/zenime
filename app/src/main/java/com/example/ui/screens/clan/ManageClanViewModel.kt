@@ -3,6 +3,7 @@ package com.example.ui.screens.clan
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.model.Clan
+import com.example.data.model.ClanSlotShop
 import com.example.data.model.ClanMemberDisplay
 import com.example.data.model.PendingJoinRequestDisplay
 import com.example.data.repository.ClanRepository
@@ -26,6 +27,10 @@ data class ManageClanUiState(
     val isSavingSettings: Boolean = false,
     val settingsFeedback: String? = null,
     val actionInFlightId: String? = null, // request_id atau firebase_uid yang lagi diproses
+    val packsToBuy: Int = 1,
+    val isBuyingSlots: Boolean = false,
+    val slotsFeedback: String? = null,
+    val slotsFeedbackIsError: Boolean = false,
     val myFirebaseUid: String = ""
 ) {
     /** Role viewer sekarang di clan ini. Cuma leader yang boleh liat tab Settings & atur role/kick. */
@@ -85,6 +90,44 @@ class ManageClanViewModel(
 
     fun onTagInputChange(value: String) {
         _uiState.value = _uiState.value.copy(tagInput = value.uppercase().take(3), settingsFeedback = null)
+    }
+
+    fun onPacksChange(delta: Int) {
+        val clan = _uiState.value.clan ?: return
+        val maxPacks = ClanSlotShop.maxPacksFor(clan.memberLimit)
+        val next = (_uiState.value.packsToBuy + delta).coerceIn(1, maxOf(1, maxPacks))
+        _uiState.value = _uiState.value.copy(packsToBuy = next, slotsFeedback = null)
+    }
+
+    /** Cuma leader (dicek juga di Edge Function + RPC). */
+    fun buySlots() {
+        val state = _uiState.value
+        val clan = state.clan ?: return
+        if (!state.isLeader || state.isBuyingSlots) return
+
+        viewModelScope.launch {
+            _uiState.value = _uiState.value.copy(isBuyingSlots = true, slotsFeedback = null)
+            val packs = state.packsToBuy
+            repository.buyMemberSlots(clanId, packs)
+                .onSuccess { res ->
+                    val newLimit = res.memberLimit ?: (clan.memberLimit + packs * ClanSlotShop.SLOTS_PER_PACK)
+                    val newBalance = res.treasuryBalance ?: (clan.treasuryBalance - packs * ClanSlotShop.PRICE_PER_PACK)
+                    _uiState.value = _uiState.value.copy(
+                        isBuyingSlots = false,
+                        clan = clan.copy(memberLimit = newLimit, treasuryBalance = newBalance),
+                        packsToBuy = 1,
+                        slotsFeedback = "Kuota member bertambah jadi $newLimit",
+                        slotsFeedbackIsError = false
+                    )
+                }
+                .onFailure { e ->
+                    _uiState.value = _uiState.value.copy(
+                        isBuyingSlots = false,
+                        slotsFeedback = e.message ?: "Gagal beli kuota member",
+                        slotsFeedbackIsError = true
+                    )
+                }
+        }
     }
 
     fun saveSettings() {

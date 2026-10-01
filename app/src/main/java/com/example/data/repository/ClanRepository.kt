@@ -2,6 +2,8 @@ package com.example.data.repository
 
 import com.example.data.api.SupabaseNetworkModule
 import com.example.data.api.ZenimeClanApi
+import com.example.data.model.BuyMemberSlotsRequest
+import com.example.data.model.BuyMemberSlotsResponse
 import com.example.data.model.Clan
 import com.example.data.model.ClanDonationEntry
 import com.example.data.model.ClanIdRequest
@@ -215,6 +217,15 @@ class ClanRepository(
             response.clan ?: throw IllegalStateException("Gagal donasi")
         } catch (e: HttpException) {
             throw IllegalStateException(extractErrorMessage(e, "Gagal donasi ZCoin"))
+        }
+    }
+
+    /** Beli [packs] paket kuota member (khusus leader, dicek di server). */
+    suspend fun buyMemberSlots(clanId: String, packs: Int): Result<BuyMemberSlotsResponse> = runCatching {
+        try {
+            clanApi.buyMemberSlots(authHeader(), BuyMemberSlotsRequest(clanId, packs))
+        } catch (e: HttpException) {
+            throw IllegalStateException(extractErrorMessage(e, "Gagal beli kuota member"))
         }
     }
 
