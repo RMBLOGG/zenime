@@ -216,7 +216,6 @@ fun PremiumPromoDialog(
 @Composable
 private fun PremiumPromoPackageCard(pkg: PremiumPackage) {
     val benefits = listOf(
-        "Semua donghua tanpa batas",
         "Resolusi unlock sampai 1080p",
         "Bebas iklan sepenuhnya",
         "Download anime buat ditonton offline",

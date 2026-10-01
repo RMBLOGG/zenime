@@ -1,7 +1,7 @@
 package com.example.util
 
 /** Jumlah episode TERBARU (index paling tinggi) yang dikunci buat non-premium. */
-const val LOCKED_LATEST_EPISODES_COUNT = 2
+const val LOCKED_LATEST_EPISODES_COUNT = 0
 
 /** Ekstrak angka index dari string index episode, misal "12" -> 12. */
 fun episodeIndexValue(episodeIndex: String?): Int? =
@@ -25,10 +25,8 @@ fun latestEpisodeIndex(episodeIndexes: List<String?>): Int =
  * TIDAK terkunci -- daripada salah lock gara-gara gagal parse / data belum siap.
  */
 fun isEpisodeLocked(episodeIndex: String?, totalEpisodes: Int, isPremium: Boolean): Boolean {
-    if (isPremium) return false
-    if (totalEpisodes <= 0) return false
-    val index = episodeIndexValue(episodeIndex) ?: return false
-    return index > totalEpisodes - LOCKED_LATEST_EPISODES_COUNT
+    // Semua episode anime GRATIS (v2.2) -- gak ada lagi episode terbaru yang dikunci.
+    return false
 }
 
 /** Kualitas maksimal (dalam "p", misal 480 = 480p) yang boleh diputer non-premium. */

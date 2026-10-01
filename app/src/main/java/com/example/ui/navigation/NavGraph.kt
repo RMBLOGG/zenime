@@ -87,7 +87,6 @@ import com.example.data.repository.AnichinRepository
 import com.example.ui.screens.donghua.DonghuaDetailScreen
 import com.example.ui.screens.donghua.DonghuaDetailViewModel
 import com.example.ui.screens.donghua.DonghuaPlayerScreen
-import com.example.ui.screens.donghua.DonghuaPremiumGate
 import com.example.ui.screens.donghua.DonghuaPlayerViewModel
 import com.example.ui.screens.donghua.DonghuaScreen
 import com.example.ui.screens.donghua.DonghuaViewModel
@@ -712,23 +711,17 @@ fun ZenimeAppNavHost(
             ) { backStackEntry ->
                 val slug = backStackEntry.arguments?.getString("slug") ?: ""
                 val donghuaPlayerViewModel = remember(slug) { DonghuaPlayerViewModel(anichinRepository, slug) }
-                DonghuaPremiumGate(
+                DonghuaPlayerScreen(
+                    viewModel = donghuaPlayerViewModel,
                     firebaseUid = currentUser?.uid,
                     onBackClick = { navController.popBackStack() },
+                    onEpisodeChange = { nextSlug ->
+                        navController.navigate(Screen.DonghuaPlayer.createRoute(nextSlug)) {
+                            popUpTo(Screen.DonghuaPlayer.route) { inclusive = true }
+                        }
+                    },
                     onUpgradeClick = { navController.navigate(Screen.Premium.route) }
-                ) {
-                    DonghuaPlayerScreen(
-                        viewModel = donghuaPlayerViewModel,
-                        firebaseUid = currentUser?.uid,
-                        onBackClick = { navController.popBackStack() },
-                        onEpisodeChange = { nextSlug ->
-                            navController.navigate(Screen.DonghuaPlayer.createRoute(nextSlug)) {
-                                popUpTo(Screen.DonghuaPlayer.route) { inclusive = true }
-                            }
-                        },
-                        onUpgradeClick = { navController.navigate(Screen.Premium.route) }
-                    )
-                }
+                )
             }
 
             // Komik -- daftar terbaru/populer, pencarian, filter genre

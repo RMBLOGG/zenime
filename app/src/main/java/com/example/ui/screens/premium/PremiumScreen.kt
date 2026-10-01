@@ -26,7 +26,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -130,8 +129,6 @@ fun PremiumScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 PremiumHero()
-
-                DonghuaFeatureCard()
 
                 SectionTitle(
                     title = "Gratis vs Premium",
@@ -259,51 +256,10 @@ private fun PremiumHero() {
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                "Donghua tanpa batas, kualitas sampai 1080p, dan nol iklan.",
+                "Kualitas sampai 1080p, nol iklan, download offline, dan XP nonton dobel.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-@Composable
-private fun DonghuaFeatureCard() {
-    val shape = RoundedCornerShape(18.dp)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(
-                Brush.horizontalGradient(
-                    listOf(PremiumGold.copy(alpha = 0.16f), PremiumGold.copy(alpha = 0.04f))
-                )
-            )
-            .border(1.dp, PremiumGold.copy(alpha = 0.45f), shape)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(46.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(PremiumGold.copy(alpha = 0.18f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Filled.Movie, contentDescription = null, tint = PremiumGold)
-        }
-        Spacer(modifier = Modifier.width(14.dp))
-        Column {
-            Text(
-                "Semua donghua terbuka",
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                "Nonton donghua episode demi episode tanpa batas. Tanpa Premium, donghua tidak bisa diputar; sinopsis dan daftar episodenya tetap bisa dilihat.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -315,8 +271,6 @@ private class CompareRow(val label: String, val free: String?, val premium: Stri
 @Composable
 private fun PremiumComparison() {
     val rows = listOf(
-        CompareRow("Donghua", "Terkunci", "Semua episode"),
-        CompareRow("2 episode anime terbaru", "Terkunci", "Langsung buka"),
         CompareRow("Kualitas video", "Maks. 480p", "Sampai 1080p"),
         CompareRow("Iklan", "Ada", "Tanpa iklan"),
         CompareRow("XP nonton", "×1", "×2"),
