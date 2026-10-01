@@ -21,6 +21,11 @@ android {
     versionCode = 11
     versionName = "2.0"
 
+    // SHA-256 sertifikat penandatangan APK RESMI (hex, tanpa titik dua, huruf besar/kecil bebas).
+    // Diisi dari env APK_SIG_SHA256 (GitHub Actions secret). Kalau kosong, cek tanda tangan
+    // dilewati -- jadi build lokal/debug gak ke-block. Lihat IntegrityGuard.isSignatureTampered().
+    buildConfigField("String", "EXPECTED_SIG_SHA256", "\"${System.getenv("APK_SIG_SHA256") ?: ""}\"")
+
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
@@ -43,7 +48,10 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = false
+      // R8 nyala di release: obfuscate nama class/method (isPremium dll) biar
+      // susah dicari & di-patch lewat decompile/smali.
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }

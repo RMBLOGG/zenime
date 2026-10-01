@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.os.Build
+import java.security.MessageDigest
 import android.view.accessibility.AccessibilityManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
@@ -98,6 +99,7 @@ object IntegrityGuard {
      * nambah daftar tanpa rilis APK baru (opsional, belum dipakai).
      */
     fun detectedTool(context: Context, extraKeywords: List<String> = emptyList()): String? {
+        if (isSignatureTampered(context)) return "APK tidak resmi (tanda tangan beda)"
         val pm = context.packageManager
         val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         val apps = if (Build.VERSION.SDK_INT >= 33) {
@@ -116,6 +118,37 @@ object IntegrityGuard {
             if (keys.any { it in haystack }) return label
         }
         return detectedGestureService(context)
+    }
+
+    /**
+     * True kalau APK ini ditandatangani sertifikat yang BEDA dari yang resmi
+     * (BuildConfig.EXPECTED_SIG_SHA256) -- ciri APK yang di-decompile, dimodif,
+     * lalu di-sign ulang pakai key orang lain. Kalau EXPECTED_SIG_SHA256 kosong
+     * (build lokal) atau gagal baca tanda tangan, dianggap aman biar gak salah blok.
+     */
+    @Suppress("DEPRECATION")
+    private fun isSignatureTampered(context: Context): Boolean {
+        val expected = com.example.BuildConfig.EXPECTED_SIG_SHA256
+            .replace(":", "").trim().lowercase()
+        if (expected.isEmpty()) return false
+        return try {
+            val pm = context.packageManager
+            val certs = if (Build.VERSION.SDK_INT >= 28) {
+                val info = pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+                val si = info.signingInfo ?: return false
+                if (si.hasMultipleSigners()) si.apkContentsSigners else si.signingCertificateHistory
+            } else {
+                pm.getPackageInfo(context.packageName, PackageManager.GET_SIGNATURES).signatures
+            }
+            if (certs.isNullOrEmpty()) return false
+            val md = MessageDigest.getInstance("SHA-256")
+            val hashes = certs.map { sig ->
+                md.digest(sig.toByteArray()).joinToString("") { "%02x".format(it) }
+            }
+            expected !in hashes
+        } catch (e: Exception) {
+            false
+        }
     }
 
     /**
