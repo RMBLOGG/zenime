@@ -188,7 +188,7 @@ data class BuyMemberSlotsResponse(
  */
 object ClanSlotShop {
     const val SLOTS_PER_PACK = 5
-    const val PRICE_PER_PACK = 10_000L
+    const val PRICE_PER_PACK = 5_000L
     const val MAX_MEMBER_LIMIT = 150
 
     /** Berapa paket maksimal yang masih muat sampai batas [MAX_MEMBER_LIMIT]. */
