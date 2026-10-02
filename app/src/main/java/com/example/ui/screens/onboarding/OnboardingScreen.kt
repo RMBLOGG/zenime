@@ -55,13 +55,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.HighQuality
+import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.WifiOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -152,6 +156,13 @@ private val slides = listOf(
         accentB = Color(0xFF8B5CF6)
     ),
     Slide(
+        title = "Komik & Donghua Juga Ada",
+        highlight = "Donghua",
+        desc = "Baca komik favoritmu dan nonton donghua terbaru, semua ada di satu aplikasi.",
+        accentA = Color(0xFF10B981),
+        accentB = Color(0xFF06B6D4)
+    ),
+    Slide(
         title = "Ngobrol Bareng, Gabung Clan",
         highlight = "Clan",
         desc = "Chat Global, tambah teman, dan bikin Clan bareng sesama penonton.",
@@ -164,6 +175,13 @@ private val slides = listOf(
         desc = "Kumpulin XP tiap nonton dan panjat Leaderboard bareng yang lain.",
         accentA = Color(0xFFF59E0B),
         accentB = Color(0xFFE4344A)
+    ),
+    Slide(
+        title = "Upgrade ke Premium",
+        highlight = "Premium",
+        desc = "Bebas iklan, kualitas HD, dan XP dobel biar nonton makin puas dan naik level makin cepat.",
+        accentA = Color(0xFFFFC53D),
+        accentB = Color(0xFFEC4899)
     )
 )
 
@@ -339,8 +357,10 @@ private fun OnboardingPage(page: Int, pagerState: PagerState) {
                 when (page) {
                     0 -> PosterStackIllustration(active, slide.accentA, slide.accentB)
                     1 -> OfflineIllustration(active, slide.accentA, slide.accentB)
-                    2 -> ChatIllustration(active, slide.accentA, slide.accentB)
-                    else -> LevelIllustration(active, slide.accentA, slide.accentB)
+                    2 -> ComicDonghuaIllustration(active, slide.accentA, slide.accentB)
+                    3 -> ChatIllustration(active, slide.accentA, slide.accentB)
+                    4 -> LevelIllustration(active, slide.accentA, slide.accentB)
+                    else -> PremiumIllustration(active, slide.accentA, slide.accentB)
                 }
             }
         }
@@ -1375,5 +1395,206 @@ private fun LevelIllustration(active: Boolean, a: Color, b: Color) {
             periodMs = 3500,
             startOffsetMs = 600
         )
+    }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slide 3 — Komik & Donghua
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun ComicDonghuaIllustration(active: Boolean, a: Color, b: Color) {
+    val spread by animateFloatAsState(
+        targetValue = if (active) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessLow),
+        label = "comicSpread"
+    )
+    Box(Modifier.size(Stage)) {
+        GlowOrb(a, 280.dp, Modifier.align(Alignment.Center))
+
+        // Halaman komik (belakang, kiri)
+        ComicPageCard(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(x = (-62).dp * spread, y = 20.dp * spread)
+                .graphicsLayer {
+                    rotationZ = -9f * spread
+                    scaleX = 0.92f
+                    scaleY = 0.92f
+                },
+            a = a,
+            b = b
+        )
+        // Poster donghua (depan, kanan)
+        PosterCard(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .offset(x = 62.dp * spread, y = (-6).dp * spread)
+                .floating(3600, 0, 6.dp)
+                .graphicsLayer { rotationZ = 7f * spread },
+            sky = Color(0xFF062A2A),
+            glow = b,
+            seed = 4,
+            showPlay = true,
+            tint = a
+        )
+
+        FloatChip(
+            icon = Icons.Rounded.MenuBook,
+            label = "Komik",
+            tint = a,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .offset(x = 6.dp, y = 4.dp),
+            periodMs = 3000
+        )
+        FloatChip(
+            icon = Icons.Rounded.Movie,
+            label = "Donghua",
+            tint = b,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .offset(x = (-6).dp, y = (-4).dp),
+            periodMs = 3400,
+            startOffsetMs = 500
+        )
+    }
+}
+
+@Composable
+private fun ComicPageCard(modifier: Modifier, a: Color, b: Color) {
+    val shape = RoundedCornerShape(14.dp)
+    val ink = Color(0xFF0B0E14)
+    Column(
+        modifier = modifier
+            .size(width = 148.dp, height = 210.dp)
+            .shadow(elevation = 16.dp, shape = shape, ambientColor = a, spotColor = a)
+            .clip(shape)
+            .background(Color(0xFFF3F0E8))
+            .border(1.dp, Color.White.copy(alpha = 0.18f), shape)
+            .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp)
+    ) {
+        ComicPanel(Modifier.fillMaxWidth().weight(1.1f), a, b, ink, bubble = true)
+        Row(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            ComicPanel(Modifier.weight(0.6f).fillMaxHeight(), b, a, ink)
+            ComicPanel(Modifier.weight(0.4f).fillMaxHeight(), a, ink, ink)
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            ComicPanel(Modifier.weight(0.4f).fillMaxHeight(), ink, b, ink)
+            ComicPanel(Modifier.weight(0.6f).fillMaxHeight(), a, b, ink, bubble = true)
+        }
+    }
+}
+
+@Composable
+private fun ComicPanel(
+    modifier: Modifier,
+    c1: Color,
+    c2: Color,
+    ink: Color,
+    bubble: Boolean = false
+) {
+    val shape = RoundedCornerShape(3.dp)
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .background(Brush.linearGradient(listOf(c1.copy(alpha = 0.95f), c2.copy(alpha = 0.7f))))
+            .border(2.dp, ink, shape)
+    ) {
+        if (bubble) {
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp)
+                    .size(width = 30.dp, height = 16.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White)
+                    .border(1.5.dp, ink, RoundedCornerShape(50))
+            )
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slide 6 — Premium
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun PremiumIllustration(active: Boolean, a: Color, b: Color) {
+    val perks = listOf(
+        Icons.Rounded.HighQuality to "Kualitas hingga 1080p",
+        Icons.Rounded.Block to "Bebas iklan",
+        Icons.Rounded.Download to "Download offline",
+        Icons.Rounded.Movie to "Semua episode donghua",
+        Icons.Rounded.Bolt to "XP nonton ×2"
+    )
+    Box(Modifier.size(Stage)) {
+        GlowOrb(a, 280.dp, Modifier.align(Alignment.Center))
+
+        Column(
+            modifier = Modifier.align(Alignment.Center),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .floating(3400, 0, 5.dp)
+                    .size(64.dp)
+                    .shadow(
+                        elevation = 18.dp,
+                        shape = CircleShape,
+                        ambientColor = a,
+                        spotColor = a
+                    )
+                    .clip(CircleShape)
+                    .background(Brush.linearGradient(listOf(a, b))),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Star,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .glass(RoundedCornerShape(20.dp))
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                perks.forEachIndexed { i, (icon, label) ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .popIn(active, 150 + i * 160, 0f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
+                                .background(a.copy(alpha = 0.22f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(icon, contentDescription = null, tint = a, modifier = Modifier.size(14.dp))
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Text(label, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.weight(1f))
+                        Icon(Icons.Rounded.Check, contentDescription = null, tint = a, modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+        }
     }
 }
