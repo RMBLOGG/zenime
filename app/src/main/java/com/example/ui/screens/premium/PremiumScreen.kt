@@ -272,6 +272,8 @@ private class CompareRow(val label: String, val free: String?, val premium: Stri
 private fun PremiumComparison() {
     val rows = listOf(
         CompareRow("Kualitas video", "Maks. 480p", "Sampai 1080p"),
+        CompareRow("Nonton donghua", null, null),
+        CompareRow("3 episode terbaru anime", null, null),
         CompareRow("Iklan", "Ada", "Tanpa iklan"),
         CompareRow("XP nonton", "×1", "×2"),
         CompareRow("Download offline", null, null),
