@@ -34,7 +34,6 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -45,8 +44,8 @@ import com.example.data.model.ZenimeRole
 
 /**
  * Badge role gaya "cyber cut": sudut dipotong (chamfer) beda tiap role,
- * fill gelap + border dan teks gradient neon, ikon + label singkat.
- * Fill gelap bikin badge tetap kebaca di banner profil warna apa pun.
+ * fill gradient neon + outline gelap tipis, ikon + label.
+ * Outline gelap misahin badge dari banner profil yang warnanya mirip.
  * Hierarki efek: Developer = kilau geser terus, Admin = kalem, Moderator = statis.
  *
  * Role + warna diambil dari [RoleBadgeCache] (batch, sama kayak centang),
@@ -91,11 +90,7 @@ private fun roleBadgeLabel(role: ZenimeRole): String = when (role) {
     ZenimeRole.MODERATOR -> "MODERATOR"
 }
 
-/** Fill badge selalu gelap, jadi warna neon yang terlalu gelap (badge_color custom) dicerahin. */
-private fun Color.neonBright(): Color =
-    if (luminance() < 0.2f) lerp(this, Color.White, 0.45f) else this
-
-private val RoleBadgeFill = Color(0xFF0C0E16)
+private val RoleBadgeOutline = Color.Black.copy(alpha = 0.65f)
 
 @Composable
 fun RoleBadgeChip(
@@ -105,9 +100,9 @@ fun RoleBadgeChip(
     height: Dp? = null
 ) {
     val shape = roleBadgeShape(info.role)
-    val primary = info.primary.neonBright()
-    val secondary = info.secondary.neonBright()
-    val neon = Brush.horizontalGradient(listOf(primary, secondary))
+    // Teks gelap di warna neon terang; kalau badge_color custom-nya gelap, putih.
+    val avgLum = (info.primary.luminance() + info.secondary.luminance()) / 2f
+    val content = if (avgLum > 0.2f) Color(0xFF0B0B0F) else Color.White
 
     // Kilau cuma buat Developer (role paling tinggi).
     val shineState: State<Float>? = if (animated && info.role == ZenimeRole.DEVELOPER) {
@@ -130,8 +125,10 @@ fun RoleBadgeChip(
         modifier = modifier
             .then(if (height != null) Modifier.height(height) else Modifier)
             .clip(shape)
-            .background(RoleBadgeFill)
-            .border(width = 1.dp, brush = neon, shape = shape)
+            .background(
+                Brush.horizontalGradient(listOf(info.primary, info.secondary))
+            )
+            .border(width = 1.dp, color = RoleBadgeOutline, shape = shape)
             .drawWithContent {
                 drawContent()
                 if (shineState != null) {
@@ -142,7 +139,7 @@ fun RoleBadgeChip(
                         brush = Brush.linearGradient(
                             colors = listOf(
                                 Color.White.copy(alpha = 0f),
-                                Color.White.copy(alpha = 0.35f),
+                                Color.White.copy(alpha = 0.7f),
                                 Color.White.copy(alpha = 0f)
                             ),
                             start = Offset(x - half, 0f),
@@ -156,14 +153,14 @@ fun RoleBadgeChip(
         Icon(
             imageVector = roleBadgeIcon(info.role),
             contentDescription = null,
-            tint = primary,
+            tint = content,
             modifier = Modifier.size(10.dp)
         )
         Spacer(modifier = Modifier.width(3.dp))
         Text(
             text = roleBadgeLabel(info.role),
+            color = content,
             style = MaterialTheme.typography.labelSmall.copy(
-                brush = neon,
                 fontWeight = FontWeight.ExtraBold,
                 fontSize = 9.sp,
                 letterSpacing = 0.8.sp
