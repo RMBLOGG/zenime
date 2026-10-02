@@ -37,6 +37,7 @@ import com.example.security.IntegrityGuard
 import com.example.ui.navigation.ZenimeAppNavHost
 import com.example.ui.screens.announcement.AnnouncementPopupHost
 import com.example.ui.screens.maintenance.MaintenanceScreen
+import com.example.ui.screens.onboarding.OnboardingFlow
 import com.example.ui.screens.update.ForceUpdateScreen
 import com.example.ui.theme.ZenimeTheme
 import com.example.util.ApkDownloader
@@ -212,6 +213,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             val themeMode by userPrefs.themeModeFlow.collectAsStateWithLifecycle(initialValue = "DARK")
             val dynamicColor by userPrefs.dynamicColorFlow.collectAsStateWithLifecycle(initialValue = false)
+            // null = flag belum kebaca dari DataStore (tahan dulu biar gak kedip).
+            val onboardingSeen by userPrefs.onboardingSeenFlow
+                .collectAsStateWithLifecycle(initialValue = null as Boolean?)
 
             val isDark = when (themeMode) {
                 "LIGHT" -> false
@@ -256,6 +260,21 @@ class MainActivity : ComponentActivity() {
                             },
                             onRetryClick = {
                                 apkDownloader.startDownload(downloadUrl)
+                            }
+                        )
+                    }
+                    needsUpdate == false && onboardingSeen == null -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MaterialTheme.colorScheme.background)
+                        )
+                    }
+                    // Install baru / install ulang: slide onboarding -> SplashScreen -> app.
+                    needsUpdate == false && onboardingSeen == false -> {
+                        OnboardingFlow(
+                            onFinished = {
+                                lifecycleScope.launch { userPrefs.setOnboardingSeen(true) }
                             }
                         )
                     }

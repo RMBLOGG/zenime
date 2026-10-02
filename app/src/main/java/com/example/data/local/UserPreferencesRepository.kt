@@ -31,6 +31,10 @@ class UserPreferencesRepository(private val context: Context) {
 
         // popup_id terakhir yang udah ditutup user (pop up pengumuman Remote Config)
         val LAST_SEEN_POPUP_ID = stringPreferencesKey("last_seen_popup_id")
+
+        // Flag intro/onboarding. Ikut kehapus pas uninstall (allowBackup=false),
+        // jadi intro muncul lagi tiap install baru / install ulang.
+        val ONBOARDING_SEEN = booleanPreferencesKey("onboarding_seen")
     }
 
     val themeModeFlow: Flow<String> = context.dataStore.data.map { prefs ->
@@ -81,6 +85,16 @@ class UserPreferencesRepository(private val context: Context) {
     // Kosong = belum pernah nutup popup apa pun.
     val lastSeenPopupIdFlow: Flow<String> = context.dataStore.data.map { prefs ->
         prefs[Keys.LAST_SEEN_POPUP_ID] ?: ""
+    }
+
+    val onboardingSeenFlow: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[Keys.ONBOARDING_SEEN] ?: false
+    }
+
+    suspend fun setOnboardingSeen(seen: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[Keys.ONBOARDING_SEEN] = seen
+        }
     }
 
     suspend fun setLastSeenPopupId(id: String) {
