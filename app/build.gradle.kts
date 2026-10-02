@@ -18,8 +18,8 @@ android {
     applicationId = "com.aistudio.zenime.app"
     minSdk = 24
     targetSdk = 36
-    versionCode = 12
-    versionName = "2.2"
+    versionCode = 13
+    versionName = "2.3"
 
     // SHA-256 sertifikat penandatangan APK RESMI (hex, tanpa titik dua, huruf besar/kecil bebas).
     // Diisi dari env APK_SIG_SHA256 (GitHub Actions secret). Kalau kosong, cek tanda tangan
