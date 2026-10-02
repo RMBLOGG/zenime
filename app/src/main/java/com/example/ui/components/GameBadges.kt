@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -27,6 +28,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
@@ -55,17 +57,18 @@ val BadgeArrowShape = GenericShape { size, _ ->
 
 /** Badge level emas dengan ikon zcoin, bentuk panah runcing sebelah. */
 @Composable
-fun LevelBadge(level: Int, modifier: Modifier = Modifier) {
+fun LevelBadge(level: Int, modifier: Modifier = Modifier, height: Dp? = null) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
+            .then(if (height != null) Modifier.height(height) else Modifier)
             .clip(BadgeArrowShape)
             .background(
                 Brush.horizontalGradient(
                     listOf(Color(0xFFFFDE7A), Color(0xFFE8A317), Color(0xFFB8860B))
                 )
             )
-            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .padding(horizontal = 8.dp, vertical = if (height != null) 0.dp else 2.dp)
     ) {
         Image(
             painter = painterResource(id = R.drawable.ic_zcoin_badge),
@@ -101,7 +104,7 @@ val BadgeHexShape = GenericShape { size, _ ->
 
 /** Badge tag clan rainbow animasi (fill geser + kilau + border berdenyut). */
 @Composable
-fun ClanRainbowBadge(text: String, modifier: Modifier = Modifier) {
+fun ClanRainbowBadge(text: String, modifier: Modifier = Modifier, height: Dp? = null) {
     val transition = rememberInfiniteTransition(label = "clanRainbow")
     // Warna gradient rainbow yang geser terus-terusan (efek holografik)
     val phase by transition.animateFloat(
@@ -157,11 +160,12 @@ fun ClanRainbowBadge(text: String, modifier: Modifier = Modifier) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
+            .then(if (height != null) Modifier.height(height) else Modifier)
             .clip(BadgeHexShape)
             .background(fillBrush)
             .background(shineBrush)
             .border(width = 1.dp, color = Color.White.copy(alpha = glowAlpha), shape = BadgeHexShape)
-            .padding(horizontal = 10.dp, vertical = 2.5.dp)
+            .padding(horizontal = 10.dp, vertical = if (height != null) 0.dp else 2.5.dp)
     ) {
         Text(
             text = "✦",

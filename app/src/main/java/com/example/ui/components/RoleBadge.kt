@@ -9,6 +9,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -37,6 +38,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ZenimeRole
@@ -54,13 +56,14 @@ import com.example.data.model.ZenimeRole
 fun RoleBadge(
     firebaseUid: String?,
     modifier: Modifier = Modifier,
-    animated: Boolean = true
+    animated: Boolean = true,
+    height: Dp? = null
 ) {
     val uid = firebaseUid.orEmpty()
     LaunchedEffect(uid) { RoleBadgeCache.request(uid) }
     val roles by RoleBadgeCache.roles.collectAsState()
     val info = roles[uid] ?: return
-    RoleBadgeChip(info = info, modifier = modifier, animated = animated)
+    RoleBadgeChip(info = info, modifier = modifier, animated = animated, height = height)
 }
 
 private fun roleBadgeShape(role: ZenimeRole): CutCornerShape = when (role) {
@@ -98,7 +101,8 @@ private val RoleBadgeFill = Color(0xFF0C0E16)
 fun RoleBadgeChip(
     info: RoleBadgeInfo,
     modifier: Modifier = Modifier,
-    animated: Boolean = true
+    animated: Boolean = true,
+    height: Dp? = null
 ) {
     val shape = roleBadgeShape(info.role)
     val primary = info.primary.neonBright()
@@ -124,6 +128,7 @@ fun RoleBadgeChip(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
+            .then(if (height != null) Modifier.height(height) else Modifier)
             .clip(shape)
             .background(RoleBadgeFill)
             .border(width = 1.dp, brush = neon, shape = shape)
@@ -146,7 +151,7 @@ fun RoleBadgeChip(
                     )
                 }
             }
-            .padding(horizontal = 8.dp, vertical = 2.dp)
+            .padding(horizontal = 8.dp, vertical = if (height != null) 0.dp else 2.dp)
     ) {
         Icon(
             imageVector = roleBadgeIcon(info.role),

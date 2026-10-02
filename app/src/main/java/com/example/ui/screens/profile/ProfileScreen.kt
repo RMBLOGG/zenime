@@ -506,11 +506,11 @@ private fun ProfileHeroSection(
             Spacer(modifier = Modifier.height(10.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                LevelBadge(level = level)
+                LevelBadge(level = level, height = 20.dp)
                 if (!clanTag.isNullOrBlank()) {
-                    ClanRainbowBadge(text = clanTag)
+                    ClanRainbowBadge(text = clanTag, height = 20.dp)
                 }
-                RoleBadge(firebaseUid = firebaseUid)
+                RoleBadge(firebaseUid = firebaseUid, height = 20.dp)
             }
 
             Spacer(modifier = Modifier.height(18.dp))
