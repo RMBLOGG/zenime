@@ -1424,7 +1424,8 @@ private fun ComicDonghuaIllustration(active: Boolean, a: Color, b: Color) {
                     scaleY = 0.92f
                 },
             a = a,
-            b = b
+            b = b,
+            coverUrl = "https://cdn.myanimelist.net/images/manga/4/221353.jpg" // Douluo Dalu (manhua)
         )
         // Poster donghua (depan, kanan)
         PosterCard(
@@ -1437,7 +1438,8 @@ private fun ComicDonghuaIllustration(active: Boolean, a: Color, b: Color) {
             glow = b,
             seed = 4,
             showPlay = true,
-            tint = a
+            tint = a,
+            posterUrl = "https://cdn.myanimelist.net/images/anime/1438/101531.jpg" // Douluo Dalu (Soul Land)
         )
 
         FloatChip(
@@ -1463,33 +1465,47 @@ private fun ComicDonghuaIllustration(active: Boolean, a: Color, b: Color) {
 }
 
 @Composable
-private fun ComicPageCard(modifier: Modifier, a: Color, b: Color) {
+private fun ComicPageCard(modifier: Modifier, a: Color, b: Color, coverUrl: String? = null) {
     val shape = RoundedCornerShape(14.dp)
     val ink = Color(0xFF0B0E14)
-    Column(
+    Box(
         modifier = modifier
             .size(width = 148.dp, height = 210.dp)
             .shadow(elevation = 16.dp, shape = shape, ambientColor = a, spotColor = a)
             .clip(shape)
             .background(Color(0xFFF3F0E8))
             .border(1.dp, Color.White.copy(alpha = 0.18f), shape)
-            .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        ComicPanel(Modifier.fillMaxWidth().weight(1.1f), a, b, ink, bubble = true)
-        Row(
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        // Lapisan bawah: halaman komik ilustrasi -- jadi placeholder/fallback
+        // selama cover asli belum ke-load (atau kalau offline).
+        Column(
+            modifier = Modifier.fillMaxSize().padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
-            ComicPanel(Modifier.weight(0.6f).fillMaxHeight(), b, a, ink)
-            ComicPanel(Modifier.weight(0.4f).fillMaxHeight(), a, ink, ink)
+            ComicPanel(Modifier.fillMaxWidth().weight(1.1f), a, b, ink, bubble = true)
+            Row(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                ComicPanel(Modifier.weight(0.6f).fillMaxHeight(), b, a, ink)
+                ComicPanel(Modifier.weight(0.4f).fillMaxHeight(), a, ink, ink)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                ComicPanel(Modifier.weight(0.4f).fillMaxHeight(), ink, b, ink)
+                ComicPanel(Modifier.weight(0.6f).fillMaxHeight(), a, b, ink, bubble = true)
+            }
         }
-        Row(
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
-        ) {
-            ComicPanel(Modifier.weight(0.4f).fillMaxHeight(), ink, b, ink)
-            ComicPanel(Modifier.weight(0.6f).fillMaxHeight(), a, b, ink, bubble = true)
+        if (coverUrl != null) {
+            // Cover komik asli.
+            AsyncImage(
+                model = coverUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
         }
     }
 }
