@@ -101,6 +101,7 @@ import com.example.data.model.FriendRelation
 import com.example.ui.components.ClanRainbowBadge
 import com.example.ui.components.GeneratedAvatar
 import com.example.ui.components.LevelBadge
+import com.example.ui.components.RoleBadge
 import com.example.ui.theme.CardOutlineBorder
 import com.example.ui.theme.ZenimeBackgroundDark
 import com.example.ui.theme.ZenimeInfoBlue
@@ -509,6 +510,7 @@ private fun ProfileHeroSection(
                 if (!clanTag.isNullOrBlank()) {
                     ClanRainbowBadge(text = clanTag)
                 }
+                RoleBadge(firebaseUid = firebaseUid)
             }
 
             Spacer(modifier = Modifier.height(18.dp))

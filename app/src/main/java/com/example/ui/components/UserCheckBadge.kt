@@ -10,9 +10,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.data.api.SupabaseNetworkModule
+import com.example.data.model.ZenimeRole
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -41,6 +43,32 @@ fun roleCheckColor(role: String?, badgeColorHex: String?): Color? {
 }
 
 /**
+ * Data buat badge role teks (cyber cut): role + 2 warna gradient. Default
+ * pakai palet neon per role; kalau developer nyetel `badge_color` custom,
+ * itu jadi warna utama dan warna keduanya versi lebih terang.
+ */
+data class RoleBadgeInfo(
+    val role: ZenimeRole,
+    val primary: Color,
+    val secondary: Color
+)
+
+fun roleBadgeInfo(role: String?, badgeColorHex: String?): RoleBadgeInfo? {
+    val r = ZenimeRole.fromValue(role) ?: return null
+    val custom = badgeColorHex?.let {
+        runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull()
+    }
+    if (custom != null) {
+        return RoleBadgeInfo(r, custom, lerp(custom, Color.White, 0.35f))
+    }
+    return when (r) {
+        ZenimeRole.DEVELOPER -> RoleBadgeInfo(r, Color(0xFFFF3B5C), Color(0xFFFF7A3D))
+        ZenimeRole.ADMIN -> RoleBadgeInfo(r, Color(0xFF2EE6A6), Color(0xFF19B5FF))
+        ZenimeRole.MODERATOR -> RoleBadgeInfo(r, Color(0xFFB26CFF), Color(0xFF6C7BFF))
+    }
+}
+
+/**
  * Cache role in-memory buat semua layar yang nampilin centang. Layar cukup
  * manggil [request] per uid; request-nya dikumpulin ~60ms lalu ditarik
  * SEKALI JALAN (`in.(...)`), jadi list panjang gak bikin request per baris.
@@ -57,6 +85,11 @@ object RoleBadgeCache {
 
     /** uid -> warna centang role. Uid tanpa role gak ada di map ini. */
     val colors: StateFlow<Map<String, Color>> = _colors.asStateFlow()
+
+    private val _roles = MutableStateFlow<Map<String, RoleBadgeInfo>>(emptyMap())
+
+    /** uid -> info badge role teks. Uid tanpa role gak ada di map ini. */
+    val roles: StateFlow<Map<String, RoleBadgeInfo>> = _roles.asStateFlow()
 
     fun request(uid: String) {
         if (uid.isBlank()) return
@@ -92,6 +125,10 @@ object RoleBadgeCache {
                         roleCheckColor(row.role, row.badgeColor)?.let { row.firebaseUid to it }
                     }.toMap()
                     if (found.isNotEmpty()) _colors.value = _colors.value + found
+                    val foundRoles = rows.mapNotNull { row ->
+                        roleBadgeInfo(row.role, row.badgeColor)?.let { row.firebaseUid to it }
+                    }.toMap()
+                    if (foundRoles.isNotEmpty()) _roles.value = _roles.value + foundRoles
                 }
             }
         }
