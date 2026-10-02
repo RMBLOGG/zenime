@@ -70,9 +70,34 @@ object AnichinNetwork {
         chain.proceed(original.newBuilder().url(newUrl).build())
     }
 
+    // Donghua khusus Premium. Endpoint episode/ dan video-source/ dijaga di SERVER
+    // (backend/anichin-api/premium_guard.py). App cuma nempelin token premium
+    // bertanda tangan server; kalau gak ada/ditolak, server yang nolak.
+    private val premiumTokenInterceptor = okhttp3.Interceptor { chain ->
+        val request = chain.request()
+        val segs = request.url.pathSegments
+        val guarded = segs.size >= 2 && segs[segs.size - 2].let { it == "episode" || it == "video-source" }
+        if (!guarded) return@Interceptor chain.proceed(request)
+
+        val token = kotlinx.coroutines.runBlocking { PremiumTokenManager.get() }
+        val first = chain.proceed(
+            if (token != null) request.newBuilder().header("Authorization", "Bearer $token").build() else request
+        )
+        if (first.code != 401 || token == null) return@Interceptor first
+
+        // Token ditolak (kadaluarsa / secret diputar) -> buang, ambil baru, coba sekali lagi.
+        first.close()
+        PremiumTokenManager.invalidate()
+        val fresh = kotlinx.coroutines.runBlocking { PremiumTokenManager.get() }
+        chain.proceed(
+            if (fresh != null) request.newBuilder().header("Authorization", "Bearer $fresh").build() else request
+        )
+    }
+
     private val okHttpClient: OkHttpClient by lazy {
         OkHttpClient.Builder()
             .addInterceptor(dynamicBaseUrlInterceptor)
+            .addInterceptor(premiumTokenInterceptor)
             // GET aman diulang sekali kalau koneksi putus (timeout sengaja gak diulang)
             .addInterceptor { chain ->
                 val request = chain.request()

@@ -33,15 +33,48 @@ class PremiumStatusCache(private val context: Context) {
         val IS_PREMIUM = booleanPreferencesKey("premium_cache_is_premium")
         val EXPIRES_AT = stringPreferencesKey("premium_cache_expires_at")
         val LAST_CHECKED_AT = longPreferencesKey("premium_cache_last_checked_at")
+        val SIG = stringPreferencesKey("premium_cache_sig")
     }
 
     companion object {
         // Maksimal umur cache buat dipakai sebagai fallback offline.
         private val CACHE_TTL_MS = java.time.Duration.ofDays(3).toMillis()
+
+        // Cache ditandatangani HMAC pakai key AndroidKeyStore (gak bisa diekspor dari
+        // device). Edit manual file DataStore (root / adb restore) jadi percuma:
+        // tanda tangan gak cocok -> cache dianggap gak ada -> non-premium.
+        private const val KEY_ALIAS = "zenime_premium_cache_hmac"
+
+        private fun hmacKey(): javax.crypto.SecretKey {
+            val ks = java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            (ks.getKey(KEY_ALIAS, null) as? javax.crypto.SecretKey)?.let { return it }
+            val gen = javax.crypto.KeyGenerator.getInstance(
+                android.security.keystore.KeyProperties.KEY_ALGORITHM_HMAC_SHA256,
+                "AndroidKeyStore"
+            )
+            gen.init(
+                android.security.keystore.KeyGenParameterSpec.Builder(
+                    KEY_ALIAS,
+                    android.security.keystore.KeyProperties.PURPOSE_SIGN
+                ).build()
+            )
+            return gen.generateKey()
+        }
+
+        private fun sign(isPremium: Boolean, expiresAt: String?, checkedAt: Long): String = try {
+            val mac = javax.crypto.Mac.getInstance("HmacSHA256")
+            mac.init(hmacKey())
+            mac.doFinal("$isPremium|${expiresAt.orEmpty()}|$checkedAt".toByteArray())
+                .joinToString("") { "%02x".format(it) }
+        } catch (e: Exception) {
+            ""
+        }
     }
 
     /** Simpan hasil sukses cek premium terbaru dari server. */
     suspend fun save(isPremium: Boolean, expiresAt: String?) {
+        val now = System.currentTimeMillis()
+        val sig = sign(isPremium, expiresAt, now)
         context.dataStore.edit { prefs ->
             prefs[Keys.IS_PREMIUM] = isPremium
             if (expiresAt != null) {
@@ -49,7 +82,8 @@ class PremiumStatusCache(private val context: Context) {
             } else {
                 prefs.remove(Keys.EXPIRES_AT)
             }
-            prefs[Keys.LAST_CHECKED_AT] = System.currentTimeMillis()
+            prefs[Keys.LAST_CHECKED_AT] = now
+            prefs[Keys.SIG] = sig
         }
     }
 
@@ -65,6 +99,13 @@ class PremiumStatusCache(private val context: Context) {
         val lastCheckedAt = prefs[Keys.LAST_CHECKED_AT] ?: return null
 
         if (!isPremium) return false
+
+        // Lapis 0: tanda tangan harus cocok, kalau gak (diedit / cache versi lama) = gak valid.
+        val storedSig = prefs[Keys.SIG].orEmpty()
+        val expectedSig = sign(true, prefs[Keys.EXPIRES_AT], lastCheckedAt)
+        if (storedSig.isEmpty() || expectedSig.isEmpty() ||
+            !java.security.MessageDigest.isEqual(storedSig.toByteArray(), expectedSig.toByteArray())
+        ) return null
 
         // Lapis 2: cache basi (lebih lama dari TTL sejak sukses cek terakhir).
         val cacheAge = System.currentTimeMillis() - lastCheckedAt

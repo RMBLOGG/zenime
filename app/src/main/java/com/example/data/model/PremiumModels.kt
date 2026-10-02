@@ -30,3 +30,12 @@ data class PremiumStatusResponse(
     @Json(name = "expires_at") val expiresAt: String? = null,
     @Json(name = "message") val message: String? = null
 )
+
+/** Respon zenime-premium-token: token bertanda tangan server, dipakai buat buka endpoint donghua. */
+@JsonClass(generateAdapter = true)
+data class PremiumTokenResponse(
+    @Json(name = "is_premium") val isPremium: Boolean = false,
+    @Json(name = "token") val token: String? = null,
+    @Json(name = "expires_in") val expiresIn: Long? = null,
+    @Json(name = "message") val message: String? = null
+)

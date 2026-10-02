@@ -10,12 +10,14 @@ import com.example.data.model.CoinBalanceResponse
 import com.example.data.model.CoinPackagesResponse
 import com.example.data.model.PremiumPackagesResponse
 import com.example.data.model.PremiumStatusResponse
+import com.example.data.model.PremiumTokenResponse
 import com.example.data.model.TopSupportersResponse
 import com.example.data.model.ZenimeCodeResponse
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Headers
 import retrofit2.http.POST
 import retrofit2.http.Query
@@ -31,6 +33,14 @@ interface ZenimeSupabaseApi {
 
     @POST("functions/v1/zenime-check-premium")
     suspend fun checkPremiumStatus(@Body body: Map<String, String>): PremiumStatusResponse
+
+    // Token premium bertanda tangan server (verifikasi Firebase ID Token di sisi server).
+    // Authorization diisi Firebase ID Token asli, sama kayak endpoint Clan.
+    @POST("functions/v1/zenime-premium-token")
+    suspend fun getPremiumToken(
+        @Header("Authorization") authorization: String,
+        @Body body: Map<String, String> = emptyMap()
+    ): PremiumTokenResponse
 
     // --- Top Support (donatur SociaBuzz) ---
 

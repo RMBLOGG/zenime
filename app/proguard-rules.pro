@@ -24,3 +24,11 @@
 -keepattributes Signature, *Annotation*, InnerClasses, EnclosingMethod
 -keep class com.example.data.model.** { *; }
 -keep,allowobfuscation,allowshrinking class kotlin.coroutines.Continuation
+
+# Anti-mod: nama class diacak & dipindah ke satu package, log debug dibuang.
+-repackageclasses ''
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+}
