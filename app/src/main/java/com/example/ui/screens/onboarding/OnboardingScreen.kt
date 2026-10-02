@@ -93,6 +93,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import com.example.ui.screens.login.LoginBackdropPosters
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -720,7 +722,8 @@ private fun PosterStackIllustration(active: Boolean, a: Color, b: Color) {
             glow = b,
             seed = 1,
             showPlay = false,
-            tint = b
+            tint = b,
+            posterUrl = LoginBackdropPosters.urls.getOrNull(2) // Fullmetal Alchemist: Brotherhood
         )
         PosterCard(
             modifier = Modifier
@@ -735,7 +738,8 @@ private fun PosterStackIllustration(active: Boolean, a: Color, b: Color) {
             glow = a,
             seed = 2,
             showPlay = false,
-            tint = a
+            tint = a,
+            posterUrl = LoginBackdropPosters.urls.getOrNull(3) // JoJo: Steel Ball Run
         )
         PosterCard(
             modifier = Modifier
@@ -745,7 +749,8 @@ private fun PosterStackIllustration(active: Boolean, a: Color, b: Color) {
             glow = lerp(a, b, 0.5f),
             seed = 3,
             showPlay = true,
-            tint = a
+            tint = a,
+            posterUrl = LoginBackdropPosters.urls.getOrNull(0) // Sousou no Frieren
         )
     }
 }
@@ -757,7 +762,8 @@ private fun PosterCard(
     glow: Color,
     seed: Int,
     showPlay: Boolean,
-    tint: Color
+    tint: Color,
+    posterUrl: String? = null
 ) {
     val shape = RoundedCornerShape(22.dp)
     Box(
@@ -772,27 +778,50 @@ private fun PosterCard(
             .clip(shape)
             .border(1.dp, Color.White.copy(alpha = 0.18f), shape)
     ) {
+        // Lapisan bawah: ilustrasi gradien -- jadi placeholder/fallback selama
+        // poster asli belum ke-load (atau kalau offline).
         Canvas(Modifier.fillMaxSize()) { drawPoster(sky, glow, seed) }
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(14.dp)
-        ) {
+        if (posterUrl != null) {
+            // Poster asli (URL sama dengan backdrop LoginScreen).
+            AsyncImage(
+                model = posterUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+            // Gradien gelap tipis di bawah biar poster tetap serasi dengan tema.
             Box(
                 Modifier
-                    .height(8.dp)
-                    .fillMaxWidth(0.7f)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.85f))
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0.55f to Color.Transparent,
+                            1f to Color.Black.copy(alpha = 0.55f)
+                        )
+                    )
             )
-            Spacer(Modifier.height(6.dp))
-            Box(
-                Modifier
-                    .height(6.dp)
-                    .fillMaxWidth(0.45f)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.4f))
-            )
+        } else {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(14.dp)
+            ) {
+                Box(
+                    Modifier
+                        .height(8.dp)
+                        .fillMaxWidth(0.7f)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.85f))
+                )
+                Spacer(Modifier.height(6.dp))
+                Box(
+                    Modifier
+                        .height(6.dp)
+                        .fillMaxWidth(0.45f)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.4f))
+                )
+            }
         }
         if (showPlay) {
             PlayPulse(tint = tint, modifier = Modifier.align(Alignment.Center))
@@ -1062,7 +1091,7 @@ private fun ChatIllustration(active: Boolean, a: Color, b: Color) {
 
         FloatChip(
             icon = Icons.Rounded.Groups,
-            label = "Clan Sakura",
+            label = "Clan Aniku",
             tint = a,
             modifier = Modifier
                 .align(Alignment.TopCenter)
@@ -1329,7 +1358,7 @@ private fun LevelIllustration(active: Boolean, a: Color, b: Color) {
 
         FloatChip(
             icon = Icons.Rounded.Bolt,
-            label = "+20 XP",
+            label = "+70 XP",
             tint = Gold,
             modifier = Modifier
                 .align(Alignment.TopStart)
