@@ -321,7 +321,11 @@ fun DonghuaPlayerScreen(
     }
 
     // ---- ExoPlayer ----
-    val exoPlayer = remember { ExoPlayer.Builder(context).build() }
+    val exoPlayer = remember {
+        ExoPlayer.Builder(context)
+            .setLoadControl(com.example.util.PlayerConfig.loadControl())
+            .build()
+    }
 
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
@@ -417,7 +421,9 @@ fun DonghuaPlayerScreen(
         val url = selectedMedia?.url ?: return@LaunchedEffect
         playbackError = null
         val resumeAt = exoPlayer.currentPosition
-        val source = ProgressiveMediaSource.Factory(AnichinNetwork.videoDataSourceFactory())
+        val source = ProgressiveMediaSource.Factory(
+            com.example.util.PlayerConfig.applyTimeouts(AnichinNetwork.videoDataSourceFactory())
+        ).setLoadErrorHandlingPolicy(com.example.util.PlayerConfig.errorPolicy())
             .createMediaSource(MediaItem.fromUri(Uri.parse(url)))
         exoPlayer.setMediaSource(source)
         exoPlayer.prepare()

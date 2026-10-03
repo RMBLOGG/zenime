@@ -113,16 +113,29 @@ object NetworkModule {
             // Server sumber kadang lambat / memutus koneksi sesaat. GET itu aman
             // diulang, jadi coba sekali lagi kalau koneksinya terputus. Timeout
             // sengaja TIDAK diulang (nunggu 2x lipat cuma bikin user makin lama).
+            .dispatcher(
+                okhttp3.Dispatcher().apply {
+                    // Default cuma 5 request/host -- beranda nembak 5-6 endpoint
+                    // sekaligus + request lain, jadinya antre satu-satu.
+                    maxRequests = 64
+                    maxRequestsPerHost = 16
+                }
+            )
             .addInterceptor { chain ->
                 val request = chain.request()
                 try {
                     chain.proceed(request)
                 } catch (e: java.io.IOException) {
+                    // GET aman diulang. Connect timeout SEKARANG ikut diulang
+                    // (jalur WiFi/ISP sering gagal di percobaan pertama tapi
+                    // lancar di kedua); read timeout tetap TIDAK diulang.
+                    val isConnectTimeout = e is java.net.SocketTimeoutException &&
+                        e.message?.contains("connect", ignoreCase = true) == true
                     val retryable = request.method == "GET" &&
-                        e !is java.net.SocketTimeoutException &&
+                        (e !is java.net.SocketTimeoutException || isConnectTimeout) &&
                         e !is com.example.util.ApiUnavailableException
                     if (!retryable) throw e
-                    Thread.sleep(800)
+                    Thread.sleep(300)
                     chain.proceed(request)
                 }
             }
@@ -136,9 +149,11 @@ object NetworkModule {
                 chain.proceed(request)
             }
             .addInterceptor(HttpLoggingInterceptor().apply {
-                level = HttpLoggingInterceptor.Level.HEADERS
+                level = if (com.example.BuildConfig.DEBUG)
+                    HttpLoggingInterceptor.Level.HEADERS
+                else HttpLoggingInterceptor.Level.NONE
             })
-            .connectTimeout(20, TimeUnit.SECONDS)
+            .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)   // server sumber sering lambat menjawab
             .build()
     }

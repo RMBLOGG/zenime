@@ -39,6 +39,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.async
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -81,7 +82,33 @@ class AnimeRepository(
         private const val TTL_EPISODES = 15 * 60 * 1000L   // 15 menit, episode baru bisa nambah
         private const val TTL_SCHEDULE = 30 * 60 * 1000L   // 30 menit
         private const val TTL_GENRES = 60 * 60 * 1000L     // 1 jam, list genre nyaris statis
+        private const val HOME_SECTION_TIMEOUT_MS = 12_000L  // 1 section lemot gak boleh nahan beranda
+        private const val HOME_DISK_FILE = "home_cache.json"
+        private const val HOME_DISK_MAX_AGE = 24 * 60 * 60 * 1000L
         private const val CUPLIX_PAGE_SIZE = 30            // sama dengan limit yang dipakai app Animein
+    }
+
+
+    // ---- Cache beranda di disk ----------------------------------------
+    private val homeResponseAdapter by lazy { rawMoshi.adapter(HomeResponse::class.java) }
+
+    private fun homeDiskFile(): java.io.File =
+        java.io.File(com.example.ZenimeApp.instance.cacheDir, HOME_DISK_FILE)
+
+    private fun readHomeFromDisk(): HomeResponse? = try {
+        val f = homeDiskFile()
+        if (!f.exists() || System.currentTimeMillis() - f.lastModified() > HOME_DISK_MAX_AGE) null
+        else homeResponseAdapter.fromJson(f.readText())
+    } catch (e: Exception) {
+        null
+    }
+
+    private fun writeHomeToDisk(response: HomeResponse) {
+        try {
+            homeDiskFile().writeText(homeResponseAdapter.toJson(response))
+        } catch (_: Exception) {
+            // best-effort, gagal nulis cache gak boleh ganggu beranda
+        }
     }
 
     private var homeCache: CacheEntry<HomeResponse>? = null
@@ -184,9 +211,18 @@ class AnimeRepository(
             emit(Result.Success(cached!!.data))
             return@flow
         }
-        emit(Result.Loading)
+        // Cold start: tampilin beranda terakhir dari disk DULU (instan), baru
+        // refresh dari network di belakang. Tanpa ini user WiFi lemot cuma
+        // ngeliat skeleton sampai SEMUA endpoint selesai.
+        val diskHome = if (cached == null) readHomeFromDisk() else null
+        if (diskHome != null) {
+            emit(Result.Success(diskHome))
+        } else {
+            emit(Result.Loading)
+        }
         try {
             val response = fetchHomeDeduped()
+            writeHomeToDisk(response)
             emit(Result.Success(response))
         } catch (e: Exception) {
             // API lagi bermasalah tapi masih ada cache lama -> tampilin
@@ -195,6 +231,8 @@ class AnimeRepository(
             val cachedAfterFailure = homeCache
             if (cachedAfterFailure != null) {
                 emit(Result.Success(cachedAfterFailure.data))
+            } else if (diskHome != null) {
+                // Sudah ditampilin dari disk di atas; jangan timpa dengan error.
             } else {
                 emit(Result.Error(e, friendlyErrorMessage(e, "Gagal memuat beranda")))
             }
@@ -221,14 +259,14 @@ class AnimeRepository(
             // gak ada tetap null, aman karena HomeScreen udah pakai ?.let
             // buat nampilin tiap section (otomatis kesembunyi kalau null).
             val response = coroutineScope {
-                val hotDef = async { runCatching { movieMaps(api.getHomeSection("hot")) } }
-                val newDef = async { runCatching { movieMaps(api.getHomeSection("new")) } }
-                val popularDef = async { runCatching { movieMaps(api.getHomeSection("popular")) } }
-                val randomDef = async { runCatching { movieMaps(api.getHomeSection("random")) } }
+                val hotDef = async { runCatching { withTimeout(HOME_SECTION_TIMEOUT_MS) { movieMaps(api.getHomeSection("hot")) } } }
+                val newDef = async { runCatching { withTimeout(HOME_SECTION_TIMEOUT_MS) { movieMaps(api.getHomeSection("new")) } } }
+                val popularDef = async { runCatching { withTimeout(HOME_SECTION_TIMEOUT_MS) { movieMaps(api.getHomeSection("popular")) } } }
+                val randomDef = async { runCatching { withTimeout(HOME_SECTION_TIMEOUT_MS) { movieMaps(api.getHomeSection("random")) } } }
                 // Section tambahan dari data/home/list (Episode Baru, Jadwal Hari
                 // Ini, Paling Dinanti). Gagal -> section-nya saja yang hilang;
                 // TIDAK ikut menggagalkan beranda.
-                val extrasDef = async { runCatching { fetchHomeExtras() } }
+                val extrasDef = async { runCatching { withTimeout(HOME_SECTION_TIMEOUT_MS) { fetchHomeExtras() } } }
                 val results = listOf(hotDef, newDef, popularDef, randomDef).awaitAll()
                 val extras = extrasDef.await().getOrNull()
                 // Kalau SEMUA section gagal, anggap request gagal total (biar

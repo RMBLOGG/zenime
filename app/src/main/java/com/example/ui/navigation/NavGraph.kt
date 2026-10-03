@@ -140,7 +140,6 @@ import com.example.ui.screens.coin.CoinScreen
 import com.example.ui.screens.donation.DonationScreen
 import com.example.ui.screens.donation.TopSupportViewModel
 import com.example.ui.screens.coin.CoinViewModel
-import com.example.ui.screens.premium.PremiumPromoDialog
 import com.example.ui.screens.premium.PremiumScreen
 import com.example.ui.screens.premium.PremiumViewModel
 import com.example.ui.screens.schedule.ScheduleScreen
@@ -303,17 +302,6 @@ fun ZenimeAppNavHost(
     val anichinRepository = remember { AnichinRepository() }
     val currentUser by authRepository.currentUser.collectAsStateWithLifecycle()
 
-    // Promo Premium full-screen -- muncul TIAP kali app dibuka (cold start
-    // ATAUPUN balik dari background, keduanya kehitung "buka app" versi
-    // Android lewat ON_START), TAPI cuma kalau user udah login dan
-    // ternyata belum premium. Sengaja BUKAN gated "sekali doang seumur
-    // proses" -- makanya triggernya pakai Lifecycle observer di ON_START,
-    // bukan cuma LaunchedEffect(currentUser) yang cuma nyala sekali pas
-    // status login berubah.
-    var showPremiumPromo by remember { mutableStateOf(false) }
-    var promoPackages by remember { mutableStateOf<List<PremiumPackage>>(emptyList()) }
-    var promoLoading by remember { mutableStateOf(true) }
-    val premiumRepositoryForPromo = remember { PremiumRepository() }
     val promoCoroutineScope = rememberCoroutineScope()
 
     // Cek ban akun/device TIAP app dibuka (ON_START), bukan cuma pas login.
@@ -331,7 +319,6 @@ fun ZenimeAppNavHost(
         val banResult = banCheckRepository.checkBan(deviceId).getOrNull()
         if (banResult?.banned == true) {
             authRepository.signOut()
-            showPremiumPromo = false
             Toast.makeText(
                 banCheckContext,
                 banResult.reason ?: "Akun/perangkat ini diblokir.",
@@ -340,33 +327,7 @@ fun ZenimeAppNavHost(
         }
     }
 
-    suspend fun checkAndShowPremiumPromo(uid: String) {
-        promoLoading = true
-        showPremiumPromo = true
-        val isPremium = premiumRepositoryForPromo.checkPremiumStatus(uid).getOrNull()?.isPremium ?: false
-        if (isPremium) {
-            // Udah premium -- gak usah nawarin apa-apa.
-            showPremiumPromo = false
-            return
-        }
-        val packages = premiumRepositoryForPromo.getPackages().getOrNull().orEmpty()
-        promoPackages = packages
-        promoLoading = false
-        // Kalau ternyata gak ada paket sama sekali, gak usah paksain
-        // nongolin promo kosong.
-        showPremiumPromo = packages.isNotEmpty()
-    }
-
-    // Trigger #1: begitu status login berubah dari belum login -> login
-    // (misal abis LoginScreen sukses) SELAMA app udah kebuka.
-    LaunchedEffect(currentUser) {
-        currentUser?.uid?.let { uid -> checkAndShowPremiumPromo(uid) }
-    }
-
-    // Trigger #2: tiap Activity-nya ON_START -- ini yang nangkep skenario
-    // "user minimize app terus buka lagi" atau "cold start pas sesi login
-    // lama masih kesimpen", yang gak selalu bikin currentUser BERUBAH
-    // (dari awal udah non-null), jadi Trigger #1 doang gak bakal nyala lagi.
+    // Cek ban tiap Activity ON_START (minimize -> buka lagi / cold start).
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -374,10 +335,6 @@ fun ZenimeAppNavHost(
                 authRepository.currentUser.value?.uid?.let { uid ->
                     promoCoroutineScope.launch {
                         checkBanAndSignOut()
-                        // Kalau barusan diban & di-signOut, skip promo.
-                        if (authRepository.currentUser.value != null) {
-                            checkAndShowPremiumPromo(uid)
-                        }
                     }
                 }
             }
@@ -1276,18 +1233,6 @@ fun ZenimeAppNavHost(
                 onExpand = {
                     val target = miniPlayerInfo ?: return@MiniPlayerOverlay
                     navController.navigate(Screen.Player.createRoute(target.episodeId, target.animeId))
-                }
-            )
-        }
-
-        if (showPremiumPromo) {
-            PremiumPromoDialog(
-                isLoading = promoLoading,
-                packages = promoPackages,
-                onDismiss = { showPremiumPromo = false },
-                onSubscribeClick = {
-                    showPremiumPromo = false
-                    navController.navigate(Screen.Premium.route)
                 }
             )
         }

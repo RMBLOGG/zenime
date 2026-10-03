@@ -492,7 +492,9 @@ fun PlayerScreen(
                     )
                 )
 
-            ExoPlayer.Builder(context).build().apply {
+            ExoPlayer.Builder(context)
+                .setLoadControl(com.example.util.PlayerConfig.loadControl())
+                .build().apply {
                 // Sengaja false -- video cuma boleh muter kalau adGateOpen true
                 // (lihat LaunchedEffect(adGateOpen) di bawah). Nyiapin/buffer
                 // tetap jalan di belakang layar walau ini false.
@@ -622,14 +624,17 @@ fun PlayerScreen(
             ProgressiveMediaSource.Factory(DefaultDataSource.Factory(context))
                 .createMediaSource(MediaItem.fromUri(Uri.fromFile(localFile)))
         } else {
-            val httpDataSourceFactory = DefaultHttpDataSource.Factory()
-                .setDefaultRequestProperties(
-                    mapOf(
-                        "Referer" to "https://animeinweb.com/",
-                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            val httpDataSourceFactory = com.example.util.PlayerConfig.applyTimeouts(
+                DefaultHttpDataSource.Factory()
+                    .setDefaultRequestProperties(
+                        mapOf(
+                            "Referer" to "https://animeinweb.com/",
+                            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                        )
                     )
-                )
+            )
             ProgressiveMediaSource.Factory(httpDataSourceFactory)
+                .setLoadErrorHandlingPolicy(com.example.util.PlayerConfig.errorPolicy())
                 .createMediaSource(MediaItem.fromUri(Uri.parse(serverUrl)))
         }
 
