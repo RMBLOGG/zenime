@@ -82,7 +82,7 @@ class AnimeRepository(
         private const val TTL_EPISODES = 15 * 60 * 1000L   // 15 menit, episode baru bisa nambah
         private const val TTL_SCHEDULE = 30 * 60 * 1000L   // 30 menit
         private const val TTL_GENRES = 60 * 60 * 1000L     // 1 jam, list genre nyaris statis
-        private const val HOME_SECTION_TIMEOUT_MS = 12_000L  // 1 section lemot gak boleh nahan beranda
+        private const val HOME_SECTION_TIMEOUT_MS = 25_000L  // 1 section lemot gak boleh nahan beranda
         private const val HOME_DISK_FILE = "home_cache.json"
         private const val HOME_DISK_MAX_AGE = 24 * 60 * 60 * 1000L
         private const val CUPLIX_PAGE_SIZE = 30            // sama dengan limit yang dipakai app Animein
